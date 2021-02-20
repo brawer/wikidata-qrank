@@ -185,14 +185,14 @@ func readMonthlyPageviews(dumpsPath string, year int, month time.Month, ch chan<
 			fmt.Sprintf("%04d-%02d", year, month),
 			filename)
 		g.Go(func() error {
-			return readPageviews(path, ch, subCtx)
+			return readPageviewsFile(path, ch, subCtx)
 		})
 	}
 
 	return g.Wait()
 }
 
-func readPageviews(path string, ch chan<- string, ctx context.Context) error {
+func readPageviewsFile(path string, ch chan<- string, ctx context.Context) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -205,6 +205,10 @@ func readPageviews(path string, ch chan<- string, ctx context.Context) error {
 	}
 	defer reader.Close()
 
+	return readPageviews(reader, ch, ctx)
+}
+
+func readPageviews(reader io.Reader, ch chan<- string, ctx context.Context) error {
 	scanner := bufio.NewScanner(reader)
 	var lastSite, lastTitle string
 	var lastCount int64
