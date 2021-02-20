@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/sync/errgroup"
 
@@ -228,6 +229,10 @@ func readPageviews(path string, ch chan<- string, ctx context.Context) error {
 		title, err := url.QueryUnescape(cols[1])
 		if err != nil {
 			title = cols[1]
+		}
+
+		if !utf8.ValidString(title) {
+			continue
 		}
 
 		c, err := strconv.ParseInt(cols[4], 10, 64)
