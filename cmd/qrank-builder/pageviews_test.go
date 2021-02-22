@@ -46,3 +46,18 @@ func checkReadPageviews(t *testing.T, input, expected string) {
 		return
 	}
 }
+
+func TestReadPageviewsCancel(t *testing.T) {
+	ch := make(chan string, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	g, subCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		input := ("en.wikipedia Bar 18911 desktop 3 A2\n" +
+			"en.wikipedia Foo 10374 desktop 1 Q1\n")
+		return readPageviews(strings.NewReader(input), ch, subCtx)
+	})
+	cancel()
+	if err := g.Wait(); err != context.Canceled {
+		t.Error("expected context.Canceled, got", err)
+	}
+}
