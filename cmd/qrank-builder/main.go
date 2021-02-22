@@ -5,9 +5,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 var logger *log.Logger
@@ -30,19 +27,12 @@ func main() {
 }
 
 func computeQRank(dumpsPath string) error {
-	path := filepath.Join(dumpsPath, "wikidatawiki", "entities", "latest-all.json.bz2")
-	wikidataPath, err := filepath.EvalSymlinks(path)
+	entitiesDate, _, err := findEntitiesDump(dumpsPath)
 	if err != nil {
 		return err
 	}
 
-	parts := strings.Split(wikidataPath, string(os.PathSeparator))
-	date, err := time.Parse("20060102", parts[len(parts)-2])
-	if err != nil {
-		return err
-	}
-
-	_, err = buildPageviews(dumpsPath, date, context.Background())
+	_, err = buildPageviews(dumpsPath, entitiesDate, context.Background())
 	if err != nil {
 		return err
 	}
