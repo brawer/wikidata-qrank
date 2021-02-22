@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,9 +10,19 @@ import (
 	"time"
 )
 
+var logger *log.Logger
+
 func main() {
 	var dumps = flag.String("dumps", "/public/dumps/public", "path to Wikimedia dumps")
 	flag.Parse()
+
+	logfile, err := os.OpenFile("logs/qrank-builder.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer logfile.Close()
+	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
+
 	if err := computeQRank(*dumps); err != nil {
 		log.Fatal(err)
 		return
@@ -33,10 +42,10 @@ func computeQRank(dumpsPath string) error {
 		return err
 	}
 
-	pv, err := buildPageviews(dumpsPath, date, context.Background())
+	_, err = buildPageviews(dumpsPath, date, context.Background())
 	if err != nil {
 		return err
 	}
-	fmt.Println("*** DONE:", pv)
+
 	return nil
 }

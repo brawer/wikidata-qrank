@@ -35,7 +35,7 @@ func buildPageviews(dumpsPath string, date time.Time, ctx context.Context) ([]st
 }
 
 func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, ctx context.Context) (string, error) {
-	outDir := "pageviews"
+	outDir := "cache"
 	if _, err := os.Stat(outDir); os.IsNotExist(err) {
 		err = os.Mkdir(outDir, 0755)
 		if err != nil {
@@ -55,6 +55,9 @@ func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, ctx con
 	if !os.IsNotExist(err) {
 		return "", err
 	}
+
+	logger.Printf("building monthly pageviews for %04d-%02d", year, month)
+	start := time.Now()
 
 	// We write our output into a temp file in the same directory
 	// as the final location, and then rename it atomically at the
@@ -108,6 +111,8 @@ func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, ctx con
 		return "", err
 	}
 
+	logger.Printf("built monthly pageviews for %04d-%02d in %.1fs",
+		year, month, time.Since(start).Seconds())
 	return outPath, nil
 }
 
@@ -215,7 +220,9 @@ func readPageviews(reader io.Reader, ch chan<- string, ctx context.Context) erro
 	n := 0
 	for scanner.Scan() {
 		n++
-		//if n == 500 { break }
+		//if n == 500 {
+		//	break
+		//}
 
 		cols := strings.Fields(scanner.Text())
 		if len(cols) != 6 {
