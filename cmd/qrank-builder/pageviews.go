@@ -20,11 +20,11 @@ import (
 	"github.com/lanrat/extsort"
 )
 
-func buildPageviews(dumpsPath string, date time.Time, ctx context.Context) ([]string, error) {
+func processPageviews(dumpsPath string, date time.Time, outDir string, ctx context.Context) ([]string, error) {
 	paths := make([]string, 0, 12)
 	for i := 1; i <= 12; i++ {
 		m := date.AddDate(0, -i, 0)
-		path, err := buildMonthlyPageviews(dumpsPath, m.Year(), m.Month(), ctx)
+		path, err := buildMonthlyPageviews(dumpsPath, m.Year(), m.Month(), outDir, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -34,17 +34,7 @@ func buildPageviews(dumpsPath string, date time.Time, ctx context.Context) ([]st
 	return paths, nil
 }
 
-func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, ctx context.Context) (string, error) {
-	outDir := "cache"
-	if _, err := os.Stat(outDir); os.IsNotExist(err) {
-		err = os.Mkdir(outDir, 0755)
-		if err != nil {
-			return "", err
-		}
-	} else if err != nil {
-		return "", err
-	}
-
+func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, outDir string, ctx context.Context) (string, error) {
 	outPath := filepath.Join(
 		outDir,
 		fmt.Sprintf("pageviews-%04d-%02d.bz2", year, month))

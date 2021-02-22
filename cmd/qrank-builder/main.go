@@ -27,12 +27,24 @@ func main() {
 }
 
 func computeQRank(dumpsPath string) error {
-	entitiesDate, _, err := findEntitiesDump(dumpsPath)
+	ctx := context.Background()
+
+	outDir := "cache"
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
+
+	edate, epath, err := findEntitiesDump(dumpsPath)
 	if err != nil {
 		return err
 	}
 
-	_, err = buildPageviews(dumpsPath, entitiesDate, context.Background())
+	_, err = processEntities(epath, edate, outDir, ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = processPageviews(dumpsPath, edate, outDir, ctx)
 	if err != nil {
 		return err
 	}
