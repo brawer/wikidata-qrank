@@ -104,6 +104,9 @@ func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, ctx con
 		return "", err
 	}
 
+	if err := tmpFile.Sync(); err != nil {
+	}
+
 	if err := tmpFile.Close(); err != nil {
 	}
 
