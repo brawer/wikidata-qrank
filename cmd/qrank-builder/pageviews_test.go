@@ -30,7 +30,7 @@ func checkReadPageviews(t *testing.T, input, expected string) {
 	g, ctx := errgroup.WithContext(context.Background())
 	g.Go(func() error {
 		defer close(ch)
-		return readPageviews(strings.NewReader(input), ch, ctx)
+		return readPageviews(false, strings.NewReader(input), ch, ctx)
 	})
 	if err := g.Wait(); err != nil {
 		t.Error(err)
@@ -54,7 +54,7 @@ func TestReadPageviewsCancel(t *testing.T) {
 	g.Go(func() error {
 		input := ("en.wikipedia Bar 18911 desktop 3 A2\n" +
 			"en.wikipedia Foo 10374 desktop 1 Q1\n")
-		return readPageviews(strings.NewReader(input), ch, subCtx)
+		return readPageviews(false, strings.NewReader(input), ch, subCtx)
 	})
 	cancel()
 	if err := g.Wait(); err != context.Canceled {

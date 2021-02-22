@@ -38,7 +38,7 @@ func findEntitiesDump(dumpsPath string) (time.Time, string, error) {
 	return date, resolved, nil
 }
 
-func processEntities(path string, date time.Time, outDir string, ctx context.Context) (string, error) {
+func processEntities(testRun bool, path string, date time.Time, outDir string, ctx context.Context) (string, error) {
 	year, month, day := date.Year(), date.Month(), date.Day()
 	sitelinksPath := filepath.Join(
 		outDir,
@@ -78,7 +78,7 @@ func processEntities(path string, date time.Time, outDir string, ctx context.Con
 	sorter, outChan, errChan := extsort.Strings(ch, config)
 	g, subCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return readEntities(path, ch, subCtx)
+		return readEntities(testRun, path, ch, subCtx)
 	})
 	g.Go(func() error {
 		sorter.Sort(subCtx)
@@ -112,7 +112,7 @@ func processEntities(path string, date time.Time, outDir string, ctx context.Con
 	return sitelinksPath, nil
 }
 
-func readEntities(path string, sitelinks chan<- string, ctx context.Context) error {
+func readEntities(testRun bool, path string, sitelinks chan<- string, ctx context.Context) error {
 	defer close(sitelinks)
 
 	file, err := os.Open(path)
@@ -140,9 +140,9 @@ func readEntities(path string, sitelinks chan<- string, ctx context.Context) err
 		if buf[len(buf)-1] == ',' {
 			buf = buf[0 : len(buf)-1]
 		}
-		//if numLines%100 == 0 {
-		//	break
-		//}
+		if testRun && numLines >= 100 {
+			break
+		}
 		if err := processEntity(buf, sitelinks, ctx); err != nil {
 			return err
 		}

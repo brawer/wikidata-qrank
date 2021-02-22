@@ -11,6 +11,7 @@ var logger *log.Logger
 
 func main() {
 	var dumps = flag.String("dumps", "/public/dumps/public", "path to Wikimedia dumps")
+	var testRun = flag.Bool("testRun", false, "if true, we process only a small fraction of the data; used for testing")
 	flag.Parse()
 
 	logfile, err := os.OpenFile("logs/qrank-builder.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -20,16 +21,20 @@ func main() {
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 
-	if err := computeQRank(*dumps); err != nil {
+	if err := computeQRank(*dumps, *testRun); err != nil {
 		log.Fatal(err)
 		return
 	}
 }
 
-func computeQRank(dumpsPath string) error {
+func computeQRank(dumpsPath string, testRun bool) error {
 	ctx := context.Background()
 
 	outDir := "cache"
+	if testRun {
+		outDir = "cache-testrun"
+	}
+
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -39,12 +44,12 @@ func computeQRank(dumpsPath string) error {
 		return err
 	}
 
-	_, err = processEntities(epath, edate, outDir, ctx)
+	_, err = processEntities(testRun, epath, edate, outDir, ctx)
 	if err != nil {
 		return err
 	}
 
-	_, err = processPageviews(dumpsPath, edate, outDir, ctx)
+	_, err = processPageviews(testRun, dumpsPath, edate, outDir, ctx)
 	if err != nil {
 		return err
 	}

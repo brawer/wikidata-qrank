@@ -20,11 +20,11 @@ import (
 	"github.com/lanrat/extsort"
 )
 
-func processPageviews(dumpsPath string, date time.Time, outDir string, ctx context.Context) ([]string, error) {
+func processPageviews(testRun bool, dumpsPath string, date time.Time, outDir string, ctx context.Context) ([]string, error) {
 	paths := make([]string, 0, 12)
 	for i := 1; i <= 12; i++ {
 		m := date.AddDate(0, -i, 0)
-		path, err := buildMonthlyPageviews(dumpsPath, m.Year(), m.Month(), outDir, ctx)
+		path, err := buildMonthlyPageviews(testRun, dumpsPath, m.Year(), m.Month(), outDir, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -34,7 +34,7 @@ func processPageviews(dumpsPath string, date time.Time, outDir string, ctx conte
 	return paths, nil
 }
 
-func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, outDir string, ctx context.Context) (string, error) {
+func buildMonthlyPageviews(testRun bool, dumpsPath string, year int, month time.Month, outDir string, ctx context.Context) (string, error) {
 	outPath := filepath.Join(
 		outDir,
 		fmt.Sprintf("pageviews-%04d-%02d.bz2", year, month))
@@ -74,7 +74,7 @@ func buildMonthlyPageviews(dumpsPath string, year int, month time.Month, outDir 
 
 	g, subCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return readMonthlyPageviews(dumpsPath, year, month, ch, subCtx)
+		return readMonthlyPageviews(testRun, dumpsPath, year, month, ch, subCtx)
 	})
 	g.Go(func() error {
 		sorter.Sort(subCtx)
@@ -168,7 +168,7 @@ func writeCount(w io.Writer, key string, count int64) error {
 	return nil
 }
 
-func readMonthlyPageviews(dumpsPath string, year int, month time.Month, ch chan<- string, ctx context.Context) error {
+func readMonthlyPageviews(testRun bool, dumpsPath string, year int, month time.Month, ch chan<- string, ctx context.Context) error {
 	defer close(ch)
 
 	g, subCtx := errgroup.WithContext(ctx)
@@ -183,14 +183,14 @@ func readMonthlyPageviews(dumpsPath string, year int, month time.Month, ch chan<
 			fmt.Sprintf("%04d-%02d", year, month),
 			filename)
 		g.Go(func() error {
-			return readPageviewsFile(path, ch, subCtx)
+			return readPageviewsFile(testRun, path, ch, subCtx)
 		})
 	}
 
 	return g.Wait()
 }
 
-func readPageviewsFile(path string, ch chan<- string, ctx context.Context) error {
+func readPageviewsFile(testRun bool, path string, ch chan<- string, ctx context.Context) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -203,19 +203,19 @@ func readPageviewsFile(path string, ch chan<- string, ctx context.Context) error
 	}
 	defer reader.Close()
 
-	return readPageviews(reader, ch, ctx)
+	return readPageviews(testRun, reader, ch, ctx)
 }
 
-func readPageviews(reader io.Reader, ch chan<- string, ctx context.Context) error {
+func readPageviews(testRun bool, reader io.Reader, ch chan<- string, ctx context.Context) error {
 	scanner := bufio.NewScanner(reader)
 	var lastSite, lastTitle string
 	var lastCount int64
 	n := 0
 	for scanner.Scan() {
 		n++
-		//if n == 500 {
-		//	break
-		//}
+		if testRun && n >= 500 {
+			break
+		}
 
 		cols := strings.Fields(scanner.Text())
 		if len(cols) != 6 {
