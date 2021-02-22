@@ -1,4 +1,4 @@
-name: Go
+name: CI
 
 on:
   push:
@@ -19,7 +19,14 @@ jobs:
         go-version: 1.16
 
     - name: Build
-      run: go build -v ./...
-
+      run: go build -ldflags="-s -w" -v ./...
+      
     - name: Test
       run: go test -v ./...
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: qrank-builder
+        path: qrank-builder
+        retention-days: 7
