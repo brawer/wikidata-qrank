@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/lanrat/extsort"
 )
@@ -42,7 +43,7 @@ func processEntities(testRun bool, path string, date time.Time, outDir string, c
 	year, month, day := date.Year(), date.Month(), date.Day()
 	sitelinksPath := filepath.Join(
 		outDir,
-		fmt.Sprintf("sitelinks-%04d-%02d-%02d.bz2", year, month, day))
+		fmt.Sprintf("sitelinks-%04d-%02d-%02d.br", year, month, day))
 	_, err := os.Stat(sitelinksPath)
 	if err == nil {
 		return sitelinksPath, nil // use pre-existing file
@@ -65,11 +66,7 @@ func processEntities(testRun bool, path string, date time.Time, outDir string, c
 	}
 	defer tmpSitelinksFile.Close()
 
-	bzConfig := bzip2.WriterConfig{Level: bzip2.BestCompression}
-	sitelinksWriter, err := bzip2.NewWriter(tmpSitelinksFile, &bzConfig)
-	if err != nil {
-		return "", err
-	}
+	sitelinksWriter := brotli.NewWriterLevel(tmpSitelinksFile, 6)
 	defer sitelinksWriter.Close()
 
 	ch := make(chan string, 10000)
@@ -140,7 +137,7 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 		if buf[len(buf)-1] == ',' {
 			buf = buf[0 : len(buf)-1]
 		}
-		if testRun && numLines >= 100 {
+		if testRun && numLines >= 100000 {
 			break
 		}
 		if err := processEntity(buf, sitelinks, ctx); err != nil {
