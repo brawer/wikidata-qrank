@@ -5,6 +5,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/dsnet/compress/bzip2"
@@ -48,6 +50,38 @@ func TestFindEntitiesDump(t *testing.T) {
 	expected, _ := os.Stat(expectedPath)
 	if !os.SameFile(expected, got) {
 		t.Errorf("expected %q, got %q", expectedPath, path)
+	}
+}
+
+func TestProcessEntity(t *testing.T) {
+	data, err := readTestEntities("testdata/twenty_entities.json.bz2")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan string, 10)
+	if err := processEntity(data[5], ch, context.Background()); err != nil {
+		t.Error(err)
+		return
+	}
+
+	close(ch)
+	got := make([]string, 0, 8)
+	for s := range ch {
+		got = append(got, s)
+	}
+	sort.Strings(got)
+
+	expected := []string{
+		"commons.wiki/category:seogyeongju_station Q58977",
+		"ja.wiki/西慶州駅 Q58977",
+		"ko.wiki/서경주역 Q58977",
+		"zh.wiki/西庆州站 Q58977",
+	}
+	e, g := strings.Join(expected, "|"), strings.Join(got, "|")
+	if e != g {
+		t.Errorf("expected %q, got %q", e, g)
 	}
 }
 
