@@ -2,12 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -156,22 +157,100 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 }
 
 func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) error {
-	var e struct {
-		Id        string
-		Sitelinks map[string]struct{ Title string }
+	// Unoptimized: 228 μs/op [Intel i9-9880H, 2.3GHz]
+	// var e struct {
+	//	Id        string
+	//	Sitelinks map[string]struct{ Title string }
+	// }
+	// json.Unmarshal(data, &e)
+
+	// Optimized: 24 μs/op [Intel i9-9880H, 2.3GHz]
+	// The code is really ugly, but it seems to be worth it.
+	limit := len(data)
+
+	var id string
+	idStart := bytes.Index(data, []byte(`,"id":"Q`))
+	if idStart > 0 {
+		idStart = idStart + 7
+		idLen := bytes.IndexByte(data[idStart:limit], '"')
+		if idLen >= 2 && idLen < 25 {
+			id = string(data[idStart : idStart+idLen])
+		}
 	}
-	if err := json.Unmarshal(data, &e); err != nil {
-		return err
+
+	// Sitelinks typically start at around 90% into the data buffer.
+	// This optimization saves about 9 μs/op [Intel i9-9880H, 2.3GHz].
+	guess := (limit * 7) / 8
+	slStart := bytes.Index(data[guess:limit], []byte(`,"sitelinks":{`))
+	if slStart > 0 {
+		slStart += guess
+	} else {
+		slStart = bytes.Index(data, []byte(`,"sitelinks":{`))
 	}
-	for key, val := range e.Sitelinks {
-		site := strings.Replace(key, "wiki", ".wiki", 1)
-		select {
-		case sitelinks <- formatLine(site, val.Title, e.Id):
-		case <-ctx.Done():
-			return ctx.Err()
+
+	if slStart >= 0 {
+		pos := slStart + 15 // Scan past ,"sitelinks":{"
+		for {
+			siteStart := bytes.Index(data[pos:limit], []byte(`":{"site":"`))
+			if siteStart < 0 {
+				break
+			}
+			siteStart += pos + 11
+			siteLen := bytes.IndexByte(data[siteStart:limit], '"')
+			if siteLen < 2 || siteLen > 50 {
+				break
+			}
+
+			// Rewrite "enwiki" to "en.wiki", "alswikinews"
+			// to "als.wikinews", etc. To save (many) buffer allocations,
+			// we do this in place.
+			wiki := []byte("wiki")
+			var site string
+			if bytes.HasSuffix(data[siteStart:siteStart+siteLen], wiki) &&
+				data[siteStart+siteLen-4] != '.' {
+				p := siteStart + siteLen - 4
+				data[p] = '.'
+				data[p+1] = 'w'
+				data[p+2] = 'i'
+				data[p+3] = 'k'
+				data[p+4] = 'i'
+				site = string(data[siteStart : siteStart+siteLen+1])
+			} else {
+				site = string(data[siteStart : siteStart+siteLen])
+			}
+			if site == "commons.wiki" {
+				site = "commons.wikimedia" // as in pageviews
+			}
+
+			titleStart := siteStart + siteLen + 11
+			titleLen := bytes.IndexByte(data[titleStart:limit], '"')
+			if titleLen < 1 || titleLen > 5000 {
+				break
+			}
+			title := unescapeJSONString(data[titleStart : titleStart+titleLen])
+			pos = titleStart + titleLen
+
+			select {
+			case sitelinks <- formatLine(site, title, id):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 	return nil
+}
+
+func unescapeJSONString(b []byte) string {
+	// Most JSON strings do not contain backslashes.
+	// This optimization saves about 1 μs/op [Intel i9-9880H, 2.3GHz].
+	if bytes.IndexByte(b, '\\') < 0 {
+		return string(b)
+	}
+	s, err := strconv.Unquote("\"" + string(b) + "\"")
+	if err != nil {
+		panic("unescapeString(\"" + string(b) + "\")")
+	}
+	return s
 }
 
 func writeSitelinks(ch <-chan string, w io.Writer, ctx context.Context) error {

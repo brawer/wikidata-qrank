@@ -74,7 +74,7 @@ func TestProcessEntity(t *testing.T) {
 	sort.Strings(got)
 
 	expected := []string{
-		"commons.wiki/category:seogyeongju_station Q58977",
+		"commons.wikimedia/category:seogyeongju_station Q58977",
 		"ja.wiki/西慶州駅 Q58977",
 		"ko.wiki/서경주역 Q58977",
 		"zh.wiki/西庆州站 Q58977",
@@ -139,4 +139,26 @@ func readTestEntities(path string) ([][]byte, error) {
 	}
 
 	return data, nil
+}
+
+func TestUnescapeJSONString(t *testing.T) {
+	tests := []struct{ in, expected string }{
+		{in: `Foo:Bar`, expected: "Foo:Bar"},
+		{in: `a\\a`, expected: `a\a`},
+		{in: `a\"a`, expected: "a\"a"},
+		{in: `a'a`, expected: "a'a"},
+		{in: `a\ba`, expected: "a\ba"},
+		{in: `a\na`, expected: "a\na"},
+		{in: `a\ra`, expected: "a\ra"},
+		{in: `a\ta`, expected: "a\ta"},
+		{in: `\uc11c\uacbd\uc8fc\uc5ed`, expected: "서경주역"},
+		{in: `\u897f\u6176\u5dde\u99c5`, expected: "西慶州駅"},
+		{in: `\u897f\u5e86\u5dde\u7ad9`, expected: "西庆州站"},
+	}
+	for _, test := range tests {
+		got := unescapeJSONString([]byte(test.in))
+		if got != test.expected {
+			t.Errorf("expected %q, got %q", test.expected, got)
+		}
+	}
 }
