@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -164,8 +163,8 @@ func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) er
 	// }
 	// json.Unmarshal(data, &e)
 
-	// Optimized: 24 μs/op [Intel i9-9880H, 2.3GHz]
-	// The code is really ugly, but it seems to be worth it.
+	// Optimized: 3 μs/op [Intel i9-9880H, 2.3GHz]
+	// The optimized code is really ugly, but it seems to be worth it.
 	limit := len(data)
 
 	var id string
@@ -227,30 +226,20 @@ func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) er
 			if titleLen < 1 || titleLen > 5000 {
 				break
 			}
-			title := unescapeJSONString(data[titleStart : titleStart+titleLen])
+
+			title, ok := unquote(data[titleStart-1 : titleStart+titleLen+1])
 			pos = titleStart + titleLen
 
-			select {
-			case sitelinks <- formatLine(site, title, id):
-			case <-ctx.Done():
-				return ctx.Err()
+			if ok {
+				select {
+				case sitelinks <- formatLine(site, title, id):
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 		}
 	}
 	return nil
-}
-
-func unescapeJSONString(b []byte) string {
-	// Most JSON strings do not contain backslashes.
-	// This optimization saves about 1 μs/op [Intel i9-9880H, 2.3GHz].
-	if bytes.IndexByte(b, '\\') < 0 {
-		return string(b)
-	}
-	s, err := strconv.Unquote("\"" + string(b) + "\"")
-	if err != nil {
-		panic("unescapeString(\"" + string(b) + "\")")
-	}
-	return s
 }
 
 func writeSitelinks(ch <-chan string, w io.Writer, ctx context.Context) error {
