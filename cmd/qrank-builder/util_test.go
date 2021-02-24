@@ -31,6 +31,7 @@ func TestUnquote(t *testing.T) {
 	tests := []struct{ in, expected string }{
 		{in: `"Foo:Bar"`, expected: "Foo:Bar"},
 		{in: `"a\\a"`, expected: `a\a`},
+		{in: `"a\/a"`, expected: "a/a"},
 		{in: `"a\"a"`, expected: "a\"a"},
 		{in: `"a'a"`, expected: "a'a"},
 		{in: `"a\ba"`, expected: "a\ba"},
