@@ -80,11 +80,12 @@ func TestProcessEntity(t *testing.T) {
 func TestProcessEntitySpecialSitelinks(t *testing.T) {
 	e := []byte(
 		`{"type":"item","id":"Q132576","sitelinks":{` +
-			`"enwiki":{"site":"enwiki","title":"Impala"}` +
-			`"be_x_old_wiki":{"site":"be_x_oldwiki","title":"Імпала"}` + // in Q72
-			`"commonswiki":{"site":"commonswiki","title":"Aepyceros melampus"}` +
-			`"simplewiki":{"site":"simplewiki","title":"Impala"}` +
-			`"specieswiki":{"site":"specieswiki","title":"Aepyceros melampus"}` +
+			`"enwiki":{"site":"enwiki","title":"Impala"},` +
+			`"be_x_old_wiki":{"site":"be_x_oldwiki","title":"Імпала"},` + // in Q72
+			`"commonswiki":{"site":"commonswiki","title":"Aepyceros melampus"},` +
+			`"simplewiki":{"site":"simplewiki","title":"Impala"},` +
+			`"specieswiki":{"site":"specieswiki","title":"Aepyceros melampus"},` +
+			`"zh_min_nanwiki":{"site":"zh_min_nanwiki","title":"Impala"}` +
 			`}}`)
 	got, err := callProcessEntity(e)
 	if err != nil {
@@ -95,6 +96,7 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 		"be-tarask.wiki/імпала Q132576",
 		"commons.wikimedia/aepyceros_melampus Q132576",
 		"en.wiki/impala Q132576",
+		"nan.wiki/impala Q132576",
 		"simple.wiki/impala Q132576",
 		"species.wikimedia/aepyceros_melampus Q132576",
 	}, "|")

@@ -19,6 +19,10 @@ func TestReadPageviews(t *testing.T) {
 				"ang.wikipedia Lech_Wałęsa 10374 desktop 1 Q1",
 			"als.wiki/ägypten 5|ang.wiki/lech_wałęsa 1",
 		},
+		{
+			"zh-min-nan.wikipedia Ìn-tō͘-chi-ná 670272 desktop 1 J1",
+			"nan.wiki/ìn-tō͘-chi-ná 1",
+		},
 	}
 	for _, c := range tests {
 		checkReadPageviews(t, c.input, c.expected)

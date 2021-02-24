@@ -214,6 +214,16 @@ func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) er
 			} else {
 				site = string(data[siteStart : siteStart+siteLen])
 			}
+
+			// In 2009, IETF BCP 47 grandfathered langauge tag zh-min-nan to nan.
+			// As of early 2021, Wikimedia still plans for a rename, but it is not done yet.
+			// We assume this will eventually come, and prepare for it.
+			// https://phabricator.wikimedia.org/T86915
+			// https://phabricator.wikimedia.org/T30442
+			if site[0] == 'z' && strings.HasPrefix(site, "zh_min_nan.") {
+				site = site[7:len(site)]
+			}
+
 			switch site {
 			case "be_x_old.wiki":
 				site = "be-tarask.wiki"

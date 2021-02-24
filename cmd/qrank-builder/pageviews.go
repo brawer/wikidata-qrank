@@ -227,6 +227,15 @@ func readPageviews(testRun bool, reader io.Reader, ch chan<- string, ctx context
 			site = site[:len(site)-5]
 		}
 
+		// In 2009, IETF BCP 47 grandfathered langauge tag zh-min-nan to nan.
+		// As of early 2021, Wikimedia still plans for a rename, but it is not done yet.
+		// We assume this will eventually come, and prepare for it.
+		// https://phabricator.wikimedia.org/T86915
+		// https://phabricator.wikimedia.org/T30442
+		if site[0] == 'z' && strings.HasPrefix(site, "zh-min-nan.") {
+			site = site[7:len(site)]
+		}
+
 		// Some, but not all, queryies are urlescaped.
 		// Try to unescape, but fall back to raw query
 		// if the syntax is invalid.
