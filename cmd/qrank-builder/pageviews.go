@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/lanrat/extsort"
 )
@@ -37,7 +38,7 @@ func processPageviews(testRun bool, dumpsPath string, date time.Time, outDir str
 func buildMonthlyPageviews(testRun bool, dumpsPath string, year int, month time.Month, outDir string, ctx context.Context) (string, error) {
 	outPath := filepath.Join(
 		outDir,
-		fmt.Sprintf("pageviews-%04d-%02d.bz2", year, month))
+		fmt.Sprintf("pageviews-%04d-%02d.br", year, month))
 	_, err := os.Stat(outPath)
 	if err == nil {
 		return outPath, nil // use pre-existing file
@@ -60,8 +61,7 @@ func buildMonthlyPageviews(testRun bool, dumpsPath string, year int, month time.
 	}
 	defer tmpFile.Close()
 
-	bzConfig := bzip2.WriterConfig{Level: bzip2.BestCompression}
-	writer, err := bzip2.NewWriter(tmpFile, &bzConfig)
+	writer := brotli.NewWriterLevel(tmpFile, 9)
 	if err != nil {
 		return "", err
 	}
