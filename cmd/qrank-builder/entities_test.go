@@ -60,29 +60,61 @@ func TestProcessEntity(t *testing.T) {
 		return
 	}
 
-	ch := make(chan string, 10)
-	if err := processEntity(data[5], ch, context.Background()); err != nil {
+	got, err := callProcessEntity(data[5])
+	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	close(ch)
-	got := make([]string, 0, 8)
-	for s := range ch {
-		got = append(got, s)
-	}
-	sort.Strings(got)
-
-	expected := []string{
+	expected := strings.Join([]string{
 		"commons.wikimedia/category:seogyeongju_station Q58977",
 		"ja.wiki/西慶州駅 Q58977",
 		"ko.wiki/서경주역 Q58977",
 		"zh.wiki/西庆州站 Q58977",
+	}, "|")
+	if expected != got {
+		t.Errorf("expected %q, got %q", expected, got)
 	}
-	e, g := strings.Join(expected, "|"), strings.Join(got, "|")
-	if e != g {
-		t.Errorf("expected %q, got %q", e, g)
+}
+
+func TestProcessEntitySpecialSitelinks(t *testing.T) {
+	e := []byte(
+		`{"type":"item","id":"Q132576","sitelinks":{` +
+			`"enwiki":{"site":"enwiki","title":"Impala"}` +
+			`"be_x_old_wiki":{"site":"be_x_oldwiki","title":"Імпала"}` + // in Q72
+			`"commonswiki":{"site":"commonswiki","title":"Aepyceros melampus"}` +
+			`"simplewiki":{"site":"simplewiki","title":"Impala"}` +
+			`"specieswiki":{"site":"specieswiki","title":"Aepyceros melampus"}` +
+			`}}`)
+	got, err := callProcessEntity(e)
+	if err != nil {
+		t.Error(err)
+		return
 	}
+	expected := strings.Join([]string{
+		"be-tarask.wiki/імпала Q132576",
+		"commons.wikimedia/aepyceros_melampus Q132576",
+		"en.wiki/impala Q132576",
+		"simple.wiki/impala Q132576",
+		"species.wikimedia/aepyceros_melampus Q132576",
+	}, "|")
+	if expected != got {
+		t.Errorf("expected %s, got %s", expected, got)
+	}
+}
+
+func callProcessEntity(rec []byte) (string, error) {
+	ch := make(chan string, 10)
+	if err := processEntity(rec, ch, context.Background()); err != nil {
+		return "", err
+	}
+	close(ch)
+	got := make([]string, 0, 10)
+	for s := range ch {
+		got = append(got, s)
+	}
+	sort.Strings(got)
+	return strings.Join(got, "|"), nil
 }
 
 func BenchmarkProcessEntity(b *testing.B) {

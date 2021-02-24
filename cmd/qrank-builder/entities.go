@@ -214,8 +214,13 @@ func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) er
 			} else {
 				site = string(data[siteStart : siteStart+siteLen])
 			}
-			if site == "commons.wiki" {
-				site = "commons.wikimedia" // as in pageviews
+			switch site {
+			case "be_x_old.wiki":
+				site = "be-tarask.wiki"
+			case "commons.wiki":
+				site = "commons.wikimedia"
+			case "species.wiki":
+				site = "species.wikimedia"
 			}
 
 			titleStart := siteStart + siteLen + 11
