@@ -45,8 +45,10 @@ func formatLine(site, title, value string) string {
 
 // getu4 decodes \uXXXX from the beginning of s, returning the hex value,
 // or it returns -1.
-// [Source: https://golang.org/src/encoding/json/decode.go]
 func getu4(s []byte) rune {
+	// Source: https://golang.org/src/encoding/json/decode.go
+	// License: BSD-3-Clause
+	// License-URL: https://github.com/golang/go/blob/master/LICENSE
 	if len(s) < 6 || s[0] != '\\' || s[1] != 'u' {
 		return -1
 	}
@@ -69,15 +71,19 @@ func getu4(s []byte) rune {
 
 // unquote converts a quoted JSON string literal s into an actual string t.
 // The rules are different than for Go, so cannot use strconv.Unquote.
-// [Source: https://golang.org/src/encoding/json/decode.go]
 func unquote(s []byte) (t string, ok bool) {
+	// Source: https://golang.org/src/encoding/json/decode.go
+	// License: BSD-3-Clause
+	// License-URL: https://github.com/golang/go/blob/master/LICENSE
 	s, ok = unquoteBytes(s)
 	t = string(s)
 	return
 }
 
-// [Source: https://golang.org/src/encoding/json/decode.go]
 func unquoteBytes(s []byte) (t []byte, ok bool) {
+	// Source: https://golang.org/src/encoding/json/decode.go
+	// License: BSD-3-Clause
+	// License-URL: https://github.com/golang/go/blob/master/LICENSE
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
 		return
 	}
