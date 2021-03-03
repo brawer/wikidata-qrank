@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -37,6 +39,37 @@ func findEntitiesDump(dumpsPath string) (time.Time, string, error) {
 	// To avoid this race condition, we need to return the resolved
 	// path here, not the symlink.
 	return date, resolved, nil
+}
+
+type WikidataSplit struct {
+	Start int64  // Position of compression block in bzip2 file.
+	Limit string // First entity coming after the current split.
+}
+
+func SplitWikidataDump(r io.ReaderAt, size int64, numSplits int) ([]WikidataSplit, error) {
+	type SplitPoint struct {
+		Start       int64
+		FirstEntity string
+	}
+	splits := make([]SplitPoint, 0, numSplits)
+	for i := 0; i < numSplits; i++ {
+		off := int64(i) * size / int64(numSplits)
+		start, entity, err := findEntitySplit(r, off)
+		if err != nil {
+			return nil, err
+		}
+		splits = append(splits, SplitPoint{start, entity})
+	}
+	result := make([]WikidataSplit, len(splits))
+	for i, split := range splits {
+		result[i].Start = split.Start
+		if i < len(splits)-1 {
+			result[i].Limit = splits[i+1].FirstEntity
+		} else {
+			result[i].Limit = "*"
+		}
+	}
+	return result, nil
 }
 
 func findEntitySplit(r io.ReaderAt, off int64) (int64, string, error) {
@@ -191,12 +224,45 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 	}
 	defer file.Close()
 
-	reader, err := bzip2.NewReader(file, &bzip2.ReaderConfig{})
+	stat, err := file.Stat()
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	fileSize := stat.Size()
 
+	splits, err := SplitWikidataDump(file, fileSize, runtime.NumCPU())
+	if err != nil {
+		return err
+	}
+
+	work := make(chan WikidataSplit, len(splits))
+	for _, split := range splits {
+		work <- split
+	}
+	close(work)
+
+	g, ctx := errgroup.WithContext(ctx)
+	for i := 0; i < runtime.NumCPU(); i++ {
+		g.Go(func() error {
+			for task := range work {
+				reader, err := NewBzip2ReaderAt(file, task.Start, fileSize-task.Start)
+				if err != nil {
+					return err
+				}
+				if err := readWikidataSplit(reader, testRun, task.Limit, sitelinks, ctx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func readWikidataSplit(reader io.Reader, testRun bool, limit string, sitelinks chan<- string, ctx context.Context) error {
 	numLines := 0
 	scanner := bufio.NewScanner(reader)
 	maxLineSize := 8 * 1024 * 1024
@@ -210,22 +276,26 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 		if buf[len(buf)-1] == ',' {
 			buf = buf[0 : len(buf)-1]
 		}
-		if testRun && numLines >= 100000 {
+		if testRun && numLines >= 10000 {
 			break
 		}
-		if err := processEntity(buf, sitelinks, ctx); err != nil {
+		if err := processEntity(buf, limit, sitelinks, ctx); err != nil {
+			if err == limitReached {
+				return nil
+			}
 			return err
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	logger.Printf("Processed %d entities", numLines)
 
 	return nil
 }
 
-func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) error {
+var limitReached error = errors.New("limit reached")
+
+func processEntity(data []byte, limitID string, sitelinks chan<- string, ctx context.Context) error {
 	// Unoptimized: 228 μs/op [Intel i9-9880H, 2.3GHz]
 	// var e struct {
 	//	Id        string
@@ -248,6 +318,9 @@ func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) er
 		if idLen >= 2 && idLen < 25 {
 			id = string(data[idStart : idStart+idLen])
 		}
+	}
+	if id == limitID {
+		return limitReached
 	}
 
 	// Sitelinks typically start at around 90% into the data buffer.

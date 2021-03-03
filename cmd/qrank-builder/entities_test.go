@@ -130,7 +130,7 @@ func TestProcessEntity(t *testing.T) {
 		return
 	}
 
-	got, err := callProcessEntity(data[5])
+	got, err := callProcessEntity(data[5], "")
 	if err != nil {
 		t.Error(err)
 		return
@@ -144,6 +144,11 @@ func TestProcessEntity(t *testing.T) {
 	}, "|")
 	if expected != got {
 		t.Errorf("expected %q, got %q", expected, got)
+	}
+
+	_, err = callProcessEntity(data[5], "Q58977")
+	if err != limitReached {
+		t.Errorf("expected error limitReached, got %q", err)
 	}
 }
 
@@ -159,7 +164,7 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 			`"specieswiki":{"site":"specieswiki","title":"Aepyceros melampus"},` +
 			`"zh_min_nanwiki":{"site":"zh_min_nanwiki","title":"Impala"}` +
 			`}}`)
-	got, err := callProcessEntity(e)
+	got, err := callProcessEntity(e, "")
 	if err != nil {
 		t.Error(err)
 		return
@@ -179,9 +184,9 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 	}
 }
 
-func callProcessEntity(rec []byte) (string, error) {
+func callProcessEntity(rec []byte, limit string) (string, error) {
 	ch := make(chan string, 10)
-	if err := processEntity(rec, ch, context.Background()); err != nil {
+	if err := processEntity(rec, limit, ch, context.Background()); err != nil {
 		return "", err
 	}
 	close(ch)
@@ -209,7 +214,7 @@ func BenchmarkProcessEntity(b *testing.B) {
 
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		if err := processEntity(data[i%len(data)], ch, ctx); err != nil {
+		if err := processEntity(data[i%len(data)], "", ch, ctx); err != nil {
 			b.Error(err)
 			return
 		}
