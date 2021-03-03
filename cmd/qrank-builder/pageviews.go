@@ -223,9 +223,6 @@ func readPageviews(testRun bool, reader io.Reader, ch chan<- string, ctx context
 		}
 
 		site := cols[0]
-		if strings.HasSuffix(site, ".wikipedia") {
-			site = site[:len(site)-5]
-		}
 
 		// In 2009, IETF BCP 47 grandfathered langauge tag zh-min-nan to nan.
 		// As of early 2021, Wikimedia still plans for a rename, but it is not done yet.
