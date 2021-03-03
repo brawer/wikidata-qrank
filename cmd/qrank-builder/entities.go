@@ -352,16 +352,29 @@ func processEntity(data []byte, limitID string, sitelinks chan<- string, ctx con
 				break
 			}
 
+			// https://en.wikipedia.org/wiki/List_of_Wikipedias#Wikipedia_edition_codes
 			lang := string(data[siteStart : siteStart+wikiPos])
 			switch lang {
 			case "als":
 				lang = "gsw" // Swiss German
 
+			case "bat_smg":
+				lang = "sgs"
+
 			case "be_x_old":
 				lang = "be-tarask" // Belarusian
 
+			case "fiu_vro":
+				lang = "vro"
+
+			case "roa_rup":
+				lang = "rup"
+
 			case "simple":
 				lang = "en-x-simple" // Simplified English
+
+			case "zh_classical":
+				lang = "lzh"
 
 			case "zh_min_nan":
 				// In 2009, IETF BCP 47 grandfathered langauge tag zh-min-nan to nan.
@@ -370,10 +383,15 @@ func processEntity(data []byte, limitID string, sitelinks chan<- string, ctx con
 				// https://phabricator.wikimedia.org/T86915
 				// https://phabricator.wikimedia.org/T30442
 				lang = "nan" // Min Nan Chinese
+
+			case "zh_yue":
+				lang = "yue"
 			}
 
 			var site string
-			if wikiPos == siteLen-4 {
+			if wikiPos == 0 && string(data[siteStart+wikiPos:siteStart+siteLen]) == "wikidatawiki" {
+				site = "und.wikidata"
+			} else if wikiPos == siteLen-4 {
 				switch lang {
 				case "commons":
 					site = "und.commons"

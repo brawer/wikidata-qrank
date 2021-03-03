@@ -159,9 +159,12 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 			`"alswikiquote":{"site":"alswikiquote","title":"Impala"},` +
 			`"be_x_old_wiki":{"site":"be_x_oldwiki","title":"Імпала"},` + // in Q72
 			`"commonswiki":{"site":"commonswiki","title":"Aepyceros melampus"},` +
+			`"roa_rupwiki":{"site":"roa_rupwiki","title":"Impala"},` +
 			`"simplewiki":{"site":"simplewiki","title":"Impala"},` +
 			`"simplewikinews":{"site":"simplewikinews","title":"Impala"},` +
 			`"specieswiki":{"site":"specieswiki","title":"Aepyceros melampus"},` +
+			`"wikidatawiki":{"site":"wikidatawiki","title":"Project_chat"}` +
+			`"zh_classicalwikisource":{"site":"zh_classicalwikisource","title":"Impala"}` +
 			`"zh_min_nanwiki":{"site":"zh_min_nanwiki","title":"Impala"}` +
 			`}}`)
 	got, err := callProcessEntity(e, "")
@@ -175,8 +178,11 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 		"en-x-simple.wikipedia/impala Q132576",
 		"en.wikipedia/impala Q132576",
 		"gsw.wikiquote/impala Q132576",
+		"lzh.wikisource/impala Q132576",
 		"nan.wikipedia/impala Q132576",
+		"rup.wikipedia/impala Q132576",
 		"und.commons/aepyceros_melampus Q132576",
+		"und.wikidata/project_chat Q132576",
 		"und.wikispecies/aepyceros_melampus Q132576",
 	}, "|")
 	if expected != got {
@@ -185,12 +191,12 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 }
 
 func callProcessEntity(rec []byte, limit string) (string, error) {
-	ch := make(chan string, 10)
+	ch := make(chan string, 20)
 	if err := processEntity(rec, limit, ch, context.Background()); err != nil {
 		return "", err
 	}
 	close(ch)
-	got := make([]string, 0, 10)
+	got := make([]string, 0, 20)
 	for s := range ch {
 		got = append(got, s)
 	}
