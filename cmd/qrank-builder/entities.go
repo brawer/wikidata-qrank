@@ -160,8 +160,11 @@ func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) er
 	// }
 	// json.Unmarshal(data, &e)
 
-	// Optimized: 3 μs/op [Intel i9-9880H, 2.3GHz]
+	// Optimized: 21.9 μs/op [Intel i9-9880H, 2.3GHz]
 	// The optimized code is really ugly, but it seems to be worth it.
+	// An earlier version only needed 3 μs/op, but it had bugs.
+	// If you ever need to micro-optimize further, please have a look
+	// at the revision history in source control.
 	limit := len(data)
 
 	var id string
@@ -197,40 +200,44 @@ func processEntity(data []byte, sitelinks chan<- string, ctx context.Context) er
 				break
 			}
 
-			// Rewrite "enwiki" to "en.wiki", "alswikinews"
-			// to "als.wikinews", etc. To save (many) buffer allocations,
-			// we do this in place.
-			wiki := []byte("wiki")
+			siteBytes := data[siteStart : siteStart+siteLen]
+			wikiPos := bytes.Index(siteBytes, []byte("wiki"))
+			if wikiPos < 0 {
+				break
+			}
+
+			lang := string(data[siteStart : siteStart+wikiPos])
+			switch lang {
+			case "als":
+				lang = "gsw" // Swiss German
+
+			case "be_x_old":
+				lang = "be-tarask" // Belarusian
+
+			case "simple":
+				lang = "en-x-simple" // Simplified English
+
+			case "zh_min_nan":
+				// In 2009, IETF BCP 47 grandfathered langauge tag zh-min-nan to nan.
+				// As of early 2021, Wikimedia still plans for a rename, but it is not done yet.
+				// We assume this will eventually come, and prepare for it.
+				// https://phabricator.wikimedia.org/T86915
+				// https://phabricator.wikimedia.org/T30442
+				lang = "nan" // Min Nan Chinese
+			}
+
 			var site string
-			if bytes.HasSuffix(data[siteStart:siteStart+siteLen], wiki) &&
-				data[siteStart+siteLen-4] != '.' {
-				p := siteStart + siteLen - 4
-				data[p] = '.'
-				data[p+1] = 'w'
-				data[p+2] = 'i'
-				data[p+3] = 'k'
-				data[p+4] = 'i'
-				site = string(data[siteStart : siteStart+siteLen+1])
+			if wikiPos == siteLen-4 {
+				switch lang {
+				case "commons":
+					site = "und.commons"
+				case "species":
+					site = "und.wikispecies"
+				default:
+					site = lang + "." + "wikipedia"
+				}
 			} else {
-				site = string(data[siteStart : siteStart+siteLen])
-			}
-
-			// In 2009, IETF BCP 47 grandfathered langauge tag zh-min-nan to nan.
-			// As of early 2021, Wikimedia still plans for a rename, but it is not done yet.
-			// We assume this will eventually come, and prepare for it.
-			// https://phabricator.wikimedia.org/T86915
-			// https://phabricator.wikimedia.org/T30442
-			if site[0] == 'z' && strings.HasPrefix(site, "zh_min_nan.") {
-				site = site[7:len(site)]
-			}
-
-			switch site {
-			case "be_x_old.wiki":
-				site = "be-tarask.wiki"
-			case "commons.wiki":
-				site = "commons.wikimedia"
-			case "species.wiki":
-				site = "species.wikimedia"
+				site = lang + "." + string(data[siteStart+wikiPos:siteStart+siteLen])
 			}
 
 			titleStart := siteStart + siteLen + 11

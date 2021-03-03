@@ -67,10 +67,10 @@ func TestProcessEntity(t *testing.T) {
 	}
 
 	expected := strings.Join([]string{
-		"commons.wikimedia/category:seogyeongju_station Q58977",
-		"ja.wiki/西慶州駅 Q58977",
-		"ko.wiki/서경주역 Q58977",
-		"zh.wiki/西庆州站 Q58977",
+		"ja.wikipedia/西慶州駅 Q58977",
+		"ko.wikipedia/서경주역 Q58977",
+		"und.commons/category:seogyeongju_station Q58977",
+		"zh.wikipedia/西庆州站 Q58977",
 	}, "|")
 	if expected != got {
 		t.Errorf("expected %q, got %q", expected, got)
@@ -81,9 +81,11 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 	e := []byte(
 		`{"type":"item","id":"Q132576","sitelinks":{` +
 			`"enwiki":{"site":"enwiki","title":"Impala"},` +
+			`"alswikiquote":{"site":"alswikiquote","title":"Impala"},` +
 			`"be_x_old_wiki":{"site":"be_x_oldwiki","title":"Імпала"},` + // in Q72
 			`"commonswiki":{"site":"commonswiki","title":"Aepyceros melampus"},` +
 			`"simplewiki":{"site":"simplewiki","title":"Impala"},` +
+			`"simplewikinews":{"site":"simplewikinews","title":"Impala"},` +
 			`"specieswiki":{"site":"specieswiki","title":"Aepyceros melampus"},` +
 			`"zh_min_nanwiki":{"site":"zh_min_nanwiki","title":"Impala"}` +
 			`}}`)
@@ -93,12 +95,14 @@ func TestProcessEntitySpecialSitelinks(t *testing.T) {
 		return
 	}
 	expected := strings.Join([]string{
-		"be-tarask.wiki/імпала Q132576",
-		"commons.wikimedia/aepyceros_melampus Q132576",
-		"en.wiki/impala Q132576",
-		"nan.wiki/impala Q132576",
-		"simple.wiki/impala Q132576",
-		"species.wikimedia/aepyceros_melampus Q132576",
+		"be-tarask.wikipedia/імпала Q132576",
+		"en-x-simple.wikinews/impala Q132576",
+		"en-x-simple.wikipedia/impala Q132576",
+		"en.wikipedia/impala Q132576",
+		"gsw.wikiquote/impala Q132576",
+		"nan.wikipedia/impala Q132576",
+		"und.commons/aepyceros_melampus Q132576",
+		"und.wikispecies/aepyceros_melampus Q132576",
 	}, "|")
 	if expected != got {
 		t.Errorf("expected %s, got %s", expected, got)
