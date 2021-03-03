@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -50,6 +52,74 @@ func TestFindEntitiesDump(t *testing.T) {
 	expected, _ := os.Stat(expectedPath)
 	if !os.SameFile(expected, got) {
 		t.Errorf("expected %q, got %q", expectedPath, path)
+	}
+}
+
+func TestNewBzip2ReaderAt(t *testing.T) {
+	var buf bytes.Buffer
+	buf.WriteString("Junk")
+	bz, _ := bzip2.NewWriter(&buf, &bzip2.WriterConfig{Level: 9})
+	bz.Write([]byte("Hello World!"))
+	bz.Close()
+
+	bufReader := bytes.NewReader(buf.Bytes())
+	// 8 bytes prefix: "Junk" written above + "BZh9" file header
+	r, err := NewBzip2ReaderAt(bufReader, 8, int64(buf.Len()-8))
+	if err != nil {
+		t.Error(err)
+	}
+
+	decompressed, err := io.ReadAll(r)
+	if err != nil {
+		t.Error(err)
+	}
+
+	got := string(decompressed)
+	if got != "Hello World!" {
+		t.Errorf("expected \"Hello World!\", got %q", got)
+	}
+}
+
+func TestFindEntitySplit(t *testing.T) {
+	f, err := os.Open("testdata/twenty_entities.json.bz2")
+	if err != nil {
+		t.Error(err)
+	}
+	defer f.Close()
+	data, _ := io.ReadAll(f)
+
+	var buf bytes.Buffer
+	buf.Write(data)
+	// Write some junk to make sure magic spans chunk boundary.
+	// Our junk contains the BZip2 StreamHeader magic, so we
+	// test that we silently ignore bzip2 decoding errors
+	// (we have to, since the same byte sequence could also
+	// appear inside a compression block).
+	junk := make([]byte, 32*1024-(len(data)%(32*1024))+192)
+	copy(junk[10:16], []byte{0x31, 0x41, 0x59, 0x26, 0x53, 0x59}) // π
+	buf.Write(junk)
+	buf.Write(data)
+	r := bytes.NewReader(buf.Bytes())
+
+	// First bzip2 BlockStart is at offset 4, after StreamHeader.
+	off, entity, err := findEntitySplit(r, 0)
+	if err != nil {
+		t.Error(err)
+	}
+	if off != 4 || entity != "Q58921" {
+		t.Errorf("expected off=4, entity=\"Q58921\"; got (%d, %s)",
+			off, entity)
+	}
+
+	// Second bzip2 BlockStart.
+	expOff := int64(len(data) + len(junk) + 4)
+	off, entity, err = findEntitySplit(r, 200)
+	if err != nil {
+		t.Error(err)
+	}
+	if off != expOff || entity != "Q58921" {
+		t.Errorf("expected off=%d, entity=\"Q58921\"; got (%d, %s)",
+			expOff, off, entity)
 	}
 }
 

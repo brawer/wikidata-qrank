@@ -39,6 +39,79 @@ func findEntitiesDump(dumpsPath string) (time.Time, string, error) {
 	return date, resolved, nil
 }
 
+func findEntitySplit(r io.ReaderAt, off int64) (int64, string, error) {
+	// We look for the magic six bytes that indicate the start
+	// of a bzip2 compression block. There is no guarantee that these
+	// bytes do not appear in the compressed stream, although it is
+	// quite unlikely; that's why we decode the stream and extract the
+	// first complete line. Another complication stems from our file
+	// access in chunks of 32 KiByte; the magic sequence could span
+	// a chunk boundary. To handle this corner case, we copy the
+	// last six bytes of the chunk to the beginning of the chunk
+	// buffer; this allows us to catch chunk-spanning magic sequences.
+	chunk := make([]byte, 6+32*1024) // default value is all zeroes
+	chunkLen := len(chunk)
+	for {
+		if _, err := r.ReadAt(chunk[6:chunkLen], off); err != nil {
+			return 0, "", err
+		}
+		magic := []byte{0x31, 0x41, 0x59, 0x26, 0x53, 0x59} // π
+		pos := bytes.Index(chunk, magic)
+		if pos < 0 {
+			copy(chunk[0:6], chunk[chunkLen-6:chunkLen])
+			off += int64(chunkLen - 6)
+			continue
+		}
+
+		// We might have found a *potential* bzip2 block, but
+		// we can't be sure because the magic six bytes could
+		// also appear in the middle of block. To be sure,
+		// let's read something from the block. If we get
+		// a bzip2 decompression error, our speculation was
+		// wrong; in that case, try again. We advance `off`
+		// after the detected potential blockStart, otherwise
+		// we don't terminate.
+		off = off + int64(pos)
+		blockStart := off - 6
+		reader, err := NewBzip2ReaderAt(r, blockStart, 1*1024*1024)
+		if err != nil {
+			continue
+		}
+
+		scanner := bufio.NewScanner(reader)
+		maxLineSize := 8 * 1024 * 1024
+		scanner.Buffer(make([]byte, maxLineSize), maxLineSize)
+		scanner.Scan()
+		scanner.Scan()
+		err = scanner.Err()
+		if err != nil && strings.HasPrefix(err.Error(), "bzip2: corrupted input") {
+			// Sadly, the github.com/dsnet/compress/bzip2 keeps
+			// its error class private, so we cannot check this
+			// condition via errors.Is(). At least it is checked
+			// in our unit tests.
+			continue
+		}
+		if err != nil {
+			return 0, "", err
+		}
+
+		line := scanner.Text()
+		if strings.HasPrefix(line, `{"type":"item","id":"`) {
+			if p := strings.IndexByte(line[21:len(line)], '"'); p > 0 {
+
+				return blockStart, line[21 : 21+p], nil
+			}
+		}
+	}
+}
+
+func NewBzip2ReaderAt(r io.ReaderAt, off int64, size int64) (io.Reader, error) {
+	header := strings.NewReader("BZh9")
+	stream := io.NewSectionReader(r, off, size)
+	cat := io.MultiReader(header, stream)
+	return bzip2.NewReader(cat, &bzip2.ReaderConfig{})
+}
+
 func processEntities(testRun bool, path string, date time.Time, outDir string, ctx context.Context) (string, error) {
 	year, month, day := date.Year(), date.Month(), date.Day()
 	sitelinksPath := filepath.Join(
