@@ -270,11 +270,21 @@ func readWikidataSplit(reader io.Reader, testRun bool, limit string, sitelinks c
 	for scanner.Scan() {
 		numLines += 1
 		buf := scanner.Bytes()
-		if len(buf) < 10 {
+		bufLen := len(buf)
+		if bufLen == 1 && buf[0] == '[' { // first line in dump
 			continue
 		}
-		if buf[len(buf)-1] == ',' {
-			buf = buf[0 : len(buf)-1]
+
+		// If we reach the last line in the dump, we stop reading.
+		// This prevents the bzip2 decoder from checking the stream
+		// checksum, which will not match when we split the bzip2
+		// stream for parallel processing.
+		if bufLen == 1 && buf[0] == ']' {
+			break
+		}
+
+		if buf[bufLen-1] == ',' {
+			buf = buf[0 : bufLen-1]
 		}
 		if testRun && numLines >= 10000 {
 			break
