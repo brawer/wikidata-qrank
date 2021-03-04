@@ -33,12 +33,16 @@ func formatLine(lang, site, title, value string) string {
 		lang = "gsw"
 
 	case "bat_smg":
+		fallthrough
+	case "bat-smg":
 		lang = "sgs"
 
 	case "be_x_old":
 		lang = "be-tarask"
 
 	case "cbk_zam":
+		fallthrough
+	case "cbk-zam":
 		lang = "cbk-x-zam"
 
 	case "commons":
@@ -46,6 +50,8 @@ func formatLine(lang, site, title, value string) string {
 		site = "commons"
 
 	case "fiu_vro":
+		fallthrough
+	case "fiu-vro":
 		lang = "vro"
 
 	case "incubator":
@@ -60,6 +66,8 @@ func formatLine(lang, site, title, value string) string {
 		}
 
 	case "map_bms": // Banyumasan dialect of Javanese
+		fallthrough
+	case "map-bms":
 		lang = "jv-x-bms"
 
 	case "media": // mediawiki.org
@@ -71,9 +79,13 @@ func formatLine(lang, site, title, value string) string {
 		site = "metawiki"
 
 	case "roa_rup":
+		fallthrough
+	case "roa-rup":
 		lang = "rup"
 
 	case "roa_tara": // Tarantino dialect of Neapolitan
+		fallthrough
+	case "roa-tara": // Tarantino dialect of Neapolitan
 		lang = "nap-x-tara"
 
 	case "simple":
@@ -90,20 +102,28 @@ func formatLine(lang, site, title, value string) string {
 		site = "wikispecies"
 
 	case "nds_nl":
+		fallthrough
+	case "nds-nl":
 		lang = "nds-NL"
 
 	case "tr":
 		title = strings.ToLowerSpecial(unicode.TurkishCase, title)
 
 	case "zh_classical":
+		fallthrough
+	case "zh-classical":
 		lang = "lzh"
 
 	case "zh_min_nan":
+		fallthrough
+	case "zh-min-nan":
 		// https://phabricator.wikimedia.org/T30442
 		// https://phabricator.wikimedia.org/T86915
 		lang = "nan"
 
 	case "zh_yue":
+		fallthrough
+	case "zh-yue":
 		lang = "yue"
 	}
 
