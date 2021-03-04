@@ -272,7 +272,11 @@ func readPageviews(testRun bool, reader io.Reader, ch chan<- string, ctx context
 
 func emitPageviews(site, title string, count int64, ch chan<- string, ctx context.Context) error {
 	if count > 0 {
-		line := formatLine(site, title, strconv.FormatInt(count, 10))
+		dot := strings.IndexByte(site, '.')
+		if dot < 0 {
+			return nil
+		}
+		line := formatLine(site[0:dot], site[dot+1:len(site)], title, strconv.FormatInt(count, 10))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

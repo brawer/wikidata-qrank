@@ -14,18 +14,78 @@ import (
 // https://pkg.go.dev/golang.org/x/text/cases#Fold
 var caser = cases.Fold()
 
-func formatLine(site, title, value string) string {
-	// Turkish needs special casefolding. Azeri follows Turkish rules.
-	// We do this if the wikimedia site starts in "tr." or "az.".
-	if len(site) > 2 && site[2] == '.' {
-		c1, c2 := site[0], site[1]
-		if (c1 == 't' && c2 == 'r') || (c1 == 'a' && c2 == 'z') {
-			title = strings.ToLowerSpecial(unicode.TurkishCase, title)
+func formatLine(lang, site, title, value string) string {
+	// https://en.wikipedia.org/wiki/List_of_Wikipedias#Wikipedia_edition_codes
+	switch lang {
+	case "":
+		lang = "und"
+		switch site {
+		case "wikidatawiki":
+			site = "wikidata"
 		}
+
+	case "az":
+		title = strings.ToLowerSpecial(unicode.AzeriCase, title)
+
+	case "als":
+		lang = "gsw"
+
+	case "bat_smg":
+		lang = "sgs"
+
+	case "be_x_old":
+		lang = "be-tarask"
+
+	case "commons":
+		lang = "und"
+		site = "commons"
+
+	case "fiu_vro":
+		lang = "vro"
+
+	case "incubator":
+		// Q11736 in Wikidata entitities dump has site: "incubatorwiki"
+		// (passed to as as lang="incubator", site="wikipedia")
+		// "title": "Wp/cpx/Teng-cing-ch\u012b"
+		parts := strings.SplitN(title, "/", 3)
+		if len(parts) == 3 && (parts[0] == "Wp" || parts[0] == "wp") &&
+			len(parts[1]) < 20 {
+			lang = strings.ToLower(parts[1])
+			title = parts[2]
+		}
+
+	case "roa_rup":
+		lang = "rup"
+
+	case "simple":
+		lang = "en-x-simple" // Simplified English
+
+	case "species":
+		lang = "und"
+		site = "wikispecies"
+
+	case "nds_nl":
+		lang = "nds-NL"
+
+	case "tr":
+		title = strings.ToLowerSpecial(unicode.TurkishCase, title)
+
+	case "zh_classical":
+		lang = "lzh"
+
+	case "zh_min_nan":
+		// https://phabricator.wikimedia.org/T30442
+		// https://phabricator.wikimedia.org/T86915
+		lang = "nan"
+
+	case "zh_yue":
+		lang = "yue"
 	}
 
 	var buf strings.Builder
-	buf.Grow(len(site) + len(title) + len(value) + 5)
+	buf.Grow(len(lang) + len(site) + len(title) + len(value) + 6)
+	buf.WriteString(lang)
+	buf.WriteByte('.')
 	buf.WriteString(site)
 	buf.WriteByte('/')
 	var it norm.Iter

@@ -14,10 +14,10 @@ func TestReadPageviews(t *testing.T) {
 		{"", ""},
 		{"only three columns", ""},
 		{
-			"als.wikipedia Ägypten 4623 mobile-web 2 N1P1\n" +
-				"als.wikipedia Ägypten 8911 desktop 3 A2X1\n" +
+			"als.wikipedia Ägypte 4623 mobile-web 2 N1P1\n" +
+				"als.wikipedia Ägypte 8911 desktop 3 A2X1\n" +
 				"ang.wikipedia Lech_Wałęsa 10374 desktop 1 Q1",
-			"als.wikipedia/ägypten 5|ang.wikipedia/lech_wałęsa 1",
+			"gsw.wikipedia/ägypte 5|ang.wikipedia/lech_wałęsa 1",
 		},
 		{
 			"zh-min-nan.wikipedia Ìn-tō͘-chi-ná 670272 desktop 1 J1",
