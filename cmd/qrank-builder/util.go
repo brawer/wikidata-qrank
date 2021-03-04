@@ -38,6 +38,9 @@ func formatLine(lang, site, title, value string) string {
 	case "be_x_old":
 		lang = "be-tarask"
 
+	case "cbk_zam":
+		lang = "cbk-x-zam"
+
 	case "commons":
 		lang = "und"
 		site = "commons"
@@ -56,6 +59,9 @@ func formatLine(lang, site, title, value string) string {
 			title = parts[2]
 		}
 
+	case "map_bms": // Banyumasan dialect of Javanese
+		lang = "jv-x-bms"
+
 	case "media": // mediawiki.org
 		lang = "und"
 		site = "mediawiki"
@@ -66,6 +72,9 @@ func formatLine(lang, site, title, value string) string {
 
 	case "roa_rup":
 		lang = "rup"
+
+	case "roa_tara": // Tarantino dialect of Neapolitan
+		lang = "nap-x-tara"
 
 	case "simple":
 		lang = "en-x-simple" // Simplified English
