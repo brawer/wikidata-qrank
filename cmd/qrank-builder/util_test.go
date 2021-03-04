@@ -29,6 +29,10 @@ func TestFormatLine(t *testing.T) {
 			"vro.wikipedia/aastak Q577"},
 		{"incubator", "wikipedia", "Wp/cpx/Teng-cing-ch\u012b", "Q11736",
 			"cpx.wikipedia/teng-cing-chī Q11736"},
+		{"media", "mediawiki", "MediaWiki", "Q5296",
+			"und.mediawiki/mediawiki Q5296"},
+		{"meta", "wikimedia", "Main Page", "Q5296",
+			"und.metawiki/main_page Q5296"},
 		{"nds_nl", "wikipedia", "Zwolle", "Q793",
 			"nds-NL.wikipedia/zwolle Q793"},
 		{"roa_rup", "wikipedia", "Anu", "Q577",
@@ -59,6 +63,8 @@ func TestFormatLine(t *testing.T) {
 			"und.commons/zwolle Q793"},
 		{"", "wikidatawiki", "Project chat", "Q16503",
 			"und.wikidata/project_chat Q16503"},
+		{"", "wikimaniawiki", "Wikimania", "Q5296",
+			"und.wikimania/wikimania Q5296"},
 	}
 	for _, c := range tests {
 		if got := formatLine(c.lang, c.site, c.title, c.value); c.expected != got {

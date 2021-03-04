@@ -22,6 +22,8 @@ func formatLine(lang, site, title, value string) string {
 		switch site {
 		case "wikidatawiki":
 			site = "wikidata"
+		case "wikimaniawiki":
+			site = "wikimania"
 		}
 
 	case "az":
@@ -53,6 +55,14 @@ func formatLine(lang, site, title, value string) string {
 			lang = strings.ToLower(parts[1])
 			title = parts[2]
 		}
+
+	case "media": // mediawiki.org
+		lang = "und"
+		site = "mediawiki"
+
+	case "meta": // meta.wikimedia.org
+		lang = "und"
+		site = "metawiki"
 
 	case "roa_rup":
 		lang = "rup"
