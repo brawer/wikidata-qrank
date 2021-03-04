@@ -35,6 +35,8 @@ func TestFormatLine(t *testing.T) {
 			"rup.wikipedia/anu Q577"},
 		{"simple", "wikipedia", "Tianjin", "Q11736",
 			"en-x-simple.wikipedia/tianjin Q11736"},
+		{"sources", "wikipedia", "Author:蒋中正", "Q16574",
+			"und.wikisource/author:蒋中正 Q16574"},
 		{"species", "wiki", "Aepyceros melampus", "Q132576",
 			"und.wikispecies/aepyceros_melampus Q132576"},
 		{"tr", "wikipedia", "Diyarbakır", "Q83387",

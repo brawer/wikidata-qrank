@@ -60,6 +60,12 @@ func formatLine(lang, site, title, value string) string {
 	case "simple":
 		lang = "en-x-simple" // Simplified English
 
+	case "sources":
+		// Q16574 in Wikidata has site: "wikisources"
+		// title: "Author:蒋中正"
+		lang = "und"
+		site = "wikisource"
+
 	case "species":
 		lang = "und"
 		site = "wikispecies"
