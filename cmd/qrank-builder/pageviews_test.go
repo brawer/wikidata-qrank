@@ -20,6 +20,10 @@ func TestReadPageviews(t *testing.T) {
 			"gsw.wikipedia/ägypte 5|ang.wikipedia/lech_wałęsa 1",
 		},
 		{
+			"en-wg.wikipedia/Talk:Main_Page  67072 desktop 4 B4",
+			"",
+		},
+		{
 			"zh-min-nan.wikipedia Ìn-tō͘-chi-ná 670272 desktop 1 J1",
 			"nan.wikipedia/ìn-tō͘-chi-ná 1",
 		},
