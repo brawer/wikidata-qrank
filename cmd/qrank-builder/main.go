@@ -44,12 +44,17 @@ func computeQRank(dumpsPath string, testRun bool) error {
 		return err
 	}
 
-	_, err = processEntities(testRun, epath, edate, outDir, ctx)
+	pageviews, err := processPageviews(testRun, dumpsPath, edate, outDir, ctx)
 	if err != nil {
 		return err
 	}
 
-	_, err = processPageviews(testRun, dumpsPath, edate, outDir, ctx)
+	sitelinks, err := processEntities(testRun, epath, edate, outDir, ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = buildQViews(testRun, edate, sitelinks, pageviews, outDir, ctx)
 	if err != nil {
 		return err
 	}
