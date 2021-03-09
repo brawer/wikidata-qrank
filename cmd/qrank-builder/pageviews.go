@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -70,6 +71,7 @@ func buildMonthlyPageviews(testRun bool, dumpsPath string, year int, month time.
 	ch := make(chan string, 10000)
 	config := extsort.DefaultConfig()
 	config.ChunkSize = 8 * 1024 * 1024 / 64 // 8 MiB, 64 Bytes/line avg
+	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.Strings(ch, config)
 
 	g, subCtx := errgroup.WithContext(ctx)

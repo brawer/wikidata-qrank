@@ -178,6 +178,7 @@ func processEntities(testRun bool, path string, date time.Time, outDir string, c
 	ch := make(chan string, 10000)
 	config := extsort.DefaultConfig()
 	config.ChunkSize = 4 * 1024 * 1024 / 16 // 4 MiB, 16 Bytes/line avg
+	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.Strings(ch, config)
 	g, subCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
