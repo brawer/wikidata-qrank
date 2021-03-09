@@ -290,7 +290,7 @@ func readWikidataSplit(reader io.Reader, testRun bool, limit string, sitelinks c
 		if buf[bufLen-1] == ',' {
 			buf = buf[0 : bufLen-1]
 		}
-		if testRun && numLines >= 10000 {
+		if testRun && numLines >= 1000 {
 			break
 		}
 		if err := processEntity(buf, limit, sitelinks, ctx); err != nil {
