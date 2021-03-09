@@ -230,7 +230,11 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 	}
 	fileSize := stat.Size()
 
-	splits, err := SplitWikidataDump(file, fileSize, runtime.NumCPU())
+	numSplits := runtime.NumCPU()
+	if testRun {
+		numSplits = 2
+	}
+	splits, err := SplitWikidataDump(file, fileSize, numSplits)
 	if err != nil {
 		return err
 	}
@@ -242,7 +246,7 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 	close(work)
 
 	g, ctx := errgroup.WithContext(ctx)
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for i := 0; i < numSplits; i++ {
 		g.Go(func() error {
 			for task := range work {
 				reader, err := NewBzip2ReaderAt(file, task.Start, fileSize-task.Start)
