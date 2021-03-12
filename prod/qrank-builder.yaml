@@ -1,0 +1,35 @@
+# Cronjob for running qrank-builder in production.
+# SPDX-License-Identifier: MIT
+
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: qrank-builder
+  namespace: tool-qrank
+  labels:
+    name: qrank.builder
+    toolforge: tool
+spec:
+  concurrencyPolicy: Forbid  # don't start new jobs while old is still running
+  schedule: "39 14 * * *"  # daily at 14:39
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            #name: qrank.builder
+            toolforge: tool
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: qrank-builder
+            workingDir: /data/project/qrank
+            image: docker-registry.tools.wmflabs.org/toolforge-python37-sssd-base:latest
+            command: [ "bin/qrank-builder", "-dumps=/public/dumps/public" ]
+            resources:
+              requests:
+                memory: "2Gi"
+                cpu: "1"
+              limits:
+                memory: "2Gi"
+                cpu: "1"
