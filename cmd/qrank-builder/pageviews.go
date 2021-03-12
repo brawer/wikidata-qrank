@@ -31,7 +31,6 @@ func processPageviews(testRun bool, dumpsPath string, date time.Time, outDir str
 			return nil, err
 		}
 		paths = append(paths, path)
-		break // TODO: Remove
 	}
 	return paths, nil
 }
