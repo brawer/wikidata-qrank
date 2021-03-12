@@ -149,7 +149,7 @@ func processEntities(testRun bool, path string, date time.Time, outDir string, c
 	year, month, day := date.Year(), date.Month(), date.Day()
 	sitelinksPath := filepath.Join(
 		outDir,
-		fmt.Sprintf("sitelinks-%04d-%02d-%02d.br", year, month, day))
+		fmt.Sprintf("sitelinks-%04d%02d%02d.br", year, month, day))
 	_, err := os.Stat(sitelinksPath)
 	if err == nil {
 		return sitelinksPath, nil // use pre-existing file
