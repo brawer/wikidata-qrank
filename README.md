@@ -1,4 +1,4 @@
-# QRank
+# Wikidata QRank
 
 [![CI](https://github.com/brawer/toolforge-qrank/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/brawer/toolforge-qrank/actions/workflows/go.yml)
 [![Data License: CC0-1.0](https://img.shields.io/badge/Data%20License-CC0%201.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
@@ -21,9 +21,9 @@ but still much higher than the relatively obscure
 | [Q252869](https://www.wikidata.org/wiki/Q252869)         | Äffle & Pferdle    |    24545 |
 
 
-Of course, QRank is not just for fictional characters: Use it to rank
-everything from animals, brands, cities, libraries, museums, ... to
-zoos, or anything else with a Wikimedia page. To avoid seasonal
+Of course, Wikidata QRank is not just for fictional characters: Use it
+to rank everything from animals, brands, cities, libraries, museums, ..., to
+zoos; or anything else with a Wikimedia page. To avoid seasonal
 effects, QRank is calculated over a one-year sliding window.
 
 
@@ -35,4 +35,4 @@ To the extent possible under law, we have waived all copyright and related
 or neighboring rights to this work. This work is published from Switzerland.
 
 *Code:* The source code of the program for computing the QRank signal
-is released under the [LICENSE](MIT license).
+is released under the [MIT license](https://github.com/brawer/wikidata-qrank/blob/main/LICENSE).
