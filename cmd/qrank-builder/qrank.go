@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
