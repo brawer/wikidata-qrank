@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -44,7 +45,7 @@ func QViewCountLess(a, b extsort.SortType) bool {
 func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []string, outDir string, ctx context.Context) (string, error) {
 	qviewsPath := filepath.Join(
 		outDir,
-		fmt.Sprintf("qviews-%04d-%02d-%02d.br", date.Year(), date.Month(), date.Day()))
+		fmt.Sprintf("qrank-%04d%02d%02d.gz", date.Year(), date.Month(), date.Day()))
 	_, err := os.Stat(qviewsPath)
 	if err == nil {
 		return qviewsPath, nil // use pre-existing file
@@ -64,8 +65,11 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 	}
 	defer tmpQViewsFile.Close()
 
-	qviewsWriter := brotli.NewWriterLevel(tmpQViewsFile, 9)
-	defer qviewsWriter.Close()
+	qrankWriter, err := gzip.NewWriterLevel(tmpQViewsFile, 9)
+	if err != nil {
+		return "", err
+	}
+	defer qrankWriter.Close()
 
 	sitelinksFile, err := os.Open(sitelinks)
 	if err != nil {
@@ -103,7 +107,7 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 	for data := range outChan {
 		c := data.(QViewCount)
 		if c.entity != entity {
-			if err := writeQViewCount(qviewsWriter, entity, count); err != nil {
+			if err := writeQViewCount(qrankWriter, entity, count); err != nil {
 				return "", err
 			}
 			entity = c.entity
@@ -111,7 +115,7 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 		}
 		count += c.count
 	}
-	if err := writeQViewCount(qviewsWriter, entity, count); err != nil {
+	if err := writeQViewCount(qrankWriter, entity, count); err != nil {
 		return "", err
 	}
 
@@ -119,7 +123,7 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 		return "", err
 	}
 
-	if err := qviewsWriter.Close(); err != nil {
+	if err := qrankWriter.Close(); err != nil {
 	}
 
 	if err := tmpQViewsFile.Sync(); err != nil {

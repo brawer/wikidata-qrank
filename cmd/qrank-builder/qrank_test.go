@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"io"
 	"os"
@@ -39,20 +40,25 @@ func TestBuildQViews(t *testing.T) {
 	}
 
 	expected := "Q72 13\nQ7197 60\n"
-	got := readBrotli(path)
+	got := readGzipFile(path)
 	if expected != got {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
 }
 
-func readBrotli(path string) string {
+func readGzipFile(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
 
-	b, err := io.ReadAll(brotli.NewReader(f))
+	reader, err := gzip.NewReader(f)
+	if err != nil {
+		panic(err)
+	}
+
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		panic(err)
 	}
