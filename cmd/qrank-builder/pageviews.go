@@ -41,7 +41,7 @@ func processPageviews(testRun bool, dumpsPath string, date time.Time, outDir str
 func buildMonthlyPageviews(testRun bool, dumpsPath string, year int, month time.Month, outDir string, ctx context.Context) (string, error) {
 	outPath := filepath.Join(
 		outDir,
-		fmt.Sprintf("pageviews-%04d-%02d.br", year, month))
+		fmt.Sprintf("pageviews-%04d%02d.br", year, month))
 	_, err := os.Stat(outPath)
 	if err == nil {
 		return outPath, nil // use pre-existing file
