@@ -59,7 +59,12 @@ func computeQRank(dumpsPath string, testRun bool) error {
 		return err
 	}
 
-	_, err = buildQRank(edate, qviews, outDir, ctx)
+	qrank, err := buildQRank(edate, qviews, outDir, ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = buildStats(edate, qrank, outDir)
 	if err != nil {
 		return err
 	}
