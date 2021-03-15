@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -47,7 +46,7 @@ func QViewCountLess(a, b extsort.SortType) bool {
 func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []string, outDir string, ctx context.Context) (string, error) {
 	qviewsPath := filepath.Join(
 		outDir,
-		fmt.Sprintf("qviews-%04d%02d%02d.gz", date.Year(), date.Month(), date.Day()))
+		fmt.Sprintf("qviews-%04d%02d%02d.br", date.Year(), date.Month(), date.Day()))
 	_, err := os.Stat(qviewsPath)
 	if err == nil {
 		return qviewsPath, nil // use pre-existing file
@@ -67,10 +66,7 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 	}
 	defer tmpQViewsFile.Close()
 
-	qviewsWriter, err := gzip.NewWriterLevel(tmpQViewsFile, 9)
-	if err != nil {
-		return "", err
-	}
+	qviewsWriter := brotli.NewWriterLevel(tmpQViewsFile, 9)
 	defer qviewsWriter.Close()
 
 	sitelinksFile, err := os.Open(sitelinks)

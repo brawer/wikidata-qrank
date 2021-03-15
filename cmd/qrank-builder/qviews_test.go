@@ -3,15 +3,10 @@
 package main
 
 import (
-	"compress/gzip"
 	"context"
-	"io"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/andybalholm/brotli"
 )
 
 func TestBuildQViews(t *testing.T) {
@@ -42,44 +37,8 @@ func TestBuildQViews(t *testing.T) {
 	}
 
 	expected := "Q72 13\nQ7197 60\n"
-	got := readGzipFile(path)
+	got := readBrotliFile(path)
 	if expected != got {
 		t.Errorf("expected %q, got %q", expected, got)
-	}
-}
-
-func readGzipFile(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	reader, err := gzip.NewReader(f)
-	if err != nil {
-		panic(err)
-	}
-
-	b, err := io.ReadAll(reader)
-	if err != nil {
-		panic(err)
-	}
-
-	return string(b)
-}
-
-func writeBrotli(path string, content string) {
-	f, err := os.Create(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	s := brotli.NewWriterLevel(f, 1)
-	s.Write([]byte(content))
-	if err := s.Close(); err != nil {
-		panic(err)
-	}
-	if err := f.Close(); err != nil {
-		panic(err)
 	}
 }
