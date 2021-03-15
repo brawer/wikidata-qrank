@@ -23,7 +23,7 @@ jobs:
         go build -ldflags="-s -w" -v ./cmd/qrank-builder
         upx qrank-builder
         go build -ldflags="-s -w" -v ./cmd/qrank-webserver
-	upx qrank-webserver
+        upx qrank-webserver
 
     - name: Test
       run: go test -v ./...
