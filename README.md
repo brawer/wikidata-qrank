@@ -24,13 +24,13 @@ but still much higher than the relatively obscure
 Such a ranking signal is useful when time or space are too limited
 to handle everything. For example:
 
-* When *fixing data problems*, start with the highest ranking entities
+* When **fixing data problems**, start with the highest ranking entities
   for maximal impact of your work.
 
-* When drawing a map of geographic features, display the higher
-  ranking features more prominently. For example,
-  [this map of Swiss castles and ruins](https://castle-map.infs.ch/#46.82825,8.19305,8z) uses QRank to decide which castles get a large icon
-  and which ones just a tiny dot.
+* When **drawing geographic maps**, show higher-ranking features
+  more prominently. For example,
+  [this map of Swiss castles and ruins](https://castle-map.infs.ch/#46.82825,8.19305,8z) uses QRank to decide which castles deserve a large icon and which
+  ones just a small dot.
 
 
 ## License
