@@ -21,10 +21,16 @@ but still much higher than the relatively obscure
 | [Q252869](https://www.wikidata.org/wiki/Q252869)         | Äffle & Pferdle    |    24545 |
 
 
-Of course, Wikidata QRank is not just for fictional characters: Use it
-to rank everything from animals, brands, cities, libraries, museums, ..., to
-zoos; or anything else with a Wikimedia page. To avoid seasonal
-effects, QRank is calculated over a one-year sliding window.
+Such a ranking signal is useful when time or space are too limited
+to handle everything. For example:
+
+* When *fixing data problems*, start with the highest ranking entities
+  for maximal impact of your work.
+
+* When drawing a map of geographic features, display the higher
+  ranking features more prominently. For example,
+  [this map of Swiss castles and ruins](https://castle-map.infs.ch/#46.82825,8.19305,8z) uses QRank to decide which castles get a large icon
+  and which ones just a tiny dot.
 
 
 ## License
