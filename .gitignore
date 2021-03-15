@@ -1,5 +1,6 @@
 *~
-/qrank-builder
+./qrank-builder
+./qrank-webserver
 cache/
 cache-testrun/
 
