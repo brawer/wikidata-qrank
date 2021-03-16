@@ -32,6 +32,8 @@ to handle everything. For example:
   [this map of Swiss castles and ruins](https://castle-map.infs.ch/#46.82825,8.19305,8z) uses QRank to decide which castles deserve a large icon and which
   ones just a small dot.
 
+For a more detailed technical description of the system,
+see the [Design Document](doc/design.md).
 
 ## License
 
