@@ -92,10 +92,7 @@ href="https://creativecommons.org/publicdomain/zero/1.0/">Creative
 Commons Zero 1.0</a>. To the extent possible under law, we have waived
 all copyright and related or neighboring rights to this work. This work
 is published from Switzerland, using infrastructure of the Wikimedia
-Foundation in the United States.
-
-work is published from Switzerland, using computing machinery located
-in the United States.</p>
+Foundation in the United States.</p>
 
 <p><img src="https://mirrors.creativecommons.org/presskit/buttons/88x31/svg/cc-zero.svg"
 width="88" height="31" alt="Public Domain" style="float:left"/></p>
