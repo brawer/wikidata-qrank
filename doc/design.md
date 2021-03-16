@@ -4,13 +4,14 @@ QRank is a ranking signal for [Wikidata](https://www.wikidata.org/) entities.
 It gets computed by aggregating page view statistics for Wikipedia, Wikitravel,
 Wikibooks, Wikispecies and other Wikimedia projects.
 
-A ranking signal like QRank is useful when time or space are too
-limited to handle everything.  For example, when **fixing data
-problems**, it makes sense to focus on the most important issues; the
-ranking signal tells the relative importance.  Likewise, **geographic
-maps** need to decide what to display how prominently; [this map of
-Swiss castles](https://castle-map.infs.ch/#46.82825,8.19305,8z) uses
-QRank to decide whether a castle deserves a large icon or just a small dot.
+A ranking signal like QRank is useful when time or space is too
+limited to handle everything.  For example, when **improving data**,
+it often makes sense to focus on the most important issues; a
+ranking signal helps to decide on importance.  Likewise, high-quality
+**maps** need a ranking signal for cartographic prominence;
+[this map of Swiss castles](https://castle-map.infs.ch/#46.82825,8.19305,8z)
+uses QRank to decide which castles deserve a large icon and which ones
+just a tiny dot.
 
 
 ## Goals
@@ -72,9 +73,9 @@ The webserver is a trivial HTTP server. In production, it runs
 on the Wikimedia Cloud behind [nginx](https://nginx.org/).
 
 A background task periodically checks the local file system.
-When new data is available, the code in [dataloader.go](./cmd/qrank-webserver/dataloader.go) loads the file hash (but not the file) into memory.
+When new data is available, the code in [dataloader.go](../cmd/qrank-webserver/dataloader.go) loads the file hash (but not the file) into memory.
 
-The main serving code is in [main.go](./cmd/qrank-webserver/main.go).
+The main serving code is in [main.go](../cmd/qrank-webserver/main.go).
 Requests for the home page are currently handled by returning a static string;
 requests for a file download get handled from the file system.
 The file hash serves as entity tag in [Conditional HTTP requests](https://tools.ietf.org/html/rfc7232).
