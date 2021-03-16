@@ -40,7 +40,8 @@ see the [Design Document](doc/design.md).
 *Data:* Just like Wikidata, the QRank data files are dedicated to the Public domain
 via [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 To the extent possible under law, we have waived all copyright and related
-or neighboring rights to this work. This work is published from Switzerland.
+or neighboring rights to this work. This work is published from Switzerland,
+using infrastructure of the Wikimedia Foundation in the United States.
 
 *Code:* The source code of the program for computing the QRank signal
 is released under the [MIT license](https://github.com/brawer/wikidata-qrank/blob/main/LICENSE).
