@@ -1,4 +1,4 @@
-# Wikidata QRank: Design
+# Wikidata QRank: Technical Design
 
 QRank is a ranking signal for [Wikidata](https://www.wikidata.org/)
 entities.  It gets computed by aggregating page view statistics for
@@ -190,16 +190,30 @@ loads the file hash (but not the file) into memory.
 
 ### Signal smearing
 
-Currently, the QRank values are simply aggregated raw view counts;
-so far we have not implemented any “signal smearing” yet. This could
-be an area for future improvement because it would assign a rank to
-entities that have no Wikimedia pages. For example, it may be beneficial
+Currently, the QRank values are simply aggregated raw view counts; no
+“signal smearing” has been implemented yet. This might be be an area
+for future improvement, since it would give a rank to entities that
+have no Wikimedia pages themselves. For example, it may be beneficial
 to propagate some fraction of an author's rank to their publications;
 likewise from a painter to their works of art.
 
-Another obvious idea would be to run a PageRank-like algorithm on the
-citation graph. As of 2021, it seems a bit early to do this because
-research literature (and especially its citation graph) has very
-little coverage in Wikidata. As the [Scholia
-project](https://www.wikidata.org/wiki/Wikidata:Scholia) proceeds, it
-may be beneficial to revisit this at some later time.
+
+### PageRank
+
+A related, quite obvious idea would be to run an iterative version of
+the [PageRank algorithm](https://en.wikipedia.org/wiki/PageRank) on
+Wikidata.  When going this route, it might be beneficial to restrict
+the analysis to those parts of the WikiData graph that actually
+reflect quality or importance.  For example, running PageRank on the
+citation graph of the world's research literature is likely to work
+quite well. As a counterexample, boosting the ranking of cities based
+on who happened to be born at a place may or may not be worth the
+effort, especially when seeding the ranking with pageviews for the
+city. Anyhow, as of March 2021, it seems a bit early to really try
+this; academic works and its citation graph have still very limited
+coverage in Wikidata. As the [Scholia
+project](https://www.wikidata.org/wiki/Wikidata:Scholia) is making
+progress, it may be beneficial to revisit this at some later time.
+There has been [research on Wikipedia
+pagerank](https://www.aifb.kit.edu/images/e/e5/Wikipedia_pagerank1.pdf)
+that may be relevant if anyone wants to look into this.
