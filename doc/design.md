@@ -58,7 +58,7 @@ intermediate files, and does some shuffling to finally build its output.
    if the monthly file has already been computed by a previous run
    of the `qrank-builder` pipeline.
 
-    For example, the file `pageviews-2021-02.br` contains a line
+   💾 For example, the file `pageviews-2021-02.br` contains a line
 `en.wikipedia/seabird 8204`, which means that the English Wikipedia
 article for [Seabird](https://en.wikipedia.org/wiki/Seabird) has been
 viewed 8204 times in February 2021. In total, the monthly file for
@@ -72,7 +72,7 @@ it weighs 8.9 MB in storage.
    this step get skipped if the monthly file has already been computed
    by a previous pipeline run.
 
-    For example, the file `sitelinks-2021-02-15.br` contains a line
+   💾 For example, the file `sitelinks-2021-02-15.br` contains a line
 `en.wikipedia/seabird Q55808`, which means that this page of the English
 Wikipedia is about entity [Q55808](https://www.wikidata.org/wiki/Q55808).
 In total, the sitelinks file extracted from the Wikidata dump of February
@@ -93,7 +93,7 @@ have no sitelinks at all), weighing 783.5 MB after compression.
    As before, this step gets skipped if the output has already
    been computed by a previous pipeline run.
 
-   For example, the file `qviews-2021-02-15.br` contains a line
+   💾 For example, the file `qviews-2021-02-15.br` contains a line
    `Q55808 329861`. This means that from February 2020 to January 2021,
    Wikimedia pages about [Q55808](https://www.wikidata.org/wiki/Q55808)
    (Seabird) have been viewed 329861 times, aggregated over all languages
@@ -101,13 +101,13 @@ have no sitelinks at all), weighing 783.5 MB after compression.
    27.3 million such lines, weighing 103.9 MB after compression.
 
 4. The build continues by sorting the view counts by decreasing popularity.
-   If two entities have been viewed the exact time during the past year,
-   the entity ID is used as secondary key. The logic for the sorting is
-   in function `QRankLess()` in [qrank.go](../cmd/qrank-builder/qrank.go).
+   If the pages about two entities were viewed equally often,
+   the entity ID is used as secondary key. The comparison function is
+   `QRankLess()` in [qrank.go](../cmd/qrank-builder/qrank.go).
 
-   The file format, content and size of `qrank-2021-02-15.br` is the same
-   as the `qviews` file of the previous step, it is just in a different
-   order.
+   💾 The file format, content and approximate size of `qrank-2021-02-15.br`
+   is the same as the `qviews` file of the previous step, only the sorting
+   is different.
 
 5. The build finishes by computing some statistics about the output,
    which get stored into a small JSON file. Currently, this is just
@@ -117,7 +117,7 @@ have no sitelinks at all), weighing 783.5 MB after compression.
    stats, for example histograms on rank distributions, and store them
    into the same JSON file.
 
-   For example, the file `stats-20210215.json` weighs 133 bytes.
+   💾 For example, the file `stats-20210215.json` weighs 133 bytes.
 
 
 ## Performance
