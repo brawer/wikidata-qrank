@@ -146,7 +146,7 @@ in smaller tasks and distributes them to parallel worker threads.
   in parallel.
 
 * When processing **Wikidata dumps**, we split the large input file
-  (62 MB as of March 2021, but growing quickly) into a set of chunks
+  (62 GB as of March 2021, but growing quickly) into a set of chunks
   that get processed in parallel. To split the compressed input, we
   look for the “magic” six-byte sequence that appears at the beginning
   of bzip2 compression blocks. In a well-compressed file, a new block
