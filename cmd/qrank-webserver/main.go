@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -103,9 +104,21 @@ width="88" height="31" alt="Public Domain" style="float:left"/></p>
 }
 
 func handleDownloadQRank(w http.ResponseWriter, req *http.Request) {
-	stats, qrankFile := dataLoader.Get()
+	stats := dataLoader.Get()
+	qrankPath := filepath.Join(dataLoader.Path, stats.QRankFilename)
+	qrankFile, err := os.Open(qrankPath)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError),
+			http.StatusInternalServerError)
+		return
+	}
+	defer qrankFile.Close()
 
+	// As per https://tools.ietf.org/html/rfc7232, ETag must have quotes.
 	etag := fmt.Sprintf(`"%s"`, stats.QRankSha256)
+
+	// Last-Modified is optional, so we can ignore errors.
+	// http.ServeContent() will omit Last-Modified if time has zero value.
 	var lastModified time.Time
 	if fstat, err := qrankFile.Stat(); err == nil {
 		lastModified = fstat.ModTime()

@@ -11,11 +11,12 @@ import (
 )
 
 type DataLoader struct {
-	path          string
+	// Directory being watched. Does not change while server is running.
+	Path string
+
 	mutex         sync.Mutex
 	statsFilename string
 	stats         Stats
-	qrankFile     *os.File
 }
 
 type Stats struct {
@@ -24,21 +25,21 @@ type Stats struct {
 }
 
 func NewDataLoader(path string) (*DataLoader, error) {
-	dl := &DataLoader{path: path}
+	dl := &DataLoader{Path: path}
 	if err := dl.Reload(); err != nil {
 		return nil, err
 	}
 	return dl, nil
 }
 
-func (dl *DataLoader) Get() (Stats, *os.File) {
+func (dl *DataLoader) Get() Stats {
 	dl.mutex.Lock()
 	defer dl.mutex.Unlock()
-	return dl.stats, dl.qrankFile
+	return dl.stats
 }
 
 func (dl *DataLoader) Reload() error {
-	files, err := os.ReadDir(dl.path)
+	files, err := os.ReadDir(dl.Path)
 	if err != nil {
 		return err
 	}
@@ -54,10 +55,10 @@ func (dl *DataLoader) Reload() error {
 	}
 
 	if len(latest) == 0 {
-		return fmt.Errorf("no stats-YYYYMMDD.json files in %s", dl.path)
+		return fmt.Errorf("no stats-YYYYMMDD.json files in %s", dl.Path)
 	}
 
-	statFile, err := os.Open(filepath.Join(dl.path, latest))
+	statFile, err := os.Open(filepath.Join(dl.Path, latest))
 	if err != nil {
 		return err
 	}
@@ -79,16 +80,8 @@ func (dl *DataLoader) Reload() error {
 		return nil
 	}
 
-	qrankFile, err := os.Open(filepath.Join(dl.path, stats.QRankFilename))
-	if err != nil {
-		return err
-	}
 	dl.statsFilename = latest
 	dl.stats = stats
-	if dl.qrankFile != nil {
-		dl.qrankFile.Close()
-	}
-	dl.qrankFile = qrankFile
 
 	return nil
 }
