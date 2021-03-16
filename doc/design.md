@@ -1,40 +1,43 @@
 # Wikidata QRank: Design
 
-QRank is a ranking signal for [Wikidata](https://www.wikidata.org/) entities.
-It gets computed by aggregating page view statistics for Wikipedia, Wikitravel,
-Wikibooks, Wikispecies and other Wikimedia projects.
-
-A ranking signal like QRank is useful when time or space is too
-limited to handle everything.  For example, when **improving data**,
-it often makes sense to focus on the most important issues; a
+QRank is a ranking signal for [Wikidata](https://www.wikidata.org/)
+entities.  It gets computed by aggregating page view statistics for
+Wikipedia, Wikitravel, Wikibooks, Wikispecies and other Wikimedia
+projects.  A ranking signal like QRank is useful when time or space is
+too limited to handle everything.  For example, when **improving
+data**, it often makes sense to focus on the most important issues; a
 ranking signal helps to decide on importance.  Likewise, high-quality
-**maps** need a ranking signal for cartographic prominence;
-[this map of Swiss castles](https://castle-map.infs.ch/#46.82825,8.19305,8z)
+**maps** need a ranking signal for cartographic prominence; [this map
+of Swiss castles](https://castle-map.infs.ch/#46.82825,8.19305,8z)
 uses QRank to decide which castles deserve a large icon and which ones
 just a tiny dot.
 
 
 ## Goals
 
-* Compute a ranking signal for Wikidata that has good coverage
-  across topics, cultures and geographic regions.
-* Keep the signal reasonably fresh, with regular automatic updates.
+* Compute a ranking signal for Wikidata with good coverage
+  across diverse topics, cultures and geographic regions.
+* Keep the signal fresh, with regular automatic updates.
 * Be resilient to short-term popularity spikes and seasonal effects.
-* Make the signal available for bulk download in a form that is trivial
-  to consume by computer programs such as data editing tools or
-  map tile generation pipelines.
+* Make the signal available for bulk download. The format should be
+  trivial to understand, and easily read in common programming
+  languages.
 
 Initially, it will explicitly *not* be our goal to offer a website where
 people can interactively browse the ranked data, even though this would
-be very cute. Likewise, it will initially not be our goal to offer an API
-for external programs to query the rank of individual Wikidata entities.
-Again, this would be useful, but it can be added later.
+be very cute. Likewise, it will initially *not* be our goal to offer an API
+for external software to quickly query the rank of individual Wikidata entities.
+Again, this would be useful, and we may well add it some later time.
+For the time being, however, we will focus on exposing the ranking data in bulk
+as a downloadable file.
 
 
 ## Overview
 
-The QRank system consists of two parts. Both are running on the
-Wikimedia Cloud infrastructure.
+The QRank system consists of two parts. Both parts are running on the
+Wikimedia Cloud infrastructure within the
+[Toolforge](https://wikitech.wikimedia.org/wiki/Portal:Toolforge)
+environment.
 
 * `qrank-builder` is an automated pipeline that computes the ranking.
 * `qrank-webserver` is an small webserver that exposes the ranking file
