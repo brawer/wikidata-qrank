@@ -44,7 +44,7 @@ environment.
   to the outside.
 
 
-## Build pipeline
+## Detailed design: Build pipeline
 
 Like all build pipelines, `qrank-builder` reads input, produces
 intermediate files, and does some shuffling to finally build its output.
@@ -58,7 +58,10 @@ which means that the English Wikipedia article on [Seabird](https://en.wikipedia
 the monthly file for February 2021 contains 118.2 million such entries.
 After compression, it needs 8.9 MB in storage.
 
-2. (TODO: Describe the other steps of the build pipeline.)
+2. The build continues by processing the latest
+[Wikidata database dump](https://www.wikidata.org/wiki/Wikidata:Database_download). 
+
+3. (TODO: Describe the other steps of the build pipeline.)
 
 Currently, we have not implemented any signal smearing: The rankings
 are just the aggregated viewcounts. This may well be refined over
@@ -70,7 +73,56 @@ be to run a PageRank-like algorithm on the citation graph; but as of
 literature in Wikidata is still very incomplete.
 
 
-## Webserver
+## Performance
+
+To make use of multi-core machines, `qrank-builder` splits the work
+in smaller tasks and distributes them to parallel worker threads.
+
+* When processing **pageviews**, the daily log files get handled
+  in parallel.
+
+* When processing **Wikidata dumps**, we split the large input file
+  (62 MB as of March 2021, but growing quickly) into a set of chunks
+  that get processed in parallel. To split the compressed input, we
+  look for the “magic” six-byte sequence that appears at the beginning
+  of bzip2 compression blocks. In a well-compressed file, a new block
+  should start roughly every hundred kilobytes: At bzip compression
+  level 9, the decompression buffer is 900 KB; with 10x compression,
+  the compressed block would be about 100 KB long. In practice,
+  Wikidata dumps seem to contain much smaller blocks (sometimes just a
+  few hundred bytes), which may be one reason why Wikidata dump files
+  are so large. Anyhow, once we found a potential block start, we
+  start decompressing the block. Typically, compression blocks can
+  start anywhere in the middle of a Wikidata entity; this is because
+  Wikidata's current bzip2 compressor does not align compression
+  blocks with entity boundaries.  We therefore skip the first
+  (partial) line in the block, and extract the ID of the entity in the
+  *second* line. However, since the “magic” six-byte sequence can also
+  appear in the middle of a compression block, our decompression
+  attempt may fail with a bzip2 decoding error.  If this happens, we
+  will not use the affected block for splitting.  The logic for the
+  splitting is in function `SplitWikidataDump()` in
+  [entities.go](../cmd/qrank-builder/entities.go). Our splitting logic
+  is somewhat similar in spirit to [lbzip2](https://lbzip2.org/), but
+  our implementation is simpler because we know the structure of the
+  decompressed stream.
+
+* Wikidata dumps contain entities in a rather verbose JSON format.
+  By implementing a specialized parser, we have reduced the time
+  to execute `ProcessEntity()` by roughly 90%, from 228 μs to 21.9 μs.
+  The corresponding benchmark is in function `BenchmarkProcessEntity()`
+  in [test_entities.go](../cmd/qrank-builder/test_entities.go). However,
+  because bzip2 is such an expensive format to decode, the bzip2 splitting
+  (see above) had a bigger impact on the overall runtime than this
+  micro-optimization.
+
+* For our intermediate data files, which are internal to the QRank system
+  and not exposed to the public, we use [Brötli compression](https://en.wikipedia.org/wiki/Brotli). When we were benchmarking various compression algorithms
+  on the internal QRank files, Brötli gave file sizes that were similar to
+  or smaller than bzip2, but at speed comparable to flate/gzip.
+
+
+## Detailed design: Webserver
 
 The webserver is a trivial HTTP server. In production, it runs
 on the Wikimedia Cloud behind [nginx](https://nginx.org/).
