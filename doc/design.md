@@ -120,6 +120,23 @@ have no sitelinks at all), weighing 783.5 MB after compression.
    💾 For example, the file `stats-20210215.json` weighs 133 bytes.
 
 
+## Detailed design: Webserver
+
+The webserver is a trivial HTTP server. In production, it runs
+on the Wikimedia Cloud behind [nginx](https://nginx.org/).
+
+The main serving code is in [main.go](../cmd/qrank-webserver/main.go).
+Requests for the home page are currently handled by returning a static string;
+requests for a file download get handled from the file system.
+The SHA-256 file hash of the ranking file (computed by `qrank-builder`,
+see above) serves as entity tag in [Conditional HTTP requests](https://tools.ietf.org/html/rfc7232).
+
+A background task periodically checks the local file system.
+When the server starts up, and whenever new data is available,
+the code in [dataloader.go](../cmd/qrank-webserver/dataloader.go)
+loads the file hash (but not the file) into memory.
+
+
 ## Performance
 
 To make use of multi-core machines, `qrank-builder` splits the work
@@ -167,23 +184,6 @@ in smaller tasks and distributes them to parallel worker threads.
   and not exposed to the public, we use [Brötli compression](https://en.wikipedia.org/wiki/Brotli). When we were benchmarking various compression algorithms
   on the internal QRank files, Brötli gave file sizes that were similar to
   or smaller than bzip2, but at speed comparable to flate/gzip.
-
-
-## Detailed design: Webserver
-
-The webserver is a trivial HTTP server. In production, it runs
-on the Wikimedia Cloud behind [nginx](https://nginx.org/).
-
-The main serving code is in [main.go](../cmd/qrank-webserver/main.go).
-Requests for the home page are currently handled by returning a static string;
-requests for a file download get handled from the file system.
-The SHA-256 file hash of the ranking file (computed by `qrank-builder`,
-see above) serves as entity tag in [Conditional HTTP requests](https://tools.ietf.org/html/rfc7232).
-
-A background task periodically checks the local file system.
-When the server starts up, and whenever new data is available,
-the code in [dataloader.go](../cmd/qrank-webserver/dataloader.go)
-loads the file hash (but not the file) into memory.
 
 
 ## Future work
