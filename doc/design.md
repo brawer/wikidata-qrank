@@ -50,27 +50,74 @@ Like all build pipelines, `qrank-builder` reads input, produces
 intermediate files, and does some shuffling to finally build its output.
 
 1. The build currently starts with Wikimedia pageviews. From the
-[Pageview complete](https://dumps.wikimedia.org/other/pageview_complete/readme.html) dataset, [pageviews.go](../cmd/qrank-builder/pageviews.go)
-aggregates monthly view counts. The result gets stored
-as a sorted and compressed text file. For example, the file
-`pageviews-2021-02.br` contains the line `en.wikipedia/seabird 8204`,
-which means that the English Wikipedia article on [Seabird](https://en.wikipedia.org/wiki/Seabird) has been viewed 8204 times in February 2021. In total,
-the monthly file for February 2021 contains 118.2 million such entries.
-After compression, it needs 8.9 MB in storage.
+   [Pageview
+   complete](https://dumps.wikimedia.org/other/pageview_complete/readme.html)
+   dataset, [pageviews.go](../cmd/qrank-builder/pageviews.go) aggregates
+   monthly view counts for the past twelve months.  The result gets
+   stored as a sorted and compressed text file. This step get skipped
+   if the monthly file has already been computed by a previous run
+   of the `qrank-builder` pipeline.
 
-2. The build continues by processing the latest
-[Wikidata database dump](https://www.wikidata.org/wiki/Wikidata:Database_download). 
+    For example, the file `pageviews-2021-02.br` contains a line
+`en.wikipedia/seabird 8204`, which means that the English Wikipedia
+article for [Seabird](https://en.wikipedia.org/wiki/Seabird) has been
+viewed 8204 times in February 2021. In total, the monthly file for
+February 2021 contains 118.2 million such lines.  After compression,
+it weighs 8.9 MB in storage.
 
-3. (TODO: Describe the other steps of the build pipeline.)
+2. The build continues by extracting Wikimedia site links from latest
+   [Wikidata database dump](https://www.wikidata.org/wiki/Wikidata:Database_download),
+   and associating them with the corresponding Wikidata entity ID. Again,
+   the result gets stored as a sorted and compressed text file, and again
+   this step get skipped if the monthly file has already been computed
+   by a previous pipeline run.
 
-Currently, we have not implemented any signal smearing: The rankings
-are just the aggregated viewcounts. This may well be refined over
-time.  For example, it probably would make sense to propagate some
-fraction of an author's fame to their publications, or some fraction
-of a painter's fame to their works. Another, rather obvious idea would
-be to run a PageRank-like algorithm on the citation graph; but as of
-2021, it seems too early to do this; the modeling of research
-literature in Wikidata is still very incomplete.
+    For example, the file `sitelinks-2021-02-15.br` contains a line
+`en.wikipedia/seabird Q55808`, which means that this page of the English
+Wikipedia is about entity [Q55808](https://www.wikidata.org/wiki/Q55808).
+In total, the sitelinks file extracted from the Wikidata dump of February
+15, 2021 contains 76.7 million such lines (because lots of Wikidata entities
+have no sitelinks at all), weighing 783.5 MB after compression.
+
+3. The build continues by joining `pageviews` for the previous twelve
+   months, which were computed in step 1, with `sitelinks` from step 2.
+   Because all inputs to this step use the same key, and because the
+   input files are sorted by that key, we can do a simple
+   linear scan without reshuffling. The logic for merging the input
+   input files is in [linemerger.go](../cmd/qrank-builder/linemerger.go);
+   it uses a [priority heap queue](https://en.wikipedia.org/wiki/Priority_queue)
+   internally. The intermediate output is a long series of (entity, count)
+   pairs. They get sorted by entity ID into a temporary file, and read back
+   in order. At this time, all view counts for the same entity will appear
+   grouped together, so we can easily (in linear time) compute the sum.
+   As before, this step gets skipped if the output has already
+   been computed by a previous pipeline run.
+
+   For example, the file `qviews-2021-02-15.br` contains a line
+   `Q55808 329861`. This means that from February 2020 to January 2021,
+   Wikimedia pages about [Q55808](https://www.wikidata.org/wiki/Q55808)
+   (Seabird) have been viewed 329861 times, aggregated over all languages
+   and Wikimedia projects for the entire year. In total, the file contains
+   27.3 million such lines, weighing 103.9 MB after compression.
+
+4. The build continues by sorting the view counts by decreasing popularity.
+   If two entities have been viewed the exact time during the past year,
+   the entity ID is used as secondary key. The logic for the sorting is
+   in function `QRankLess()` in [qrank.go](../cmd/qrank-builder/qrank.go).
+
+   The file format, content and size of `qrank-2021-02-15.br` is the same
+   as the `qviews` file of the previous step, it is just in a different
+   order.
+
+5. The build finishes by computing some statistics about the output,
+   which get stored into a small JSON file. Currently, this is just
+   the SHA-256 hash of the `qrank` file; the `qrank-webserver`
+   (see below) uses this as an entity tag for conditional HTTP
+   requests. In the future, it would  make sense to compute additional
+   stats, for example histograms on rank distributions, and store them
+   into the same JSON file.
+
+   For example, the file `stats-20210215.json` weighs 133 bytes.
 
 
 ## Performance
@@ -127,10 +174,32 @@ in smaller tasks and distributes them to parallel worker threads.
 The webserver is a trivial HTTP server. In production, it runs
 on the Wikimedia Cloud behind [nginx](https://nginx.org/).
 
-A background task periodically checks the local file system.
-When new data is available, the code in [dataloader.go](../cmd/qrank-webserver/dataloader.go) loads the file hash (but not the file) into memory.
-
 The main serving code is in [main.go](../cmd/qrank-webserver/main.go).
 Requests for the home page are currently handled by returning a static string;
 requests for a file download get handled from the file system.
-The file hash serves as entity tag in [Conditional HTTP requests](https://tools.ietf.org/html/rfc7232).
+The SHA-256 file hash of the ranking file (computed by `qrank-builder`,
+see above) serves as entity tag in [Conditional HTTP requests](https://tools.ietf.org/html/rfc7232).
+
+A background task periodically checks the local file system.
+When the server starts up, and whenever new data is available,
+the code in [dataloader.go](../cmd/qrank-webserver/dataloader.go)
+loads the file hash (but not the file) into memory.
+
+
+## Future work
+
+### Signal smearing
+
+Currently, the QRank values are simply aggregated raw view counts;
+so far we have not implemented any “signal smearing” yet. This could
+be an area for future improvement because it would assign a rank to
+entities that have no Wikimedia pages. For example, it may be beneficial
+to propagate some fraction of an author's rank to their publications;
+likewise from a painter to their works of art.
+
+Another obvious idea would be to run a PageRank-like algorithm on the
+citation graph. As of 2021, it seems a bit early to do this because
+research literature (and especially its citation graph) has very
+little coverage in Wikidata. As the [Scholia
+project](https://www.wikidata.org/wiki/Wikidata:Scholia) proceeds, it
+may be beneficial to revisit this at some later time.
