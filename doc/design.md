@@ -48,15 +48,15 @@ environment.
 
 Like all build pipelines, `qrank-builder` reads input, produces
 intermediate files, and does some shuffling to finally build its output.
+At every step of the pipeline, we check whether the output has already
+been computed in a previous run of the pipeline; if so, the step is skipped.
 
 1. The build currently starts with Wikimedia pageviews. From the
    [Pageview
    complete](https://dumps.wikimedia.org/other/pageview_complete/readme.html)
    dataset, [pageviews.go](../cmd/qrank-builder/pageviews.go) aggregates
    monthly view counts for the past twelve months.  The result gets
-   stored as a sorted and compressed text file. This step get skipped
-   if the monthly file has already been computed by a previous run
-   of the `qrank-builder` pipeline.
+   stored as a sorted and compressed text file.
 
    💾 For example, the file `pageviews-2021-02.br` contains a line
 `en.wikipedia/seabird 8204`, which means that the English Wikipedia
@@ -68,9 +68,7 @@ it weighs 8.9 MB in storage.
 2. The build continues by extracting Wikimedia site links from latest
    [Wikidata database dump](https://www.wikidata.org/wiki/Wikidata:Database_download),
    and associating them with the corresponding Wikidata entity ID. Again,
-   the result gets stored as a sorted and compressed text file, and again
-   this step get skipped if the monthly file has already been computed
-   by a previous pipeline run.
+   the result gets stored as a sorted and compressed text file.
 
    💾 For example, the file `sitelinks-2021-02-15.br` contains a line
 `en.wikipedia/seabird Q55808`, which means that this page of the English
@@ -90,8 +88,6 @@ have no sitelinks at all), weighing 783.5 MB after compression.
    pairs. They get sorted by entity ID into a temporary file, and read back
    in order. At this time, all view counts for the same entity will appear
    grouped together, so we can easily (in linear time) compute the sum.
-   As before, this step gets skipped if the output has already
-   been computed by a previous pipeline run.
 
    💾 For example, the file `qviews-2021-02-15.br` contains a line
    `Q55808 329861`. This means that from February 2020 to January 2021,
