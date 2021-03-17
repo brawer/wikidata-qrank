@@ -181,12 +181,9 @@ improvements.
 
 * Wikidata dumps contain entities in a rather verbose JSON format.
   By implementing a specialized parser, we have reduced the time
-  to execute `ProcessEntity()` by roughly 90%, from 228 μs to 21.9 μs.
+  to process one Wikidata entity by roughly 90%, from 228 μs to 21.9 μs.
   The corresponding benchmark is in function `BenchmarkProcessEntity()`
-  in [test_entities.go](../cmd/qrank-builder/test_entities.go). However,
-  because bzip2 is such an expensive format to decode, the bzip2 splitting
-  (see above) had a bigger impact on the overall runtime than this
-  micro-optimization.
+  in [entities_test.go](../cmd/qrank-builder/entities_test.go).
 
 * A large fraction of the pipeline's time is spent in compression
   and decompression. For its intermediate data files, the `qrank-builder`
@@ -196,6 +193,29 @@ improvements.
   flate/gzip. However, we decided to *not* use Brötli compression for
   the externally exposed `qrank` file. A lesser-known compression format
   would make it harder for downstream clients to consume the rankings.
+
+Compressing intermediate files for performance sounds rather
+counter-intuitive.  Essentially, this helps to work around a quirk of
+the Wikimedia Cloud.  Although Wikimedia seems to have pretty good hardware,
+it still uses the ancient [NFS file
+system](https://en.wikipedia.org/wiki/Network_File_System) for
+storage which does not scale well to high loads. In order to
+protect its NFS servers from overload, the Wikimedia Cloud is
+throttling access to a very low 5 MBit/s. When
+benchmarking `qrank-builder` on [Digital
+Ocean](https://www.digitalocean.com/) whose block storage is [based
+on](https://www.digitalocean.com/blog/why-we-chose-ceph-to-build-block-storage/)
+the open-source [Ceph](https://ceph.io/) system, we could read and
+write files from Ceph-mounted volumes at 200 MBit/s, roughly 20 times
+faster (on hardware that is probably similar to Wikimedia's). Although
+Wikimedia is already using Ceph for parts of its infrastructure, the
+data dumps (which are the input to `qrank-builder`) can currently only
+be read over NFS. Likewise, Toolforge is currently mounting a tool's
+private data via NFS, which equally limits the throughput on intermediate
+files to merely 5 MBit/s.  If and when the Wikimedia Cloud has modernized
+the software for its storage infrastructure, it may be worth trying
+to remove the compression of intermediate files in `qrank-builder`,
+or to reduce the compression level.
 
 
 ## Future work
