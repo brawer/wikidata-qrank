@@ -206,16 +206,16 @@ benchmarking `qrank-builder` on [Digital
 Ocean](https://www.digitalocean.com/) whose block storage is [based
 on](https://www.digitalocean.com/blog/why-we-chose-ceph-to-build-block-storage/)
 the open-source [Ceph](https://ceph.io/) system, we could read and
-write files from Ceph-mounted volumes at 200 MBit/s, roughly 20 times
-faster (on hardware that is probably similar to Wikimedia's). Although
-Wikimedia is already using Ceph for parts of its infrastructure, the
-data dumps (which are the input to `qrank-builder`) can currently only
-be read over NFS. Likewise, Toolforge is currently mounting a tool's
-private data via NFS, which equally limits the throughput on intermediate
-files to merely 5 MBit/s.  If and when the Wikimedia Cloud has modernized
-the software for its storage infrastructure, it may be worth trying
-to remove the compression of intermediate files in `qrank-builder`,
-or to reduce the compression level.
+write files from Ceph-mounted volumes at up to 200 MBit/s, roughly
+40 times faster on probably comparable hardware. Although Wikimedia
+has started to modernize its storage infrastructure,
+the data dumps, which are the input to the QRank build pipeline, can still
+only be accessed over NFS (or an HTTP server that seems subject to similar
+levels of throttling). Likewise, Toolforge is currently mounting a tool's private data directory
+via NFS, again slowing down access to 5 MBit/s. If and when the
+Wikimedia Cloud has moved on from NFS to more scalable storage,
+it may be worth trying to remove the compression of intermediate files
+in `qrank-builder`, or to reduce the compression level.
 
 
 ## Future work
