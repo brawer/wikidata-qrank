@@ -171,6 +171,14 @@ in smaller tasks and distributes them to parallel worker threads.
   our implementation is simpler because we know the structure of the
   decompressed stream.
 
+Beyond parallelization, we have implemented other peformance
+improvements.
+
+* For sorting, we use an
+  [external sorting algorithm](https://en.wikipedia.org/wiki/External_sorting).
+  This allows `qrank-builder` to process very large amounts of data
+  on cheap machines with relatively little main memory.
+
 * Wikidata dumps contain entities in a rather verbose JSON format.
   By implementing a specialized parser, we have reduced the time
   to execute `ProcessEntity()` by roughly 90%, from 228 μs to 21.9 μs.
@@ -180,10 +188,14 @@ in smaller tasks and distributes them to parallel worker threads.
   (see above) had a bigger impact on the overall runtime than this
   micro-optimization.
 
-* For our intermediate data files, which are internal to the QRank system
-  and not exposed to the public, we use [Brötli compression](https://en.wikipedia.org/wiki/Brotli). When we were benchmarking various compression algorithms
-  on the internal QRank files, Brötli gave file sizes that were similar to
-  or smaller than bzip2, but at speed comparable to flate/gzip.
+* A large fraction of the pipeline's time is spent in compression
+  and decompression. For its intermediate data files, the `qrank-builder`
+  pipeline uses [Brötli compression](https://en.wikipedia.org/wiki/Brotli).
+  When benchmarking various compression algorithms on the actual payload,
+  Brötli gave similar file sizes to bzip2, but at speeds comparable to
+  flate/gzip. However, we decided to *not* use Brötli compression for
+  the externally exposed `qrank` file. A lesser-known compression format
+  would make it harder for downstream clients to consume the rankings.
 
 
 ## Future work
