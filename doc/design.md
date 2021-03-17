@@ -80,10 +80,10 @@ have no sitelinks at all), weighing 783.5 MB after compression.
    months, which were computed in step 1, with `sitelinks` from step 2.
    Because all inputs to this step use the same key, and because the
    input files are sorted by that key, we can do a simple
-   linear scan without reshuffling. The logic for merging the input
-   input files is in [linemerger.go](../cmd/qrank-builder/linemerger.go);
-   it uses a [priority heap queue](https://en.wikipedia.org/wiki/Priority_queue)
-   internally. The intermediate output is a long series of (entity, count)
+   linear scan without reshuffling. The logic for merging the thirteen
+   input files is in [linemerger.go](../cmd/qrank-builder/linemerger.go),
+   using a [min heap](https://en.wikipedia.org/wiki/Heap_(data_structure)).
+   The intermediate output is a long series of (entity, count)
    pairs. They get sorted by entity ID into a temporary file, and read back
    in order. At this time, all view counts for the same entity will appear
    grouped together, so we can easily (in linear time) compute the sum.
