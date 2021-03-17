@@ -23,25 +23,24 @@ just a tiny dot.
   trivial to understand, and easily read in common programming
   languages.
 
-Initially, it will explicitly *not* be our goal to offer a website where
-people can interactively browse the ranked data, even though this would
-be very cute. Likewise, it will initially *not* be our goal to offer an API
-for external software to quickly query the rank of individual Wikidata entities.
-Again, this would be useful, and we may well add it some later time.
-For the time being, however, we will focus on exposing the ranking data in bulk
-as a downloadable file.
+Initially, it is an explicit *non-goal* to build a website for
+people to interactively browse the ranking, or an API for software
+to query individual rankings. Both would be useful, but for the time
+being, we focus on exposing ranking data as a bulk downloadable
+file.
 
 
 ## Overview
 
-The QRank system consists of two parts. Both parts are running on the
-Wikimedia Cloud infrastructure within the
-[Toolforge](https://wikitech.wikimedia.org/wiki/Portal:Toolforge)
-environment.
+The QRank system consists of two parts. Both run in the
+[Wikimedia Cloud](https://wikitech.wikimedia.org/wiki/Help:Cloud_Services_Introduction) on
+[Toolforge](https://wikitech.wikimedia.org/wiki/Portal:Toolforge).
 
 * `qrank-builder` is an automated pipeline that computes the ranking.
-* `qrank-webserver` is an small webserver that exposes the ranking file
-  to the outside.
+
+* `qrank-webserver` handles queries for
+  [qrank.toolforge.org](https://qrank.toolforge.org/), serving
+  the ranking data to the outside.
 
 
 ## Detailed design: Build pipeline
@@ -124,13 +123,18 @@ on the Wikimedia Cloud behind [nginx](https://nginx.org/).
 The main serving code is in [main.go](../cmd/qrank-webserver/main.go).
 Requests for the home page are currently handled by returning a static string;
 requests for a file download get handled from the file system.
-The SHA-256 file hash of the ranking file (computed by `qrank-builder`,
-see above) serves as entity tag in [Conditional HTTP requests](https://tools.ietf.org/html/rfc7232).
 
-A background task periodically checks the local file system.
-When the server starts up, and whenever new data is available,
-the code in [dataloader.go](../cmd/qrank-webserver/dataloader.go)
-loads the file hash (but not the file) into memory.
+Clients can efficiently check for updates to the ranking file
+because `qrank-webserver` supports
+[conditional requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests). For the `ETag` entity tag, we currently use the SHA-256
+hash of the ranking file, computed by the final stage of `qrank-builder`
+and stored in the `stats` file.
+
+A background task of `qrank-webserver` periodically checks the local
+file system. When the server starts up, and whenever new data is
+available, the code in
+[dataloader.go](../cmd/qrank-webserver/dataloader.go) loads the latest
+`stats` file (but not the large ranking file) into memory.
 
 
 ## Performance
