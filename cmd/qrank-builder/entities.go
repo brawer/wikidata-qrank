@@ -160,7 +160,7 @@ func processEntities(testRun bool, path string, date time.Time, outDir string, c
 		return "", err
 	}
 
-	logger.Printf("processing entities of %04d-%02d", year, month)
+	logger.Printf("processing entities of %04d-%02d-%d", year, month, day)
 	start := time.Now()
 
 	// We write our output into a temp file in the same directory
@@ -179,7 +179,7 @@ func processEntities(testRun bool, path string, date time.Time, outDir string, c
 
 	ch := make(chan string, 10000)
 	config := extsort.DefaultConfig()
-	config.ChunkSize = 4 * 1024 * 1024 / 16 // 4 MiB, 16 Bytes/line avg
+	config.ChunkSize = 8 * 1024 * 1024 / 16 // 8 MiB, 16 Bytes/line avg
 	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.Strings(ch, config)
 	g, subCtx := errgroup.WithContext(ctx)
@@ -233,7 +233,9 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 	}
 	fileSize := stat.Size()
 
-	numSplits := runtime.NumCPU()
+	// To keep CPU cores busy while tasks are blocked waiting for input,
+	// we use more worker tasks than we have CPUs.
+	numSplits := runtime.NumCPU() * 4
 	if testRun {
 		numSplits = 2
 	}
@@ -241,6 +243,7 @@ func readEntities(testRun bool, path string, sitelinks chan<- string, ctx contex
 	if err != nil {
 		return err
 	}
+	logger.Printf("reading Wikidata dump with %d parallel workers", len(splits))
 
 	work := make(chan WikidataSplit, len(splits))
 	for _, split := range splits {
