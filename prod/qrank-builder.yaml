@@ -28,8 +28,8 @@ spec:
             command: [ "bin/qrank-builder", "-dumps=/public/dumps/public" ]
             resources:
               requests:
-                memory: "2Gi"
-                cpu: "1"
+                memory: "1Gi"
+                cpu: "2"
               limits:
-                memory: "2Gi"
-                cpu: "1"
+                memory: "1Gi"
+                cpu: "2"
