@@ -207,15 +207,22 @@ Ocean](https://www.digitalocean.com/) whose block storage is [based
 on](https://www.digitalocean.com/blog/why-we-chose-ceph-to-build-block-storage/)
 the open-source [Ceph](https://ceph.io/) system, we could read and
 write files from Ceph-mounted volumes at up to 200 MBit/s, roughly
-40 times faster on probably comparable hardware. Although Wikimedia
-has started to modernize its storage infrastructure,
-the data dumps, which are the input to the QRank build pipeline, can still
-only be accessed over NFS (or an HTTP server that seems subject to similar
-levels of throttling). Likewise, Toolforge is currently mounting a tool's private data directory
-via NFS, again slowing down access to 5 MBit/s. If and when the
-Wikimedia Cloud has moved on from NFS to more scalable storage,
-it may be worth trying to remove the compression of intermediate files
-in `qrank-builder`, or to reduce the compression level.
+40 times faster. Although Wikimedia has started to modernize its
+storage infrastructure, the data dumps, which are the input to the
+QRank build pipeline, can still only be accessed over NFS (or an
+HTTP server that seems subject to similar levels of throttling).
+Likewise, Toolforge is currently mounting a tool's private data directory
+via NFS. When the Wikimedia Cloud finished its migration to more
+scalable storage systems, it might be worth trying to remove the
+compression of intermediate files in `qrank-builder`, or to reduce
+the compression level.
+
+Said this, the build pipeline's current bottleneck seems to be CPU and
+not I/O, so the file system may not actually matter all that much.
+Still, it is a little surprising that the pipeline can process
+the exact same data so much faster on DigitalOcean than in the
+Wikimedia Cloud. In any case, it's not really a big problem if the
+ranking signal is stale by a couple days.
 
 
 ## Future work
