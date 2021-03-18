@@ -19,7 +19,12 @@ func TestBuildQRank(t *testing.T) {
 		return
 	}
 
-	expected := "Q4\t77\nQ2\t42\nQ5\t42\nQ1\t1\nQ3\t1\n"
+	expected := "Entity,QRank\n" +
+		"Q4,77\n" +
+		"Q2,42\n" +
+		"Q5,42\n" +
+		"Q1,1\n" +
+		"Q3,1\n"
 	got := readGzipFile(path)
 	if expected != got {
 		t.Errorf("expected %q, got %q", expected, got)

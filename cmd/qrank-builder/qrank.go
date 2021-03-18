@@ -101,12 +101,18 @@ func buildQRank(date time.Time, qviews string, outDir string, ctx context.Contex
 	if err := g.Wait(); err != nil {
 		return "", err
 	}
+
+	header := "Entity,QRank\n"
+	if _, err := qrankWriter.Write([]byte(header)); err != nil {
+		return "", err
+	}
+
 	for data := range outChan {
 		qr := data.(QRank)
 		var buf bytes.Buffer
 		buf.WriteByte('Q')
 		buf.WriteString(strconv.FormatInt(qr.Entity, 10))
-		buf.WriteByte('\t')
+		buf.WriteByte(',')
 		buf.WriteString(strconv.FormatInt(qr.Rank, 10))
 		buf.WriteByte('\n')
 		if _, err := qrankWriter.Write(buf.Bytes()); err != nil {
