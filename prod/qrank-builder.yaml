@@ -17,7 +17,6 @@ spec:
       template:
         metadata:
           labels:
-            #name: qrank.builder
             toolforge: tool
         spec:
           restartPolicy: OnFailure
@@ -27,9 +26,10 @@ spec:
             image: docker-registry.tools.wmflabs.org/toolforge-python37-sssd-base:latest
             command: [ "bin/qrank-builder", "-dumps=/public/dumps/public" ]
             resources:
+              # https://phabricator.wikimedia.org/T277457
               requests:
-                memory: "1Gi"
-                cpu: "2"
+                memory: "1.5Gi"
+                cpu: "2500m"
               limits:
-                memory: "1Gi"
-                cpu: "2"
+                memory: "1.5Gi"
+                cpu: "2500m"
