@@ -29,7 +29,7 @@ spec:
               # https://phabricator.wikimedia.org/T277457
               requests:
                 memory: "1.5Gi"
-                cpu: "2500m"
+                cpu: "2"
               limits:
                 memory: "1.5Gi"
-                cpu: "2500m"
+                cpu: "2"
