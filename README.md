@@ -10,7 +10,7 @@ Wikibooks, Wikispecies and other Wikimedia projects.
 For example, according to the QRank signal, the fictional character
 [Pippi Longstocking](https://www.wikidata.org/wiki/Q6668)
 ranks lower than [Harry Potter](https://www.wikidata.org/wiki/Q8337),
-but still much higher than the relatively obscure
+but still much higher than the obscure
 [Äffle & Pferdle](https://www.wikidata.org/wiki/Q252869).
 
 
@@ -21,23 +21,20 @@ but still much higher than the relatively obscure
 | [Q252869](https://www.wikidata.org/wiki/Q252869)         | Äffle & Pferdle    |    24545 |
 
 
-Such a ranking signal is useful when time or space are too limited
-to handle everything. For example:
+A ranking signal is useful when time or space are too limited
+to handle everything. When **fixing data problems**, use QRank
+for maximal impact of your work. In **cartography**,
+use QRank to display important features more prominently; [this map of Swiss castles](https://castle-map.infs.ch/#46.82825,8.19305,8z) uses QRank to decide which castles deserve a large symbol.
 
-* When **fixing data problems**, start with the highest ranking entities
-  for maximal impact of your work.
+For a *technical description* of the system, see the
+[Design Document](doc/design.md). To *download ranking data*,
+head over to *[qrank.toolforge.org](https://https://qrank.toolforge.org/)*.
 
-* When **drawing geographic maps**, show higher-ranking features
-  more prominently. For example,
-  [this map of Swiss castles and ruins](https://castle-map.infs.ch/#46.82825,8.19305,8z) uses QRank to decide which castles deserve a large icon and which
-  ones just a small dot.
-
-For a more detailed technical description of the system,
-see the [Design Document](doc/design.md).
 
 ## License
 
-*Data:* Just like Wikidata, the QRank data files are dedicated to the Public domain
+*Data:* Like Wikidata, the [QRank data](https://qrank.toolforge.org/)
+is dedicated to the Public domain
 via [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 To the extent possible under law, we have waived all copyright and related
 or neighboring rights to this work. This work is published from Switzerland,
