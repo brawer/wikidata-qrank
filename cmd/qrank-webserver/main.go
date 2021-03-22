@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -30,6 +31,27 @@ func main() {
 	var err error
 	dataLoader, err = NewDataLoader(*dataFlag)
 	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	if err := prometheus.Register(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Namespace:   "qrank",
+			Name:        "last_modified_time_seconds",
+			Help:        "Number of seconds since 1970 of last modification to downloadable file.",
+			ConstLabels: prometheus.Labels{"filename": "qrank_csv"},
+		},
+		func() float64 {
+			stats := dataLoader.Get()
+			qrankPath := filepath.Join(dataLoader.Path, stats.QRankFilename)
+			if s, err := os.Stat(qrankPath); err == nil {
+				return float64(s.ModTime().UnixNano()) * 1e-9
+			} else {
+				log.Println("os.Stat(%q) failed: %s", qrankPath, err)
+				return 0
+			}
+		})); err != nil {
 		log.Fatal(err)
 		return
 	}
