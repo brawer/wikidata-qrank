@@ -48,7 +48,7 @@ func main() {
 			if s, err := os.Stat(qrankPath); err == nil {
 				return float64(s.ModTime().UnixNano()) * 1e-9
 			} else {
-				log.Println("os.Stat(%q) failed: %s", qrankPath, err)
+				log.Printf("os.Stat(%q) failed: %s", qrankPath, err)
 				return 0
 			}
 		})); err != nil {
