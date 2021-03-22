@@ -72,13 +72,14 @@ func main() {
 		}
 	}()
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/", handleMain)
-	http.HandleFunc("/download/qrank.csv.gz", handleDownloadQRank)
+	http.HandleFunc("/", HandleMain)
+	http.HandleFunc("/download/qrank.csv.gz", HandleDownloadQRank)
+	http.HandleFunc("/robots.txt", HandleRobotsTxt)
 	http.ListenAndServe(":"+strconv.Itoa(port), nil)
 	done <- true
 }
 
-func handleMain(w http.ResponseWriter, r *http.Request) {
+func HandleMain(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s",
 		`<html>
 <head>
@@ -122,7 +123,7 @@ width="88" height="31" alt="Public Domain" style="float:left"/></p>
 </body></html>`)
 }
 
-func handleDownloadQRank(w http.ResponseWriter, req *http.Request) {
+func HandleDownloadQRank(w http.ResponseWriter, req *http.Request) {
 	stats := dataLoader.Get()
 	qrankPath := filepath.Join(dataLoader.Path, stats.QRankFilename)
 	qrankFile, err := os.Open(qrankPath)
@@ -145,4 +146,14 @@ func handleDownloadQRank(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("ETag", etag)
 	http.ServeContent(w, req, stats.QRankFilename, lastModified, qrankFile)
+}
+
+// HandleRobotsTxt sends a constant robots.txt file back to the
+// client, allowing web crawlers to access our entire site.  If we
+// didn't handle /robots.txt ourselves, Wikimedia's proxy would inject
+// a deny-all response and return that to the caller.
+func HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
+	// https://wikitech.wikimedia.org/wiki/Help:Toolforge/Web#/robots.txt
+	w.Header().Set("Content-Type", "text/plain")
+	fmt.Fprintf(w, "%s", "User-Agent: *\nAllow: /\n")
 }
