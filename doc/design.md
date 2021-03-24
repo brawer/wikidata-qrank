@@ -256,3 +256,35 @@ progress, it may be beneficial to revisit this at some later time.
 There has been [research on Wikipedia
 pagerank](https://www.aifb.kit.edu/images/e/e5/Wikipedia_pagerank1.pdf)
 that may be relevant if anyone wants to look into this.
+
+
+### Query API
+
+It would be very useful to offer an Application Programming Interface
+to query the rank of Wikidata entities. To integrate into the existing
+ecosystem, such as [Wikidata Query Service](https://query.wikidata.org/)
+and similar services, we could expose a
+[SPARQL endpoint](https://www.w3.org/TR/sparql11-overview/)
+for [federated queries](https://www.w3.org/TR/sparql11-federated-query/).
+
+A realistic approach might be writing a Java server that invokes
+the [query engine](https://jena.apache.org/documentation/query/index.html)
+of [Apache Jena](https://jena.apache.org/) on a custom data store
+built from the existing QRank data files. This would best be implemented
+as a separate project, but it may make sense to proxy queries from
+[qrank.toolforge.org](https://qrank.toolforge.org/) to that other service.
+Then, the system complexity would be hidden from external developers.
+This variant might be a great project for a Java programmer.
+
+Alternatively, one could also write a SPARQL implementation in Go and
+make it part of the existing `qrank-webserver`. From a systems
+perspective, this would be easier to maintain (less moving parts) than
+a separate Java process, but one would have to re-implement parts of
+Apache Jena in the Go programming language.  The key difficulty would
+be designing the libary in a lean way, avoiding the complexity that is
+typical of Java frameworks.  This seems certainly doable, but it would
+be substantial work, ideally done by a very experienced programmer.
+
+Another alternative would be coming up with some ad-hoc query language
+instead of SPARQL. That would take less effort to implement, but then
+the integration with existing services gets more complicated.
