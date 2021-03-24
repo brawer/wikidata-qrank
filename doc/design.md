@@ -249,7 +249,7 @@ quite well. As a counterexample, boosting the ranking of cities based
 on who happened to be born at a place may or may not be worth the
 effort, especially when seeding the ranking with pageviews for the
 city. Anyhow, as of March 2021, it seems a bit early to really try
-this; academic works and its citation graph have still very limited
+this; academic works and their citation graph still have very limited
 coverage in Wikidata. As the [Scholia
 project](https://www.wikidata.org/wiki/Wikidata:Scholia) is making
 progress, it may be beneficial to revisit this at some later time.
