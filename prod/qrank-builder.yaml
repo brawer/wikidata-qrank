@@ -23,7 +23,7 @@ spec:
           containers:
           - name: qrank-builder
             workingDir: /data/project/qrank
-            image: docker-registry.tools.wmflabs.org/toolforge-python37-sssd-base:latest
+            image: docker-registry.tools.wmflabs.org/toolforge-buster-standalone:latest
             command: [ "bin/qrank-builder", "-dumps=/public/dumps/public" ]
             resources:
               # https://phabricator.wikimedia.org/T277457
