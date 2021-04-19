@@ -39,6 +39,10 @@ func computeQRank(dumpsPath string, testRun bool) error {
 		return err
 	}
 
+	if err := CleanupCache(outDir); err != nil {
+		return err
+	}
+
 	edate, epath, err := findEntitiesDump(dumpsPath)
 	if err != nil {
 		return err
