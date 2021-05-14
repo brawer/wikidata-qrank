@@ -20,8 +20,8 @@ func main() {
 	}
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
-
 	if err := computeQRank(*dumps, *testRun); err != nil {
+		logger.Printf("ComputeQRank failed: %v", err)
 		log.Fatal(err)
 		return
 	}
