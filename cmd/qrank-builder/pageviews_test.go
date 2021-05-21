@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -69,5 +70,38 @@ func TestReadPageviewsCancel(t *testing.T) {
 	cancel()
 	if err := g.Wait(); err != context.Canceled {
 		t.Error("expected context.Canceled, got", err)
+	}
+}
+
+func TestCombineCounts(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"bar 22|bar 17|foo 7", "bar 39\nfoo 7\n"},
+
+		// https://github.com/brawer/wikidata-qrank/issues/3
+		{"whitespace\u0085char 666", "whitespace\u0085char 666\n"},
+		{"multiple columns 666", ""},
+	}
+
+	for _, tc := range tests {
+		input := strings.Split(tc.input, "|")
+		ch := make(chan string, len(input))
+		for _, s := range input {
+			ch <- s
+		}
+		close(ch)
+
+		var buf bytes.Buffer
+		ctx := context.Background()
+		if err := combineCounts(ch, &buf, ctx); err != nil {
+			t.Error(err)
+			return
+		}
+		got := buf.String()
+		if tc.expected != got {
+			t.Errorf("expected %q, got %q", tc.expected, got)
+		}
 	}
 }

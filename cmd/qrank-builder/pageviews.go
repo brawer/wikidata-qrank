@@ -124,7 +124,11 @@ func combineCounts(ch <-chan string, w io.Writer, ctx context.Context) error {
 			if !ok { // channel closed, end of input
 				return writeCount(w, lastKey, lastCount)
 			}
-			cols := strings.Fields(line)
+			cols := strings.Split(line, " ")
+			if len(cols) != 2 {
+				continue
+			}
+
 			key := cols[0]
 			count, err := strconv.ParseInt(cols[1], 10, 64)
 			if err != nil {
