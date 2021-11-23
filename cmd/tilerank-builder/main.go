@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package main
 
 import (
@@ -29,7 +31,19 @@ func main() {
 		return
 	}
 
+	maxWeeks := 3 * 52 // 3 years
+	if len(weeks) > maxWeeks {
+		weeks = weeks[len(weeks)-maxWeeks:]
+	}
 	logger.Printf(
 		"found %d weeks with OpenStreetMap tile logs, from %s to %s",
 		len(weeks), weeks[0], weeks[len(weeks)-1])
+
+	cachedir := "cache"
+	for _, week := range weeks {
+		if _, err := GetTileLogs(week, client, cachedir); err != nil {
+			logger.Fatal(err)
+			return
+		}
+	}
 }

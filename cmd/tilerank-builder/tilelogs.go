@@ -1,13 +1,24 @@
+// SPDX-License-Identifier: MIT
+
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
+	"github.com/lanrat/extsort"
+	"golang.org/x/sync/errgroup"
 )
 
 // Returns a list of weeks for which OpenStreetMap has tile logs.
@@ -62,4 +73,146 @@ func GetAvailableWeeks(client *http.Client) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+var isoWeekRegexp = regexp.MustCompile(`(\d{4})-W(\d{2})`)
+
+func GetTileLogs(week string, client *http.Client, cachedir string) (io.Reader, error) {
+	ctx := context.Background()
+	path := filepath.Join(cachedir, fmt.Sprintf("tilelogs-%s.br", week))
+	fmt.Println(path)
+	if f, err := os.Open(path); err == nil {
+		return brotli.NewReader(f), nil
+	}
+
+	if logger != nil {
+		logger.Printf("building %s", path)
+	}
+
+	if err := os.MkdirAll(cachedir, os.ModePerm); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan extsort.SortType, 100000)
+	g, subCtx := errgroup.WithContext(ctx)
+	config := extsort.DefaultConfig()
+	config.NumWorkers = runtime.NumCPU()
+	sorter, outChan, errChan := extsort.New(ch, TileCountFromBytes, TileCountLess, config)
+	g.Go(func() error {
+		return fetchWeeklyTileLogs(week, client, ch, subCtx)
+	})
+	g.Go(func() error {
+		sorter.Sort(ctx) // not subCtx, as per extsort docs
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	// We write to a temporary file first, and rename it atomically
+	// once it is finished in usable state. This prevents hiccups
+	// in case the process crashes (or the machine dies) while the
+	// output file is being written.
+	tmppath := path + ".tmp"
+	tmpfile, err := os.Create(tmppath)
+	if err != nil {
+		return nil, err
+	}
+	defer tmpfile.Close()
+	writer := brotli.NewWriterLevel(tmpfile, 9)
+	defer writer.Close()
+
+	var last TileCount
+	for data := range outChan {
+		cur := data.(TileCount)
+		if cur.X != last.X || cur.Y != last.Y {
+			if last.Count > 0 {
+				fmt.Fprintf(writer, "%d,%d,%d\n", last.X, last.Y, last.Count)
+			}
+			last = cur
+		} else {
+			last.Count += cur.Count
+		}
+	}
+	if last.Count > 0 {
+		fmt.Fprintf(writer, "%d,%d,%d\n", last.X, last.Y, last.Count)
+	}
+
+	// Check for errors from the external sorting library.
+	if err := <-errChan; err != nil {
+		return nil, err
+	}
+
+	// Close writer/compressor, ask kernel to ensure temp file is on disk, and close it.
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	if err := tmpfile.Sync(); err != nil {
+		return nil, err
+	}
+	if err := tmpfile.Close(); err != nil {
+		return nil, err
+	}
+
+	// Now that we have the result on disk, rename it to final path.
+	if err := os.Rename(tmppath, path); err != nil {
+		return nil, err
+	}
+
+	// Open the file for reading and return a reader for it.
+	if f, err := os.Open(path); err == nil {
+		return brotli.NewReader(f), nil
+	} else {
+		return nil, err
+	}
+}
+
+func fetchWeeklyTileLogs(week string, client *http.Client, ch chan<- extsort.SortType, ctx context.Context) error {
+	defer close(ch)
+
+	match := isoWeekRegexp.FindStringSubmatch(week)
+	if match == nil || len(match) != 3 {
+		return fmt.Errorf("week not in ISO 8601 format: %s", week)
+	}
+
+	// Fetch the tile logs for the seven days in this week, in parallel.
+	parsedYear, _ := strconv.Atoi(match[1])
+	parsedWeek, _ := strconv.Atoi(match[2])
+	firstDay := weekStart(parsedYear, parsedWeek)
+	g, subCtx := errgroup.WithContext(ctx)
+	for i := 0; i < 7; i++ {
+		day := firstDay.AddDate(0, 0, i)
+		g.Go(func() error {
+			return fetchTileLogs(day, client, ch, subCtx)
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func fetchTileLogs(day time.Time, client *http.Client, ch chan<- extsort.SortType, ctx context.Context) error {
+	url := fmt.Sprintf(
+		"https://planet.openstreetmap.org/tile_logs/tiles-%04d-%02d-%02d.txt.xz",
+		day.Year(), day.Month(), day.Day())
+	fmt.Println("*** TODO: FetchTileLogs", url)
+	ch <- TileCount{17, 23, 3}
+	ch <- TileCount{17, 22, 6}
+	return nil
+}
+
+// Reverse of Go’s time.ISOWeek() function.
+func weekStart(year, week int) time.Time {
+	// Find the first Monday before July 1 of the given year.
+	t := time.Date(year, 7, 1, 0, 0, 0, 0, time.UTC)
+	if wd := t.Weekday(); wd == time.Sunday {
+		t = t.AddDate(0, 0, -6)
+	} else {
+		t = t.AddDate(0, 0, -int(wd)+1)
+	}
+
+	_, w := t.ISOWeek()
+	return t.AddDate(0, 0, (week-w)*7)
 }
