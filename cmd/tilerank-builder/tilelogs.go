@@ -23,9 +23,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Returns a list of weeks for which OpenStreetMap has tile logs.
+// Return a list of weeks for which OpenStreetMap has tile logs.
 // Weeks are returned in ISO 8601 format such as "2021-W07".
-// The reslut is sorted from least to most recent week.
+// The result is sorted from least to most recent week.
 // We return only those weeks where OpenStreetMap has tile logs
 // for all seven days.
 func GetAvailableWeeks(client *http.Client) ([]string, error) {
