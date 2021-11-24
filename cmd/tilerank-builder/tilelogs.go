@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/lanrat/extsort"
+	"github.com/ulikunitz/xz"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -76,11 +78,11 @@ func GetAvailableWeeks(client *http.Client) ([]string, error) {
 }
 
 var isoWeekRegexp = regexp.MustCompile(`(\d{4})-W(\d{2})`)
+var tileLogRegexp = regexp.MustCompile(`^(\d+)/(\d+)/(\d+)\s+(\d+)$`)
 
 func GetTileLogs(week string, client *http.Client, cachedir string) (io.Reader, error) {
 	ctx := context.Background()
 	path := filepath.Join(cachedir, fmt.Sprintf("tilelogs-%s.br", week))
-	fmt.Println(path)
 	if f, err := os.Open(path); err == nil {
 		return brotli.NewReader(f), nil
 	}
@@ -197,9 +199,44 @@ func fetchTileLogs(day time.Time, client *http.Client, ch chan<- extsort.SortTyp
 	url := fmt.Sprintf(
 		"https://planet.openstreetmap.org/tile_logs/tiles-%04d-%02d-%02d.txt.xz",
 		day.Year(), day.Month(), day.Day())
-	fmt.Println("*** TODO: FetchTileLogs", url)
-	ch <- TileCount{17, 23, 3}
-	ch <- TileCount{17, 22, 6}
+	r, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+
+	reader, err := xz.NewReader(r.Body)
+	if err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		// Check if our task has been canceled. Typically this can happen
+		// because of an error in another goroutine in the same x.sync.errroup.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		match := tileLogRegexp.FindStringSubmatch(scanner.Text())
+		if match == nil || len(match) != 5 {
+			continue
+		}
+		zoom, _ := strconv.Atoi(match[1])
+		if zoom < 16 {
+			continue
+		}
+		shift := zoom - 16
+		x, _ := strconv.ParseUint(match[2], 10, 32)
+		y, _ := strconv.ParseUint(match[3], 10, 32)
+		count, _ := strconv.ParseUint(match[4], 10, 64)
+		ch <- TileCount{uint32(x >> shift), uint32(y >> shift), count}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

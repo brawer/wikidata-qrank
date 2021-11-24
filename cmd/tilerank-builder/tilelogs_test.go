@@ -39,6 +39,16 @@ func (f *FakeOSMPlanet) RoundTrip(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: body, Header: header}, nil
 	}
 
+	if strings.HasPrefix(url, "https://planet.openstreetmap.org/tile_logs/tiles-2567-03-") {
+		body, err := os.Open("testdata/rapperswil.xz")
+		if err != nil {
+			return nil, err
+		}
+
+		header.Add("Content-Type", "application/x-xz")
+		return &http.Response{StatusCode: 200, Body: body, Header: header}, nil
+	}
+
 	return nil, fmt.Errorf("unexpected request: %s", url)
 }
 
@@ -71,10 +81,34 @@ func TestGetTileLogs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	_, err = GetTileLogs("2021-W52", client, cachedir)
+	reader, err := GetTileLogs("2567-W12", client, cachedir)
 	if err != nil {
 		t.Error(err)
 		return
+	}
+
+	// Contents of testdata/rapperswil.xz, aggregated to zoom level 16.
+	expected := `34372,22988,315
+34372,22989,1890
+34372,22990,2884
+34372,22991,966
+34373,22988,546
+34373,22989,2527
+34373,22990,2940
+34373,22991,1029
+34374,22988,602
+34374,22989,2471
+34374,22990,2044
+34374,22991,847
+34375,22988,714
+34375,22989,2072
+34375,22990,1491
+34375,22991,525
+`
+	got := readStream(reader)
+	if expected != got {
+		t.Errorf("expected %v, got %v", expected, got)
+		fmt.Println(got)
 	}
 }
 
