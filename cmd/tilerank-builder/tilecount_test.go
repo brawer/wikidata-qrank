@@ -59,7 +59,6 @@ func TestTileCountLess(t *testing.T) {
 
 func TestTileCountLessContainment(t *testing.T) {
 	big := TileCount{Zoom: 15, X: 17161, Y: 11476, Count: 42}
-	last := big
 	for y := big.Y << 3; y < (big.Y+1)<<3; y++ {
 		for x := big.X << 3; x < (big.X+1)<<3; x++ {
 			small := TileCount{Zoom: 18, X: x, Y: y, Count: 7}
@@ -71,10 +70,6 @@ func TestTileCountLessContainment(t *testing.T) {
 				t.Errorf("expected TileCountLess(%v, %v) = false because the former is geographically contained within the latter",
 					small, big)
 			}
-			if !TileCountLess(last, small) {
-				t.Errorf("expected TileCountLess(%v, %v) = true", last, small)
-			}
-			last = small
 		}
 	}
 

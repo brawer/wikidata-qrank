@@ -35,12 +35,10 @@ func TileCountFromBytes(b []byte) extsort.SortType {
 
 func TileCountLess(a, b extsort.SortType) bool {
 	aa := a.(TileCount)
-	aKey := uint64(aa.Y) << (64 - aa.Zoom)
-	aKey = aKey | uint64(aa.X)<<(44-aa.Zoom) | uint64(aa.Zoom)
+	aKey := MakeTileKey(aa.Zoom, aa.X, aa.Y)
 
 	bb := b.(TileCount)
-	bKey := uint64(bb.Y) << (64 - bb.Zoom)
-	bKey = bKey | uint64(bb.X)<<(44-bb.Zoom) | uint64(bb.Zoom)
+	bKey := MakeTileKey(bb.Zoom, bb.X, bb.Y)
 
 	if aKey != bKey {
 		return aKey < bKey
