@@ -8,17 +8,17 @@ import (
 )
 
 type TileCount struct {
-	X, Y  uint32
+	Key   TileKey
 	Count uint64
-	Zoom  uint8
 }
 
 func (c TileCount) ToBytes() []byte {
+	zoom, x, y := c.Key.ZoomXY()
 	buf := make([]byte, binary.MaxVarintLen32*2+binary.MaxVarintLen64+1)
-	pos := binary.PutUvarint(buf, uint64(c.X))
-	pos += binary.PutUvarint(buf[pos:], uint64(c.Y))
+	pos := binary.PutUvarint(buf, uint64(x))
+	pos += binary.PutUvarint(buf[pos:], uint64(y))
 	pos += binary.PutUvarint(buf[pos:], c.Count)
-	buf[pos] = c.Zoom
+	buf[pos] = zoom
 	pos += 1
 	return buf[0:pos]
 }
@@ -30,18 +30,15 @@ func TileCountFromBytes(b []byte) extsort.SortType {
 	count, len := binary.Uvarint(b[pos:])
 	pos += len
 	zoom := b[pos]
-	return TileCount{X: uint32(x), Y: uint32(y), Count: count, Zoom: zoom}
+	key := MakeTileKey(zoom, uint32(x), uint32(y))
+	return TileCount{Key: key, Count: count}
 }
 
 func TileCountLess(a, b extsort.SortType) bool {
 	aa := a.(TileCount)
-	aKey := MakeTileKey(aa.Zoom, aa.X, aa.Y)
-
 	bb := b.(TileCount)
-	bKey := MakeTileKey(bb.Zoom, bb.X, bb.Y)
-
-	if aKey != bKey {
-		return aKey < bKey
+	if aa.Key != bb.Key {
+		return aa.Key < bb.Key
 	} else {
 		return aa.Count < bb.Count
 	}

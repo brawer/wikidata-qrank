@@ -43,7 +43,8 @@ func mergeTileCounts(r []io.Reader, out chan<- TileCount, ctx context.Context) e
 		x, _ := strconv.ParseUint(match[2], 10, 32)
 		y, _ := strconv.ParseUint(match[3], 10, 32)
 		count, _ := strconv.ParseUint(match[4], 10, 64)
-		out <- TileCount{Zoom: uint8(zoom), X: uint32(x), Y: uint32(y), Count: count}
+		key := MakeTileKey(uint8(zoom), uint32(x), uint32(y))
+		out <- TileCount{Key: key, Count: count}
 	}
 
 	return nil

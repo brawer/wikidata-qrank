@@ -40,7 +40,8 @@ func readMerged(readers []io.Reader) (string, error) {
 				result.WriteRune('◆')
 			}
 			first = false
-			result.WriteString(fmt.Sprintf("%d/%d/%d %d", tile.Zoom, tile.X, tile.Y, tile.Count))
+			zoom, x, y := tile.Key.ZoomXY()
+			result.WriteString(fmt.Sprintf("%d/%d/%d %d", zoom, x, y, tile.Count))
 		}
 		return nil
 	})

@@ -127,9 +127,10 @@ func GetTileLogs(week string, client *http.Client, cachedir string) (io.Reader, 
 	var last TileCount
 	for data := range outChan {
 		cur := data.(TileCount)
-		if cur.X != last.X || cur.Y != last.Y || cur.Zoom != last.Zoom {
+		if cur.Key != last.Key {
 			if last.Count > 0 {
-				fmt.Fprintf(writer, "%d/%d/%d %d\n", last.Zoom, last.X, last.Y, last.Count)
+				zoom, x, y := last.Key.ZoomXY()
+				fmt.Fprintf(writer, "%d/%d/%d %d\n", zoom, x, y, last.Count)
 			}
 			last = cur
 		} else {
@@ -137,7 +138,8 @@ func GetTileLogs(week string, client *http.Client, cachedir string) (io.Reader, 
 		}
 	}
 	if last.Count > 0 {
-		fmt.Fprintf(writer, "%d/%d/%d %d\n", last.Zoom, last.X, last.Y, last.Count)
+		zoom, x, y := last.Key.ZoomXY()
+		fmt.Fprintf(writer, "%d/%d/%d %d\n", zoom, x, y, last.Count)
 	}
 
 	// Check for errors from the external sorting library.
@@ -224,31 +226,15 @@ func fetchTileLogs(day time.Time, client *http.Client, ch chan<- extsort.SortTyp
 			continue
 		}
 		zoom, _ := strconv.Atoi(match[1])
-		if zoom < 0 {
+		if zoom < 0 || zoom > 24 {
 			continue
 		}
 		x, _ := strconv.ParseUint(match[2], 10, 32)
 		y, _ := strconv.ParseUint(match[3], 10, 32)
+		key := MakeTileKey(uint8(zoom), uint32(x), uint32(y))
 		count, _ := strconv.ParseUint(match[4], 10, 64)
-
-		// In the OSM logs, we see no tile logs for zoom 20+. But let's
-		// handle this case, should the server-side logging ever change.
-		// We project the X and Y coordinates to zoom 19. Regarding the
-		// count of tile impressions, we ultimately compute the number
-		// of user views per m². For each level of increasing zoom depth,
-		// the covered area shrinks to one fourth, so we divide the
-		// view count by 2 ^ (shift*2). Technically, the covered area
-		// also depends on the Y coordinate (because of mercator projection),
-		// but this does not really matter at very deep zoom levels.
-		if zoom > 19 {
-			shift := zoom - 19
-			x = x >> shift
-			y = y >> shift
-			count = count >> (shift * 2) // a z20 tile has 1/4 views per m2 than z19
-			zoom = 19
-		}
 		if count > 0 {
-			ch <- TileCount{Zoom: uint8(zoom), X: uint32(x), Y: uint32(y), Count: count}
+			ch <- TileCount{Key: key, Count: count}
 		}
 	}
 	if err := scanner.Err(); err != nil {

@@ -8,48 +8,51 @@ import (
 )
 
 func TestTileCountRoundTrip(t *testing.T) {
-	var tc TileCount
-	for i := 0; i < 10000; i++ {
-		tc.X = rand.Uint32()
-		tc.Y = rand.Uint32()
-		tc.Count = rand.Uint64()
-		tc.Zoom = uint8(rand.Uint32() % 31)
-
+	for _, key := range makeTestTileKeys(1000) {
+		tc := TileCount{Key: key, Count: rand.Uint64()}
 		got := TileCountFromBytes(tc.ToBytes()).(TileCount)
-		if got.X != tc.X || got.Y != tc.Y || got.Count != tc.Count || got.Zoom != tc.Zoom {
+		if got.Key != tc.Key || got.Count != tc.Count {
 			t.Errorf("not round-trippable: %v, got %v", tc, got)
 		}
 	}
 }
 
 func TestTileCountLess(t *testing.T) {
+	type TC struct {
+		x, y  uint32
+		count uint64
+		zoom  uint8
+	}
 	for _, tc := range []struct {
-		a, b     TileCount
+		a, b     TC
 		expected bool
 	}{
-		{TileCount{2, 5, 8, 9}, TileCount{3, 5, 8, 9}, true},  // a.X < b.X
-		{TileCount{2, 5, 8, 9}, TileCount{1, 5, 8, 9}, false}, // a.X > b.X
-		{TileCount{2, 5, 8, 9}, TileCount{2, 6, 8, 9}, true},  // a.Y < b.Y
-		{TileCount{2, 5, 8, 9}, TileCount{2, 4, 8, 9}, false}, // a.Y > b.Y
-		{TileCount{2, 5, 8, 9}, TileCount{2, 5, 7, 9}, false}, // a.Count>b.Count
-		{TileCount{2, 5, 8, 9}, TileCount{2, 5, 9, 9}, true},  // a.Count<b.Count
-		{TileCount{2, 5, 8, 9}, TileCount{2, 5, 8, 9}, false}, // all equal
+		{TC{2, 5, 8, 9}, TC{3, 5, 8, 9}, true},  // a.X < b.X
+		{TC{2, 5, 8, 9}, TC{1, 5, 8, 9}, false}, // a.X > b.X
+		{TC{2, 5, 8, 9}, TC{2, 6, 8, 9}, true},  // a.Y < b.Y
+		{TC{2, 5, 8, 9}, TC{2, 4, 8, 9}, false}, // a.Y > b.Y
 
-		{TileCount{0, 0, 0, 0}, TileCount{0, 0, 0, 0}, false},
-		{TileCount{0, 0, 0, 0}, TileCount{0, 0, 0, 1}, true},
-		{TileCount{0, 0, 0, 0}, TileCount{0, 1, 0, 1}, true},
-		{TileCount{0, 0, 0, 0}, TileCount{1, 0, 0, 1}, true},
-		{TileCount{0, 0, 0, 0}, TileCount{1, 1, 0, 1}, true},
-		{TileCount{0, 0, 0, 1}, TileCount{0, 1, 0, 1}, true},
-		{TileCount{0, 1, 0, 1}, TileCount{0, 1, 0, 1}, false},
-		{TileCount{1, 0, 0, 1}, TileCount{0, 1, 0, 1}, true},
-		{TileCount{1, 1, 0, 1}, TileCount{0, 1, 0, 1}, false},
-		{TileCount{0, 0, 0, 2}, TileCount{0, 1, 0, 1}, true},
+		{TC{2, 5, 8, 9}, TC{2, 5, 7, 9}, false}, // a.Count>b.Count
+		{TC{2, 5, 8, 9}, TC{2, 5, 9, 9}, true},  // a.Count<b.Count
+		{TC{2, 5, 8, 9}, TC{2, 5, 8, 9}, false}, // all equal
 
-		{TileCount{17187, 11494, 104, 15}, TileCount{17187, 11495, 79, 15}, true},
-		{TileCount{17187, 11495, 79, 15}, TileCount{17187, 11494, 104, 15}, false},
+		{TC{0, 0, 0, 0}, TC{0, 0, 0, 0}, false},
+		{TC{0, 0, 0, 0}, TC{0, 0, 0, 1}, true},
+		{TC{0, 0, 0, 0}, TC{0, 1, 0, 1}, true},
+		{TC{0, 0, 0, 0}, TC{1, 0, 0, 1}, true},
+		{TC{0, 0, 0, 0}, TC{1, 1, 0, 1}, true},
+		{TC{0, 0, 0, 1}, TC{0, 1, 0, 1}, true},
+		{TC{0, 1, 0, 1}, TC{0, 1, 0, 1}, false},
+		{TC{1, 0, 0, 1}, TC{0, 1, 0, 1}, true},
+		{TC{1, 1, 0, 1}, TC{0, 1, 0, 1}, false},
+		{TC{0, 0, 0, 2}, TC{0, 1, 0, 1}, true},
+
+		{TC{17187, 11494, 104, 15}, TC{17187, 11495, 79, 15}, true},
+		{TC{17187, 11495, 79, 15}, TC{17187, 11494, 104, 15}, false},
 	} {
-		got := TileCountLess(tc.a, tc.b)
+		a := TileCount{MakeTileKey(tc.a.zoom, tc.a.x, tc.a.y), tc.a.count}
+		b := TileCount{MakeTileKey(tc.b.zoom, tc.b.x, tc.b.y), tc.b.count}
+		got := TileCountLess(a, b)
 		if tc.expected != got {
 			t.Errorf("expected TileCountLess(%v, %v) = %v, got %v",
 				tc.a, tc.b, tc.expected, got)
@@ -58,10 +61,12 @@ func TestTileCountLess(t *testing.T) {
 }
 
 func TestTileCountLessContainment(t *testing.T) {
-	big := TileCount{Zoom: 15, X: 17161, Y: 11476, Count: 42}
-	for y := big.Y << 3; y < (big.Y+1)<<3; y++ {
-		for x := big.X << 3; x < (big.X+1)<<3; x++ {
-			small := TileCount{Zoom: 18, X: x, Y: y, Count: 7}
+	bigX := uint32(17161)
+	bigY := uint32(11476)
+	big := TileCount{Key: MakeTileKey(15, bigX, bigY), Count: 42}
+	for y := bigY << 3; y < (bigY+1)<<3; y++ {
+		for x := bigX << 3; x < (bigX+1)<<3; x++ {
+			small := TileCount{Key: MakeTileKey(18, x, y), Count: 7}
 			if !TileCountLess(big, small) {
 				t.Errorf("expected TileCountLess(%v, %v) = true because the former geographically contains the latter",
 					big, small)
@@ -73,7 +78,7 @@ func TestTileCountLessContainment(t *testing.T) {
 		}
 	}
 
-	smallOutside := TileCount{Zoom: 18, X: (big.X << 3) - 1, Y: big.Y << 3}
+	smallOutside := TileCount{MakeTileKey(18, bigX<<3-1, bigY<<3), 42}
 	if TileCountLess(big, smallOutside) {
 		t.Errorf("expected TileCountLess(%v, %v) = false, got true",
 			big, smallOutside)
