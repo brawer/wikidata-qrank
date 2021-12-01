@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -20,9 +21,14 @@ func main() {
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 
+	ctx := context.Background()
 	cachedir := "cache"
 	maxWeeks := 3 * 52 // 3 years
-	if _, err := fetchWeeklyLogs(cachedir, maxWeeks); err != nil {
+	tilecounts, err := fetchWeeklyLogs(cachedir, maxWeeks)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	if err := paint(cachedir, 16, tilecounts, ctx); err != nil {
 		logger.Fatal(err)
 	}
 }
