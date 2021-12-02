@@ -24,7 +24,10 @@ func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Contex
 				return subCtx.Err()
 			default:
 			}
-			fmt.Println(tile)
+			zoom, x, y := tile.Key.ZoomXY()
+			if zoom <= 4 {
+				fmt.Printf("%d/%d/%d %d\n", zoom, x, y, tile.Count)
+			}
 		}
 		return nil
 	})
