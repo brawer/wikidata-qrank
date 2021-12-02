@@ -47,5 +47,9 @@ func mergeTileCounts(r []io.Reader, out chan<- TileCount, ctx context.Context) e
 		out <- TileCount{Key: key, Count: count}
 	}
 
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
