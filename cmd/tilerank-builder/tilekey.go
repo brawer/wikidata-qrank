@@ -2,6 +2,10 @@
 
 package main
 
+import (
+	"math"
+)
+
 type TileKey uint64
 
 func MakeTileKey(zoom uint8, x, y uint32) TileKey {
@@ -26,4 +30,18 @@ func (t TileKey) ZoomXY() (zoom uint8, x, y uint32) {
 		shift += 2
 	}
 	return zoom, x, y
+}
+
+// TileLatitude returns the latitude of a web mercator tile’s northern edge,
+// in radians. For degrees, multiply by 180/π.
+func TileLatitude(zoom uint8, y uint32) float64 {
+	yf := 1.0 - 2.0*float64(y)/float64(uint32(1)<<zoom)
+	return math.Atan(math.Sinh(math.Pi * yf))
+}
+
+// TileArea returns the area of a web mercator tile in km².
+func TileArea(zoom uint8, y uint32) float64 {
+	earthSurface := 510065623.0 // in km²
+	latFraction := (TileLatitude(zoom, y) - TileLatitude(zoom, y+1)) / math.Pi
+	return earthSurface * latFraction / float64(uint32(1)<<zoom)
 }
