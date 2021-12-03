@@ -80,6 +80,12 @@ func GetAvailableWeeks(client *http.Client) ([]string, error) {
 var isoWeekRegexp = regexp.MustCompile(`(\d{4})-W(\d{2})`)
 var tileLogRegexp = regexp.MustCompile(`^(\d+)/(\d+)/(\d+)\s+(\d+)$`)
 
+// GetTileLogs returns an io.Reader for the sorted log records of a week.
+// If cachedir contains already contains cached records for the requested week,
+// the data will be read from local disk. Otherwise, the seven daily log files
+// for the requested week are fetched from the OpenStreetMap planet server,
+// uncompressed, sorted by TileKey, and stored as a compressed file into
+// cachedir.
 func GetTileLogs(week string, client *http.Client, cachedir string) (io.Reader, error) {
 	ctx := context.Background()
 	path := filepath.Join(cachedir, fmt.Sprintf("tilelogs-%s.br", week))
