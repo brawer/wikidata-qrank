@@ -64,6 +64,12 @@ func (t TileKey) ZoomXY() (zoom uint8, x, y uint32) {
 	return zoom, x, y
 }
 
+func (t TileKey) ToZoom(z uint8) TileKey {
+	val := uint64(t)
+	shift := uint8(64 - 2*z)
+	return TileKey(((val >> shift) << shift) | uint64(z))
+}
+
 // String formats the tile coordinates into a string.
 func (t TileKey) String() string {
 	if t == NoTile {

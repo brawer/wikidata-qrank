@@ -309,6 +309,27 @@ func TestTileKey_Area(t *testing.T) {
 	}
 }
 
+func TestTileKey_ToZoom(t *testing.T) {
+	type TK struct {
+		z    uint8
+		x, y uint32
+	}
+	for _, tc := range []struct{ a, b TK }{
+		{TK{0, 0, 0}, TK{0, 0, 0}},
+		{TK{0, 0, 0}, TK{2, 0, 0}},
+		{TK{2, 0, 0}, TK{0, 0, 0}},
+		{TK{3, 4, 5}, TK{3, 4, 5}},
+		{TK{7, 1, 1}, TK{9, 4, 4}},
+		{TK{18, 130976, 87136}, TK{12, 2046, 1361}},
+	} {
+		tile := MakeTileKey(tc.a.z, tc.a.x, tc.a.y)
+		want := MakeTileKey(tc.b.z, tc.b.x, tc.b.y)
+		if got := tile.ToZoom(tc.b.z); got != want {
+			t.Errorf("got %v.ToZoom(%d)=%v, want %v", tile, tc.b.z, got, want)
+		}
+	}
+}
+
 var tk TileKey
 
 func BenchmarkMakeTileKey(b *testing.B) {
