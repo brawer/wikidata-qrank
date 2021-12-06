@@ -4,8 +4,11 @@ package main
 
 import (
 	"encoding/binary"
-	"github.com/lanrat/extsort"
+	"fmt"
 	"math"
+	"math/bits"
+
+	"github.com/lanrat/extsort"
 )
 
 // TileLatitude returns the latitude of a web mercator tile’s northern edge,
@@ -26,6 +29,14 @@ func TileArea(zoom uint8, y uint32) float64 {
 // sorted before all their content; when sorting a set of tile keys,
 // the resulting order is that of a depth-first pre-order tree traversal.
 type TileKey uint64
+
+// WorldTile is the tile for the entire planet, to the extent it is visible
+// in the Web Mercator projection.
+const WorldTile = TileKey(0)
+
+// NoTile is a tile that does not actually exist. This is useful
+// as an out-of-range value when iterating over a range of tiles.
+const NoTile = TileKey(^uint64(0x1f)) // zoom 0, sorts after all valid tiles
 
 // MakeTileKey returns a TileKey given the zoom/x/y tile coordinates.
 func MakeTileKey(zoom uint8, x, y uint32) TileKey {
@@ -51,6 +62,39 @@ func (t TileKey) ZoomXY() (zoom uint8, x, y uint32) {
 		shift += 2
 	}
 	return zoom, x, y
+}
+
+// String formats the tile coordinates into a string.
+func (t TileKey) String() string {
+	if t == NoTile {
+		return "NoTile"
+	}
+
+	zoom, x, y := t.ZoomXY()
+	return fmt.Sprintf("%d/%d/%d", zoom, x, y)
+}
+
+// Next returns the next TileKey in pre-order depth-first traversal order,
+// or NoTile after we’ve reached the very last tile.
+func (t TileKey) Next(maxZoom uint8) TileKey {
+	zoom := uint8(t) & 0x1f
+
+	// Descend into tree: x/y/0 → x/y/1 → ... → x/y/maxZoom, for any x and y.
+	if zoom < maxZoom {
+		return TileKey(uint64(t) & ^uint64(0x1f) | uint64(zoom+1))
+	}
+
+	shift := uint8(64 - 2*maxZoom)
+	val := uint64(t) >> shift
+
+	// Terminate after last tile.
+	if bits.OnesCount64(val) == int(2*maxZoom) { // 2/3/3 → NoTile
+		return NoTile
+	}
+
+	val = val + 1
+	newZoom := maxZoom - uint8(bits.TrailingZeros64(val)/2)
+	return TileKey(val<<shift | uint64(newZoom))
 }
 
 // TileCount counts the number of impressions for a tile.

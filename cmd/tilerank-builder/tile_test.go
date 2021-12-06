@@ -3,12 +3,55 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
 )
 
-func TestTileLatitude(t *testing.T) {
+func ExampleTileKey_String() {
+	fmt.Println(MakeTileKey(7, 42, 23).String(), NoTile.String())
+	// Output: 7/42/23 NoTile
+}
+
+func ExampleTileKey_Next() {
+	for tile := WorldTile; tile != NoTile; tile = tile.Next(2) {
+		fmt.Println(tile)
+	}
+	// Output:
+	// 0/0/0
+	// 1/0/0
+	// 2/0/0
+	// 2/1/0
+	// 2/0/1
+	// 2/1/1
+	// 1/1/0
+	// 2/2/0
+	// 2/3/0
+	// 2/2/1
+	// 2/3/1
+	// 1/0/1
+	// 2/0/2
+	// 2/1/2
+	// 2/0/3
+	// 2/1/3
+	// 1/1/1
+	// 2/2/2
+	// 2/3/2
+	// 2/2/3
+	// 2/3/3
+}
+
+func TestTileKey_Next_CurZoomDeeperThanMaxZoom(t *testing.T) {
+	tile := MakeTileKey(17, 68640, 45888)
+	got := tile.Next(12)
+	want := MakeTileKey(12, 2144, 1435)
+	if got != want {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestTileKey_Latitude(t *testing.T) {
 	for _, tc := range []struct {
 		zoom     uint8
 		y        uint32
@@ -49,7 +92,7 @@ func TestTileLatitude(t *testing.T) {
 	}
 }
 
-func TestTileArea(t *testing.T) {
+func TestTileKey_Area(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		zoom     uint8
@@ -282,7 +325,7 @@ func BenchmarkMakeTileKey(b *testing.B) {
 
 var unused uint32
 
-func BenchmarkTileKeyZoomXY(b *testing.B) {
+func BenchmarkTileKey_ZoomXY(b *testing.B) {
 	keys := makeTestTileKeys(64)
 	for n := 0; n < b.N; n++ {
 		zoom, x, y := keys[n%64].ZoomXY()
