@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
+	"sort"
 	"strings"
 	"testing"
 
@@ -13,20 +15,59 @@ import (
 )
 
 func TestMergeTileCounts(t *testing.T) {
-	// TODO: Should pass multiple readers, once k-way merging is implemented.
-	r1 := strings.NewReader("0/0/0 42\n15/456/789 3\n")
-	readers := []io.Reader{r1}
-	expected := "0/0/0 42◆15/456/789 3"
-	if got, err := readMerged(readers); err != nil {
-		t.Error(err)
-	} else if expected != got {
-		t.Errorf("expected %v, got %v", expected, got)
+	// Helper for sorting a []TileCount array.
+	sortCounts := func(counts []TileCount) {
+		sort.Slice(counts, func(i, j int) bool {
+			return TileCountLess(counts[i], counts[j])
+		})
+	}
+
+	want := make([]TileCount, 0, 10000) // Expected output.
+
+	// Prepare the input for running the merge function under test.
+	// We pass 100 input readers, each with 0..99 random TileCounts
+	// in already sorted order. For the sake of debugging,
+	// TileCount.Count indicates which reader supplied the value.
+	readers := make([]io.Reader, 0, 100)
+	for i := 0; i < 100; i++ {
+		// TODO: Remove this once k-way merging is implemented.
+		if i != 99 {
+			continue
+		}
+
+		var buf strings.Builder
+		counts := make([]TileCount, 0, 100)
+		for _, tileKey := range makeTestTileKeys(rand.Intn(100)) {
+			counts = append(counts, TileCount{Key: tileKey, Count: uint64(i)})
+		}
+		sortCounts(counts) // Input to mergeTileCounts() is in sorted order.
+		for _, c := range counts {
+			want = append(want, c)
+			fmt.Fprintf(&buf, "%s %d\n", c.Key, c.Count)
+		}
+		readers = append(readers, strings.NewReader(buf.String()))
+	}
+	sortCounts(want)
+
+	got, err := readMerged(readers)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d TileCounts, want %d", len(got), len(want))
+	}
+
+	for i := 0; i < len(got); i++ {
+		if got[i] != want[i] {
+			t.Fatalf("got TileCount[%d]=%v, want %v", i, got[i], want[i])
+		}
 	}
 }
 
 // Helper for testing mergeTileCounts().
-func readMerged(readers []io.Reader) (string, error) {
-	var result strings.Builder
+func readMerged(readers []io.Reader) ([]TileCount, error) {
+	result := make([]TileCount, 0, 10000)
 	// To test channel overflow, pass a channel that buffers just one item.
 	ch := make(chan TileCount, 1)
 	g, ctx := errgroup.WithContext(context.Background())
@@ -34,19 +75,13 @@ func readMerged(readers []io.Reader) (string, error) {
 		return mergeTileCounts(readers, ch, ctx)
 	})
 	g.Go(func() error {
-		first := true
-		for tile := range ch {
-			if !first {
-				result.WriteRune('◆')
-			}
-			first = false
-			zoom, x, y := tile.Key.ZoomXY()
-			result.WriteString(fmt.Sprintf("%d/%d/%d %d", zoom, x, y, tile.Count))
+		for t := range ch {
+			result = append(result, t)
 		}
 		return nil
 	})
 	if err := g.Wait(); err != nil {
-		return "", err
+		return nil, err
 	}
-	return result.String(), nil
+	return result, nil
 }
