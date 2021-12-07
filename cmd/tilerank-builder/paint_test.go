@@ -7,7 +7,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-	//"golang.org/x/sync/errgroup"
 )
 
 func TestPaint_TooManyCountsForSameTile(t *testing.T) {
