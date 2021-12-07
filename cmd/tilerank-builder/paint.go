@@ -18,18 +18,38 @@ func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Contex
 		return mergeTileCounts(tilecounts, ch, subCtx)
 	})
 	g.Go(func() error {
-		for tile := range ch {
+		tile := WorldTile
+		counts := make([]uint64, len(tilecounts))
+		numCounts := 0 // number of counts for the same tile
+		for {
 			select {
 			case <-subCtx.Done():
 				return subCtx.Err()
-			default:
-			}
-			zoom, x, y := tile.Key.ZoomXY()
-			if zoom <= 4 {
-				fmt.Printf("%d/%d/%d %d\n", zoom, x, y, tile.Count)
+			case c, more := <-ch:
+				if c.Key != tile {
+					if numCounts > 0 {
+						// fmt.Println("TODO: Paint", tile, counts[:numCounts], more)
+					}
+					numCounts = 0
+					tile = c.Key
+				}
+
+				if c.Count > 0 {
+					if numCounts >= len(counts) {
+						return fmt.Errorf("tile %s appears more than %d times in input", tile.String(), len(counts))
+					}
+					counts[numCounts] = c.Count
+					numCounts = numCounts + 1
+				}
+
+				if !more {
+					if numCounts > 0 {
+						// fmt.Println("TODO: Paint", tile, counts[:numCounts], more)
+					}
+					return nil
+				}
 			}
 		}
-		return nil
 	})
 	if err := g.Wait(); err != nil {
 		return err
