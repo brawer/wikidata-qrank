@@ -10,9 +10,23 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type Painter struct {
+	numWeeks int
+}
+
+func (p *Painter) Paint(tile TileKey, counts []uint64) error {
+	// fmt.Println("TODO: Paint", tile, counts)
+	return nil
+}
+
+func NewPainter(numWeeks int) *Painter {
+	return &Painter{numWeeks: numWeeks}
+}
+
 // Paint a GeoTIFF file.
 func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Context) error {
 	ch := make(chan TileCount, 100000)
+	painter := NewPainter(len(tilecounts))
 	g, subCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return mergeTileCounts(tilecounts, ch, subCtx)
@@ -28,7 +42,9 @@ func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Contex
 			case c, more := <-ch:
 				if c.Key != tile {
 					if numCounts > 0 {
-						// fmt.Println("TODO: Paint", tile, counts[:numCounts], more)
+						if err := painter.Paint(tile, counts[:numCounts]); err != nil {
+							return err
+						}
 					}
 					numCounts = 0
 					tile = c.Key
@@ -44,7 +60,9 @@ func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Contex
 
 				if !more {
 					if numCounts > 0 {
-						// fmt.Println("TODO: Paint", tile, counts[:numCounts], more)
+						if err := painter.Paint(tile, counts[:numCounts]); err != nil {
+							return err
+						}
 					}
 					return nil
 				}
