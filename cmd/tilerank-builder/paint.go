@@ -18,9 +18,36 @@ type Painter struct {
 }
 
 func (p *Painter) Paint(tile TileKey, counts []uint64) error {
-	if _, err := p.setupRaster(tile); err != nil {
+	raster, err := p.setupRaster(tile)
+	if err != nil {
 		return err
 	}
+
+	// Compute the average weekly views per km² for this tile.
+	// TODO: Since the counts are already in sorted order, we could
+	// easily ignore the top and bottom percentiles. This might
+	// help to smoothen out short-term peaks. Figure out if this
+	// is worth doing, and what percentile thresholds to use.
+	// Don't forget we also have (p.numWeeks - len(counts)) weeks
+	// that had zero views for this tile. For the current averaging,
+	// this is accounted for because we divide by p.numWeeks; please
+	// make sure to consider this when changing the aggregation logic.
+	sum := uint64(0)
+	for _, c := range counts {
+		sum += c
+	}
+	zoom, _, y := tile.ZoomXY()
+	viewsPerKm2 := float32(sum) / (float32(p.numWeeks) * float32(TileArea(zoom, y)))
+
+	if tile == raster.tile {
+		raster.viewsPerKm2 = viewsPerKm2
+		if raster.parent != nil {
+			raster.viewsPerKm2 += raster.parent.viewsPerKm2
+		}
+	}
+
+	raster.Paint(tile, viewsPerKm2)
+
 	p.last = tile
 	return nil
 }
@@ -80,13 +107,19 @@ func NewPainter(numWeeks int, zoom uint8) *Painter {
 }
 
 type Raster struct {
-	tile   TileKey
-	area   float64
-	parent *Raster
+	tile        TileKey
+	parent      *Raster
+	viewsPerKm2 float32
+	pixels      [256 * 256]float32
+}
+
+func (r *Raster) Paint(tile TileKey, viewsPerKm2 float32) {
+	// TODO: Add viewsPerKm2 to those pixels that are touched by the tile.
+	// fmt.Println("Paint", tile, viewsPerKm2, r.tile, r.viewsPerKm2)
 }
 
 func NewRaster(tile TileKey, parent *Raster) *Raster {
-	zoom, _, y := tile.ZoomXY()
+	zoom := tile.Zoom()
 
 	// Check that NewRaster() is called for the right parent. This check
 	// should never fail, no matter what the input data is. If it does fail,
@@ -99,7 +132,7 @@ func NewRaster(tile TileKey, parent *Raster) *Raster {
 		panic(fmt.Sprintf("NewRaster(%s) with parent=<nil>", tile))
 	}
 
-	return &Raster{tile: tile, area: TileArea(zoom, y), parent: parent}
+	return &Raster{tile: tile, parent: parent}
 }
 
 // Paint produces a GeoTIFF file from a set of weekly tile view counts.
