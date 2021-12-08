@@ -114,8 +114,20 @@ type Raster struct {
 }
 
 func (r *Raster) Paint(tile TileKey, viewsPerKm2 float32) {
+	rZoom, _, _ := r.tile.ZoomXY()
+	zoom := tile.Zoom()
+
+	// If the to-be-painted tile is smaller than 1 pixel, we scale it
+	// to one pixel and reduce the number of views accordingly.
+	// We only do this at deep zoom levels, where the area per pixel
+	// is nearly uniform despite the distortion of the web mercator
+	// projection.
+	if zoom > rZoom+8 {
+		viewsPerKm2 /= float32(int32(1 << (zoom - (rZoom + 8))))
+		tile = tile.ToZoom(rZoom + 8)
+	}
+
 	// TODO: Add viewsPerKm2 to those pixels that are touched by the tile.
-	// fmt.Println("Paint", tile, viewsPerKm2, r.tile, r.viewsPerKm2)
 }
 
 func NewRaster(tile TileKey, parent *Raster) *Raster {
