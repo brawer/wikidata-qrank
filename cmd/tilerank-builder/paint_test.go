@@ -5,9 +5,25 @@ package main
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andybalholm/brotli"
 )
+
+func TestPaint(t *testing.T) {
+	file, err := os.Open(filepath.Join("testdata", "zurich-2021-W47.br"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	readers := []io.Reader{brotli.NewReader(file)}
+	if err := paint("", 17, readers, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestPaint_TooManyCountsForSameTile(t *testing.T) {
 	ctx := context.Background()
