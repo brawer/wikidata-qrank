@@ -12,24 +12,35 @@ import (
 
 type Painter struct {
 	numWeeks int
+	zoom     uint8
+	last     TileKey
 }
 
 func (p *Painter) Paint(tile TileKey, counts []uint64) error {
-	// fmt.Println("TODO: Paint", tile, counts)
+	p.last = tile
 	return nil
 }
 
-func NewPainter(numWeeks int) *Painter {
-	return &Painter{numWeeks: numWeeks}
+func (p *Painter) Close() error {
+	// For the part of the world we haven't covered yet, paint empty rasters.
+	zoom := p.zoom - 8
+	for t := p.last.Next(zoom); t != NoTile; t = t.Next(zoom) {
+		// TODO: Emit empty raster.
+	}
+	return nil
+}
+
+func NewPainter(numWeeks int, zoom uint8) *Painter {
+	return &Painter{numWeeks: numWeeks, zoom: zoom}
 }
 
 // Paint produces a GeoTIFF file from a set of weekly tile view counts.
 // Tile views at zoom level `zoom` become one pixel in the output GeoTIFF.
-func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Context) error {
+func paint(cachedir string, zoom uint8, tilecounts []io.Reader, ctx context.Context) error {
 	// One goroutine is decompressing, parsing and merging the weekly counts;
 	// another is painting the image from data that gets sent over a channel.
 	ch := make(chan TileCount, 100000)
-	painter := NewPainter(len(tilecounts))
+	painter := NewPainter(len(tilecounts), zoom)
 	g, subCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return mergeTileCounts(tilecounts, ch, subCtx)
@@ -73,6 +84,9 @@ func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Contex
 		}
 	})
 	if err := g.Wait(); err != nil {
+		return err
+	}
+	if err := painter.Close(); err != nil {
 		return err
 	}
 	return nil
