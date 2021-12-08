@@ -51,6 +51,11 @@ func MakeTileKey(zoom uint8, x, y uint32) TileKey {
 	return TileKey(val)
 }
 
+// Zoom returns the zoom level of a TileKey.
+func (t TileKey) Zoom() uint8 {
+	return uint8(t) & 0x1f
+}
+
 // ZoomXY returns the zoom, x and y coordinates for a TileKey.
 func (t TileKey) ZoomXY() (zoom uint8, x, y uint32) {
 	val := uint64(t)

@@ -14,6 +14,11 @@ func ExampleTileKey_String() {
 	// Output: 7/42/23 NoTile
 }
 
+func ExampleTileKey_Zoom() {
+	fmt.Println(MakeTileKey(7, 42, 23).Zoom())
+	// Output: 7
+}
+
 func ExampleTileKey_Next() {
 	for tile := WorldTile; tile != NoTile; tile = tile.Next(2) {
 		fmt.Println(tile)
