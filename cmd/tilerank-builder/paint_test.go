@@ -25,15 +25,23 @@ func TestPaint(t *testing.T) {
 	}
 }
 
+// Make sure we can handle view counts at deep zoom levels even if not all
+// parent tiles have been viewed.
+func TestPaint_ParentNotLogged(t *testing.T) {
+	readers := []io.Reader{strings.NewReader("3/1/1 3\n18/137341/91897 1\n")}
+	if err := paint("", 11, readers, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPaint_TooManyCountsForSameTile(t *testing.T) {
-	ctx := context.Background()
 	readers := []io.Reader{
 		// TODO: Uncomment once k-way merging is implemented.
 		//strings.NewReader("4/4/10 3\n7/39/87 11\n"),
 		strings.NewReader("4/2/1 2\n7/39/87 22\n7/39/87 33\n7/39/87 44\n"),
 	}
 	var got string
-	if err := paint("", 16, readers, ctx); err != nil {
+	if err := paint("", 16, readers, context.Background()); err != nil {
 		got = err.Error()
 	}
 	want := "tile 7/39/87 appears more than 1 times in input"
