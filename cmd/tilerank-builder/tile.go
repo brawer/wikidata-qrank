@@ -51,6 +51,17 @@ func MakeTileKey(zoom uint8, x, y uint32) TileKey {
 	return TileKey(val)
 }
 
+// Contains returns true if this tile strictly contains `other`.
+func (t TileKey) Contains(other TileKey) bool {
+	zoom := t.Zoom()
+	otherZoom := other.Zoom()
+	if otherZoom > zoom {
+		return t == other.ToZoom(zoom)
+	} else {
+		return false
+	}
+}
+
 // Zoom returns the zoom level of a TileKey.
 func (t TileKey) Zoom() uint8 {
 	return uint8(t) & 0x1f

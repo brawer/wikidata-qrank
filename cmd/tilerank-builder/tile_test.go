@@ -14,6 +14,19 @@ func ExampleTileKey_String() {
 	// Output: 7/42/23 NoTile
 }
 
+func ExampleTileKey_Contains() {
+	switzerland, zurich := MakeTileKey(6, 33, 22), MakeTileKey(13, 4290, 2868)
+	fmt.Println(switzerland.Contains(zurich))
+	fmt.Println(zurich.Contains(switzerland))
+	fmt.Println(zurich.Contains(zurich))
+	fmt.Println(WorldTile.Contains(zurich))
+	// Output:
+	// true
+	// false
+	// false
+	// true
+}
+
 func ExampleTileKey_Zoom() {
 	fmt.Println(MakeTileKey(7, 42, 23).Zoom())
 	// Output: 7
