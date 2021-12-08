@@ -23,8 +23,11 @@ func NewPainter(numWeeks int) *Painter {
 	return &Painter{numWeeks: numWeeks}
 }
 
-// Paint a GeoTIFF file.
+// Paint produces a GeoTIFF file from a set of weekly tile view counts.
+// Tile views at zoom level `zoom` become one pixel in the output GeoTIFF.
 func paint(cachedir string, zoom int, tilecounts []io.Reader, ctx context.Context) error {
+	// One goroutine is decompressing, parsing and merging the weekly counts;
+	// another is painting the image from data that gets sent over a channel.
 	ch := make(chan TileCount, 100000)
 	painter := NewPainter(len(tilecounts))
 	g, subCtx := errgroup.WithContext(ctx)
