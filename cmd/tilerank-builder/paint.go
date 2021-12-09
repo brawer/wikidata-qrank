@@ -15,6 +15,14 @@ type Painter struct {
 	zoom     uint8
 	last     TileKey
 	raster   *Raster
+
+	// When painting for zoom=17, 191925 of 349525 output rasters (about 55%)
+	// have the same color for  all pixels. That number is large enough to
+	// be worth optimizing for, and small enough to keep their tile keys and
+	// color in memory. However, about 30% of all output rasters (or 54% of
+	// the uniformly colored ones) have less then 0.5 views per km², so we
+	// don’t keep those.
+	uniformRasters map[TileKey]float32
 }
 
 func (p *Painter) Paint(tile TileKey, counts []uint64) error {
@@ -84,7 +92,7 @@ func (p *Painter) setupRaster(tile TileKey) (*Raster, error) {
 		if t.Contains(rasterTile) {
 			p.raster = NewRaster(t, p.raster)
 		} else {
-			// fmt.Printf("TODO: Store empty raster %s into output TIFF\n", t)
+			p.emitUniformRaster(t, p.raster.viewsPerKm2)
 		}
 	}
 
@@ -94,10 +102,15 @@ func (p *Painter) setupRaster(tile TileKey) (*Raster, error) {
 }
 
 func (p *Painter) Close() error {
-	// For the part of the world we haven't covered yet, paint empty rasters.
+	// For the part of the world we haven't covered yet, emit uniform rasters.
 	zoom := p.zoom - 8
 	for t := p.last.Next(zoom); t != NoTile; t = t.Next(zoom) {
-		// fmt.Printf("TODO: Store uniform raster %s into output TIFF\n", t)
+		for p.raster != nil && !p.raster.tile.Contains(t) {
+			if err := p.emitRaster(); err != nil {
+				return err
+			}
+		}
+		p.emitUniformRaster(t, p.raster.viewsPerKm2)
 	}
 
 	for p.raster != nil {
@@ -123,8 +136,23 @@ func (p *Painter) emitRaster() error {
 	return nil
 }
 
+// Function emitUniformRaster is called to produce a raster whose pixels
+// all have the same color. In a typical output, about 55% of the rasters
+// are uniformly coloreds, so we treat them specially.
+func (p *Painter) emitUniformRaster(tile TileKey, viewsPerKm2 float32) {
+	// About 30% of all output rasters (or 54% of the uniformly colored ones)
+	// have less then 0.5 views per km², so we don’t keep those in memory.
+	if viewsPerKm2 >= 0.5 {
+		p.uniformRasters[tile] = viewsPerKm2
+	}
+}
+
 func NewPainter(numWeeks int, zoom uint8) *Painter {
-	return &Painter{numWeeks: numWeeks, zoom: zoom}
+	return &Painter{
+		numWeeks:       numWeeks,
+		zoom:           zoom,
+		uniformRasters: make(map[TileKey]float32, 10000),
+	}
 }
 
 type Raster struct {
