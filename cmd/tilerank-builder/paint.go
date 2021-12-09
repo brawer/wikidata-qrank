@@ -68,9 +68,9 @@ func (p *Painter) setupRaster(tile TileKey) (*Raster, error) {
 	// the new rasterTile. Those can be compressed and stored into the
 	// output TIFF file.
 	for p.raster != nil && !p.raster.tile.Contains(rasterTile) {
-		// TODO: Compress p.raster and store it into TIFF file.
-		// fmt.Printf("TODO: Compress and store %s\n", p.raster.tile)
-		p.raster = p.raster.parent
+		if err := p.emitRaster(); err != nil {
+			return nil, err
+		}
 	}
 
 	if p.raster == nil {
@@ -97,8 +97,29 @@ func (p *Painter) Close() error {
 	// For the part of the world we haven't covered yet, paint empty rasters.
 	zoom := p.zoom - 8
 	for t := p.last.Next(zoom); t != NoTile; t = t.Next(zoom) {
-		// fmt.Printf("TODO: Store empty raster %s into output TIFF\n", t)
+		// fmt.Printf("TODO: Store uniform raster %s into output TIFF\n", t)
 	}
+
+	for p.raster != nil {
+		if err := p.emitRaster(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Function emitRaster is called when the Painter has finished painting
+// pixels into the current Raster. The raster gets removed from the tree,
+// compressed, and stored into a temporary file.
+// TODO: Subsample pixels to parent raster on behalf of GeoTIFF overview.
+func (p *Painter) emitRaster() error {
+	raster := p.raster
+	p.raster = raster.parent
+	raster.parent = nil
+
+	// TODO: Compress p.raster and store it into TIFF file.
+	// fmt.Printf("TODO: Emit %s\n", raster.tile)
 	return nil
 }
 
