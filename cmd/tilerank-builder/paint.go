@@ -17,12 +17,12 @@ type Painter struct {
 	raster   *Raster
 
 	// When painting for zoom=17, 191925 of 349525 output rasters (about 55%)
-	// have the same color for  all pixels. That number is large enough to
+	// have the same color across all pixels. That number is large enough to
 	// be worth optimizing for, and small enough to keep their tile keys and
 	// color in memory. However, about 30% of all output rasters (or 54% of
 	// the uniformly colored ones) have less then 0.5 views per km², so we
 	// don’t keep those.
-	uniformRasters map[TileKey]float32
+	uniformRasters map[TileKey]uint32
 }
 
 func (p *Painter) Paint(tile TileKey, counts []uint64) error {
@@ -92,7 +92,7 @@ func (p *Painter) setupRaster(tile TileKey) (*Raster, error) {
 		if t.Contains(rasterTile) {
 			p.raster = NewRaster(t, p.raster)
 		} else {
-			p.emitUniformRaster(t, p.raster.viewsPerKm2)
+			p.emitUniformRaster(t, uint32(p.raster.viewsPerKm2+0.5))
 		}
 	}
 
@@ -110,7 +110,7 @@ func (p *Painter) Close() error {
 				return err
 			}
 		}
-		p.emitUniformRaster(t, p.raster.viewsPerKm2)
+		p.emitUniformRaster(t, uint32(p.raster.viewsPerKm2+0.5))
 	}
 
 	for p.raster != nil {
@@ -131,18 +131,43 @@ func (p *Painter) emitRaster() error {
 	p.raster = raster.parent
 	raster.parent = nil
 
+	// About 124K rasters are not strictly uniform, but they have only
+	// marginal differences in color. For those, we can save the effort
+	// of compression.
+	uniform := true
+	viewsPerKm2 := uint32(raster.pixels[0] + 0.5)
+	for i := 1; i < len(raster.pixels); i++ {
+		if uint32(raster.pixels[i]+0.5) != viewsPerKm2 {
+			uniform = false
+			break
+		}
+	}
+	if uniform {
+		p.emitUniformRaster(raster.tile, viewsPerKm2)
+		return nil
+	}
+
 	// TODO: Compress p.raster and store it into TIFF file.
-	// fmt.Printf("TODO: Emit %s\n", raster.tile)
+	// Only about 33K rasters are left to compress here.
+	// Consider (a) converting to raster.pixels to []uint32 when checking
+	// for uniformity, so we don't need ot do the conversion effoert twice;
+	// (b) do the compression in a worker pool, because it is CPU-intensive
+	// and since it needs to flush the output to (slow) disk;
+	// (c) pass the tile index, TIFF offsets and sizes to an external
+	// sorter, which could also take the uniform raster tiles,
+	// to reduce the memory need for keeping the offset index (it also
+	// would simplify the code).
+	// fmt.Println("TODO: compress", raster.tile, raster.pixels[:80])
 	return nil
 }
 
 // Function emitUniformRaster is called to produce a raster whose pixels
 // all have the same color. In a typical output, about 55% of the rasters
 // are uniformly coloreds, so we treat them specially.
-func (p *Painter) emitUniformRaster(tile TileKey, viewsPerKm2 float32) {
+func (p *Painter) emitUniformRaster(tile TileKey, viewsPerKm2 uint32) {
 	// About 30% of all output rasters (or 54% of the uniformly colored ones)
 	// have less then 0.5 views per km², so we don’t keep those in memory.
-	if viewsPerKm2 >= 0.5 {
+	if viewsPerKm2 != 0 {
 		p.uniformRasters[tile] = viewsPerKm2
 	}
 }
@@ -151,7 +176,7 @@ func NewPainter(numWeeks int, zoom uint8) *Painter {
 	return &Painter{
 		numWeeks:       numWeeks,
 		zoom:           zoom,
-		uniformRasters: make(map[TileKey]float32, 10000),
+		uniformRasters: make(map[TileKey]uint32, 10000),
 	}
 }
 
