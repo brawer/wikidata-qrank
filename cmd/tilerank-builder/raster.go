@@ -77,7 +77,7 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 	var t cogTile
 	zoom, x, y := tile.ZoomXY()
 	t.zoom = zoom
-	t.y = x
+	t.x = x
 	t.y = y
 	colorIndex, exists := w.palette[color]
 	if !exists {
