@@ -61,7 +61,7 @@ func makeRandomCogTiles(n int) []cogTile {
 		t.x = uint32(rand.Intn(1 << t.zoom))
 		t.y = uint32(rand.Intn(1 << t.zoom))
 		if rand.Intn(1) == 0 {
-			t.uniformColorIndex = uint16(rand.Intn(0xffff))
+			t.uniformColor = uint32(rand.Int63())
 		} else {
 			t.byteCount = uint32(rand.Int63())
 			t.offset = uint64(rand.Int63())

@@ -79,28 +79,12 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 	t.zoom = zoom
 	t.x = x
 	t.y = y
-	colorIndex, exists := w.palette[color]
-	if !exists {
-		numColors := len(w.palette)
-		if numColors >= 0xffff {
-			// If this ever triggers, a fallback would be to read back the
-			// already emitted tiles, convert them to non-indexed form,
-			// write them out again, and then continue writing. This would
-			// be complex to implement, and from the data we’ve seen
-			// it’s not necessary because only used about 20K colors
-			// are sufficient for the entire world.
-			panic("palette full; need to implement fallback")
-		}
-		colorIndex = uint16(numColors)
-		w.palette[color] = colorIndex
-	}
-	t.uniformColorIndex = colorIndex
+	t.uniformColor = color
 	//fmt.Printf("TODO: Send %v to sorting channel\n", t)
 	return nil
 }
 
 func (w *RasterWriter) Close() error {
-	fmt.Printf("len(palette)=%d\n", len(w.palette))
 	return nil
 }
 
@@ -109,11 +93,11 @@ func (w *RasterWriter) Close() error {
 // a specific arrangement of the data, which is different from
 // the order in which we’re painting our raster tiles.
 type cogTile struct {
-	zoom              uint8
-	x, y              uint32
-	uniformColorIndex uint16
-	byteCount         uint32
-	offset            uint64
+	zoom         uint8
+	x, y         uint32
+	uniformColor uint32
+	byteCount    uint32
+	offset       uint64
 }
 
 // ToBytes serializes a cogTile into a byte array.
@@ -123,7 +107,7 @@ func (c cogTile) ToBytes() []byte {
 	pos := 1
 	pos += binary.PutUvarint(buf[pos:], uint64(c.x))
 	pos += binary.PutUvarint(buf[pos:], uint64(c.y))
-	pos += binary.PutUvarint(buf[pos:], uint64(c.uniformColorIndex))
+	pos += binary.PutUvarint(buf[pos:], uint64(c.uniformColor))
 	pos += binary.PutUvarint(buf[pos:], uint64(c.byteCount))
 	pos += binary.PutUvarint(buf[pos:], c.offset)
 	return buf[0:pos]
@@ -138,19 +122,19 @@ func cogTileFromBytes(b []byte) extsort.SortType {
 	pos += len
 	y, len := binary.Uvarint(b[pos:])
 	pos += len
-	uniformColorIndex, len := binary.Uvarint(b[pos:])
+	uniformColor, len := binary.Uvarint(b[pos:])
 	pos += len
 	byteCount, len := binary.Uvarint(b[pos:])
 	pos += len
 	offset, len := binary.Uvarint(b[pos:])
 	pos += len
 	return cogTile{
-		zoom:              zoom,
-		x:                 uint32(x),
-		y:                 uint32(y),
-		uniformColorIndex: uint16(uniformColorIndex),
-		byteCount:         uint32(byteCount),
-		offset:            offset,
+		zoom:         zoom,
+		x:            uint32(x),
+		y:            uint32(y),
+		uniformColor: uint32(uniformColor),
+		byteCount:    uint32(byteCount),
+		offset:       offset,
 	}
 }
 
