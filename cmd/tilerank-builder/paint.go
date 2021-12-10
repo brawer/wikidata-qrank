@@ -15,14 +15,7 @@ type Painter struct {
 	zoom     uint8
 	last     TileKey
 	raster   *Raster
-
-	// When painting for zoom=17, 191925 of 349525 output rasters (about 55%)
-	// have the same color across all pixels. That number is large enough to
-	// be worth optimizing for, and small enough to keep their tile keys and
-	// color in memory. However, about 30% of all output rasters (or 54% of
-	// the uniformly colored ones) have less then 0.5 views per km², so we
-	// don’t keep those.
-	uniformRasters map[TileKey]uint32
+	writer   *RasterWriter
 }
 
 func (p *Painter) Paint(tile TileKey, counts []uint64) error {
@@ -92,7 +85,10 @@ func (p *Painter) setupRaster(tile TileKey) (*Raster, error) {
 		if t.Contains(rasterTile) {
 			p.raster = NewRaster(t, p.raster)
 		} else {
-			p.emitUniformRaster(t, uint32(p.raster.viewsPerKm2+0.5))
+			err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -110,7 +106,9 @@ func (p *Painter) Close() error {
 				return err
 			}
 		}
-		p.emitUniformRaster(t, uint32(p.raster.viewsPerKm2+0.5))
+		if err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5)); err != nil {
+			return err
+		}
 	}
 
 	for p.raster != nil {
@@ -119,7 +117,7 @@ func (p *Painter) Close() error {
 		}
 	}
 
-	return nil
+	return p.writer.Close()
 }
 
 // Function emitRaster is called when the Painter has finished painting
@@ -143,8 +141,7 @@ func (p *Painter) emitRaster() error {
 		}
 	}
 	if uniform {
-		p.emitUniformRaster(raster.tile, viewsPerKm2)
-		return nil
+		return p.writer.WriteUniform(raster.tile, viewsPerKm2)
 	}
 
 	// TODO: Compress p.raster and store it into TIFF file.
@@ -161,22 +158,11 @@ func (p *Painter) emitRaster() error {
 	return nil
 }
 
-// Function emitUniformRaster is called to produce a raster whose pixels
-// all have the same color. In a typical output, about 55% of the rasters
-// are uniformly coloreds, so we treat them specially.
-func (p *Painter) emitUniformRaster(tile TileKey, viewsPerKm2 uint32) {
-	// About 30% of all output rasters (or 54% of the uniformly colored ones)
-	// have less then 0.5 views per km², so we don’t keep those in memory.
-	if viewsPerKm2 != 0 {
-		p.uniformRasters[tile] = viewsPerKm2
-	}
-}
-
 func NewPainter(numWeeks int, zoom uint8) *Painter {
 	return &Painter{
-		numWeeks:       numWeeks,
-		zoom:           zoom,
-		uniformRasters: make(map[TileKey]uint32, 10000),
+		numWeeks: numWeeks,
+		zoom:     zoom,
+		writer:   NewRasterWriter(),
 	}
 }
 

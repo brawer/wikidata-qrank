@@ -4,6 +4,7 @@ package main
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 )
 
@@ -42,4 +43,30 @@ func wantPixels(t *testing.T, got [256 * 256]float32, want [4][4]float32) {
 			}
 		}
 	}
+}
+
+func TestCogTile_ToBytes(t *testing.T) {
+	for _, want := range makeRandomCogTiles(1000) {
+		if got := cogTileFromBytes(want.ToBytes()).(cogTile); got != want {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func makeRandomCogTiles(n int) []cogTile {
+	tiles := make([]cogTile, n)
+	for i := 0; i < n; i++ {
+		var t cogTile
+		t.zoom = uint8(rand.Intn(12))
+		t.x = uint32(rand.Intn(1 << t.zoom))
+		t.y = uint32(rand.Intn(1 << t.zoom))
+		if rand.Intn(1) == 0 {
+			t.uniformColorIndex = uint16(rand.Intn(0xffff))
+		} else {
+			t.byteCount = uint32(rand.Int63())
+			t.offset = uint64(rand.Int63())
+		}
+		tiles[i] = t
+	}
+	return tiles
 }

@@ -3,7 +3,10 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
+
+	"github.com/lanrat/extsort"
 )
 
 type Raster struct {
@@ -57,10 +60,110 @@ func NewRaster(tile TileKey, parent *Raster) *Raster {
 }
 
 type RasterWriter struct {
+	palette map[uint32]uint16 // color -> index
 }
 
-func (t *RasterWriter) Write(r *Raster) {
+func NewRasterWriter() *RasterWriter {
+	return &RasterWriter{palette: make(map[uint32]uint16, 65536)}
 }
 
-func (t *RasterWriter) WriteUniform(tile TileKey, color uint32) {
+func (w *RasterWriter) Write(r *Raster) {
+}
+
+// WriteUniform produces a raster whose pixels all have the same color.
+// In a typical output, about 55% of all rasters are uniformly coloreds,
+// so we treat them specially as an optimization.
+func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
+	var t cogTile
+	zoom, x, y := tile.ZoomXY()
+	t.zoom = zoom
+	t.y = x
+	t.y = y
+	colorIndex, exists := w.palette[color]
+	if !exists {
+		numColors := len(w.palette)
+		if numColors >= 0xffff {
+			// If this ever triggers, a fallback would be to read back the
+			// already emitted tiles, convert them to non-indexed form,
+			// write them out again, and then continue writing. This would
+			// be complex to implement, and from the data we’ve seen
+			// it’s not necessary because only used about 20K colors
+			// are sufficient for the entire world.
+			panic("palette full; need to implement fallback")
+		}
+		colorIndex = uint16(numColors)
+		w.palette[color] = colorIndex
+	}
+	t.uniformColorIndex = colorIndex
+	//fmt.Printf("TODO: Send %v to sorting channel\n", t)
+	return nil
+}
+
+func (w *RasterWriter) Close() error {
+	fmt.Printf("len(palette)=%d\n", len(w.palette))
+	return nil
+}
+
+// cogTile represents a raster tile that will be written into
+// a Cloud-Optimized GeoTIFF file. The file format requires
+// a specific arrangement of the data, which is different from
+// the order in which we’re painting our raster tiles.
+type cogTile struct {
+	zoom              uint8
+	x, y              uint32
+	uniformColorIndex uint16
+	byteCount         uint32
+	offset            uint64
+}
+
+// ToBytes serializes a cogTile into a byte array.
+func (c cogTile) ToBytes() []byte {
+	var buf [1 + 4*binary.MaxVarintLen32 + binary.MaxVarintLen64]byte
+	buf[0] = c.zoom
+	pos := 1
+	pos += binary.PutUvarint(buf[pos:], uint64(c.x))
+	pos += binary.PutUvarint(buf[pos:], uint64(c.y))
+	pos += binary.PutUvarint(buf[pos:], uint64(c.uniformColorIndex))
+	pos += binary.PutUvarint(buf[pos:], uint64(c.byteCount))
+	pos += binary.PutUvarint(buf[pos:], c.offset)
+	return buf[0:pos]
+}
+
+// Function cogTileFromBytes de-serializes a cogTile from a byte slice.
+// The result is returned as an extsort.SortType because that is
+// needed by the library for external sorting.
+func cogTileFromBytes(b []byte) extsort.SortType {
+	zoom, pos := b[0], 1
+	x, len := binary.Uvarint(b[1:])
+	pos += len
+	y, len := binary.Uvarint(b[pos:])
+	pos += len
+	uniformColorIndex, len := binary.Uvarint(b[pos:])
+	pos += len
+	byteCount, len := binary.Uvarint(b[pos:])
+	pos += len
+	offset, len := binary.Uvarint(b[pos:])
+	pos += len
+	return cogTile{
+		zoom:              zoom,
+		x:                 uint32(x),
+		y:                 uint32(y),
+		uniformColorIndex: uint16(uniformColorIndex),
+		byteCount:         uint32(byteCount),
+		offset:            offset,
+	}
+}
+
+// cogTileLess returns true if the TIFF tag for raster a should come
+// before b in the Cloud-Optimized GeoTIFF file format.
+func cogTilekLess(a, b extsort.SortType) bool {
+	aa := a.(cogTile)
+	bb := b.(cogTile)
+	if aa.zoom != bb.zoom {
+		return aa.zoom > bb.zoom
+	} else if aa.y != bb.y {
+		return aa.y < bb.y
+	} else {
+		return aa.x < bb.x
+	}
 }
