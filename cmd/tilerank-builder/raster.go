@@ -3,9 +3,12 @@
 package main
 
 import (
+	"bytes"
+	"compress/flate"
 	"context"
 	"encoding/binary"
 	"fmt"
+	"os"
 	"runtime"
 
 	"github.com/lanrat/extsort"
@@ -65,19 +68,28 @@ type RasterWriter struct {
 	tiffTilesToSort  chan<- extsort.SortType
 	tiffTiles        <-chan extsort.SortType
 	tiffTilesSortErr <-chan error
+	uniform          map[uint32]tiffTile
+	tempFile         *os.File
+	dataSize         uint64
 }
 
-func NewRasterWriter() *RasterWriter {
+func NewRasterWriter() (*RasterWriter, error) {
+	tempFile, err := os.CreateTemp("", "*.tmp")
+	if err != nil {
+		return nil, err
+	}
 	inChan := make(chan extsort.SortType, 10000)
 	config := extsort.DefaultConfig()
 	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.New(inChan, tiffTileFromBytes, tiffTileLess, config)
 	go sorter.Sort(context.Background())
 	return &RasterWriter{
+		tempFile:         tempFile,
 		tiffTilesToSort:  inChan,
 		tiffTiles:        outChan,
 		tiffTilesSortErr: errChan,
-	}
+		uniform:          make(map[uint32]tiffTile, 16),
+	}, nil
 }
 
 func (w *RasterWriter) Write(r *Raster) error {
@@ -95,22 +107,77 @@ func (w *RasterWriter) Write(r *Raster) error {
 	if uniform {
 		return w.WriteUniform(r.tile, color)
 	}
+
+	offset, byteCount, err := w.compress(r.tile, r.pixels[:])
+	if err != nil {
+		return err
+	}
+
+	var t tiffTile
+	t.zoom, t.x, t.y = r.tile.ZoomXY()
+	t.offset, t.byteCount = offset, byteCount
+	w.tiffTilesToSort <- t
 	return nil
 }
 
 // WriteUniform produces a raster whose pixels all have the same color.
-// In a typical output, about 55% of all rasters are uniformly coloreds,
+// In a typical output, about 55% of all rasters are uniformly colored,
 // so we treat them specially as an optimization.
 func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
-	//fmt.Println("WriteUniform", tile)
 	var t tiffTile
 	zoom, x, y := tile.ZoomXY()
 	t.zoom = zoom
 	t.x = x
 	t.y = y
-	t.uniformColor = color
+	if same, exists := w.uniform[color]; exists {
+		t.offset = same.offset
+		t.byteCount = same.byteCount
+		w.tiffTilesToSort <- t
+		return nil
+	}
+	var pixels [256 * 256]float32
+	for i := 0; i < 256*256; i++ {
+		pixels[i] = float32(color)
+	}
+	offset, len, err := w.compress(tile, pixels[:])
+	if err != nil {
+		return err
+	}
+	t.offset, t.byteCount = offset, len
+	w.uniform[color] = t
 	w.tiffTilesToSort <- t
 	return nil
+}
+
+func (w *RasterWriter) compress(tile TileKey, pixels []float32) (offset uint64, size uint32, err error) {
+	var buf bytes.Buffer
+	buf.Grow(len(pixels) * 4)
+	if err := binary.Write(&buf, binary.LittleEndian, pixels); err != nil {
+		return 0, 0, err
+	}
+
+	var compressed bytes.Buffer
+	writer, err := flate.NewWriter(&compressed, flate.BestCompression)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if _, err := writer.Write(buf.Bytes()); err != nil {
+		return 0, 0, err
+	}
+
+	if err := writer.Close(); err != nil {
+		return 0, 0, err
+	}
+
+	len, err := w.tempFile.Write(compressed.Bytes())
+	if err != nil {
+		return 0, 0, err
+	}
+
+	offset = w.dataSize
+	w.dataSize += uint64(len)
+	return offset, uint32(len), nil
 }
 
 func (w *RasterWriter) Close() error {
@@ -121,6 +188,17 @@ func (w *RasterWriter) Close() error {
 	if err := <-w.tiffTilesSortErr; err != nil {
 		return err
 	}
+
+	// Delete the temporary file for compressed data of TIFF tiles.
+	tempFileName := w.tempFile.Name()
+	if err := w.tempFile.Close(); err != nil {
+		return err
+	}
+	if err := os.Remove(tempFileName); err != nil {
+		return err
+	}
+
+	fmt.Printf("Total data size: %d\n", w.dataSize)
 	return nil
 }
 
@@ -129,21 +207,19 @@ func (w *RasterWriter) Close() error {
 // a specific arrangement of the data, which is different from
 // the order in which we’re painting our raster tiles.
 type tiffTile struct {
-	zoom         uint8
-	x, y         uint32
-	uniformColor uint32
-	byteCount    uint32
-	offset       uint64
+	zoom      uint8
+	x, y      uint32
+	byteCount uint32
+	offset    uint64
 }
 
 // ToBytes serializes a tiffTile into a byte array.
 func (c tiffTile) ToBytes() []byte {
-	var buf [1 + 4*binary.MaxVarintLen32 + binary.MaxVarintLen64]byte
+	var buf [1 + 3*binary.MaxVarintLen32 + binary.MaxVarintLen64]byte
 	buf[0] = c.zoom
 	pos := 1
 	pos += binary.PutUvarint(buf[pos:], uint64(c.x))
 	pos += binary.PutUvarint(buf[pos:], uint64(c.y))
-	pos += binary.PutUvarint(buf[pos:], uint64(c.uniformColor))
 	pos += binary.PutUvarint(buf[pos:], uint64(c.byteCount))
 	pos += binary.PutUvarint(buf[pos:], c.offset)
 	return buf[0:pos]
@@ -158,19 +234,16 @@ func tiffTileFromBytes(b []byte) extsort.SortType {
 	pos += len
 	y, len := binary.Uvarint(b[pos:])
 	pos += len
-	uniformColor, len := binary.Uvarint(b[pos:])
-	pos += len
 	byteCount, len := binary.Uvarint(b[pos:])
 	pos += len
 	offset, len := binary.Uvarint(b[pos:])
 	pos += len
 	return tiffTile{
-		zoom:         zoom,
-		x:            uint32(x),
-		y:            uint32(y),
-		uniformColor: uint32(uniformColor),
-		byteCount:    uint32(byteCount),
-		offset:       offset,
+		zoom:      zoom,
+		x:         uint32(x),
+		y:         uint32(y),
+		byteCount: uint32(byteCount),
+		offset:    offset,
 	}
 }
 

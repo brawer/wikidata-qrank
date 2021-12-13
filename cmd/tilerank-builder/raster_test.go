@@ -60,12 +60,8 @@ func makeRandomTiffTiles(n int) []tiffTile {
 		t.zoom = uint8(rand.Intn(12))
 		t.x = uint32(rand.Intn(1 << t.zoom))
 		t.y = uint32(rand.Intn(1 << t.zoom))
-		if rand.Intn(1) == 0 {
-			t.uniformColor = uint32(rand.Int63())
-		} else {
-			t.byteCount = uint32(rand.Int63())
-			t.offset = uint64(rand.Int63())
-		}
+		t.offset = uint64(rand.Int63())
+		t.byteCount = uint32(rand.Int63())
 		tiles[i] = t
 	}
 	return tiles

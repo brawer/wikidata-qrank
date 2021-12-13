@@ -137,12 +137,16 @@ func (p *Painter) emitRaster() error {
 	}
 }
 
-func NewPainter(numWeeks int, zoom uint8) *Painter {
+func NewPainter(numWeeks int, zoom uint8) (*Painter, error) {
+	writer, err := NewRasterWriter()
+	if err != nil {
+		return nil, err
+	}
 	return &Painter{
 		numWeeks: numWeeks,
 		zoom:     zoom,
-		writer:   NewRasterWriter(),
-	}
+		writer:   writer,
+	}, nil
 }
 
 // Paint produces a GeoTIFF file from a set of weekly tile view counts.
@@ -151,7 +155,10 @@ func paint(cachedir string, zoom uint8, tilecounts []io.Reader, ctx context.Cont
 	// One goroutine is decompressing, parsing and merging the weekly counts;
 	// another is painting the image from data that gets sent over a channel.
 	ch := make(chan TileCount, 100000)
-	painter := NewPainter(len(tilecounts), zoom)
+	painter, err := NewPainter(len(tilecounts), zoom)
+	if err != nil {
+		return err
+	}
 	g, subCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return mergeTileCounts(tilecounts, ch, subCtx)
