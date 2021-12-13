@@ -45,18 +45,18 @@ func wantPixels(t *testing.T, got [256 * 256]float32, want [4][4]float32) {
 	}
 }
 
-func TestCogTile_ToBytes(t *testing.T) {
-	for _, want := range makeRandomCogTiles(1000) {
-		if got := cogTileFromBytes(want.ToBytes()).(cogTile); got != want {
+func TestTiffTile_ToBytes(t *testing.T) {
+	for _, want := range makeRandomTiffTiles(1000) {
+		if got := tiffTileFromBytes(want.ToBytes()).(tiffTile); got != want {
 			t.Errorf("got %v, want %v", got, want)
 		}
 	}
 }
 
-func makeRandomCogTiles(n int) []cogTile {
-	tiles := make([]cogTile, n)
+func makeRandomTiffTiles(n int) []tiffTile {
+	tiles := make([]tiffTile, n)
 	for i := 0; i < n; i++ {
-		var t cogTile
+		var t tiffTile
 		t.zoom = uint8(rand.Intn(12))
 		t.x = uint32(rand.Intn(1 << t.zoom))
 		t.y = uint32(rand.Intn(1 << t.zoom))

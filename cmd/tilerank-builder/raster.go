@@ -71,7 +71,7 @@ func NewRasterWriter() *RasterWriter {
 	inChan := make(chan extsort.SortType, 10000)
 	config := extsort.DefaultConfig()
 	config.NumWorkers = runtime.NumCPU()
-	sorter, outChan, errChan := extsort.New(inChan, cogTileFromBytes, cogTileLess, config)
+	sorter, outChan, errChan := extsort.New(inChan, tiffTileFromBytes, tiffTileLess, config)
 	go sorter.Sort(context.Background())
 	return &RasterWriter{
 		tiffTilesToSort:  inChan,
@@ -87,7 +87,7 @@ func (w *RasterWriter) Write(r *Raster) {
 // In a typical output, about 55% of all rasters are uniformly coloreds,
 // so we treat them specially as an optimization.
 func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
-	var t cogTile
+	var t tiffTile
 	zoom, x, y := tile.ZoomXY()
 	t.zoom = zoom
 	t.x = x
@@ -108,11 +108,11 @@ func (w *RasterWriter) Close() error {
 	return nil
 }
 
-// cogTile represents a raster tile that will be written into
+// tiffTile represents a raster tile that will be written into
 // a Cloud-Optimized GeoTIFF file. The file format requires
 // a specific arrangement of the data, which is different from
 // the order in which we’re painting our raster tiles.
-type cogTile struct {
+type tiffTile struct {
 	zoom         uint8
 	x, y         uint32
 	uniformColor uint32
@@ -120,8 +120,8 @@ type cogTile struct {
 	offset       uint64
 }
 
-// ToBytes serializes a cogTile into a byte array.
-func (c cogTile) ToBytes() []byte {
+// ToBytes serializes a tiffTile into a byte array.
+func (c tiffTile) ToBytes() []byte {
 	var buf [1 + 4*binary.MaxVarintLen32 + binary.MaxVarintLen64]byte
 	buf[0] = c.zoom
 	pos := 1
@@ -133,10 +133,10 @@ func (c cogTile) ToBytes() []byte {
 	return buf[0:pos]
 }
 
-// Function cogTileFromBytes de-serializes a cogTile from a byte slice.
+// Function tiffTileFromBytes de-serializes a tiffTile from a byte slice.
 // The result is returned as an extsort.SortType because that is
 // needed by the library for external sorting.
-func cogTileFromBytes(b []byte) extsort.SortType {
+func tiffTileFromBytes(b []byte) extsort.SortType {
 	zoom, pos := b[0], 1
 	x, len := binary.Uvarint(b[1:])
 	pos += len
@@ -148,7 +148,7 @@ func cogTileFromBytes(b []byte) extsort.SortType {
 	pos += len
 	offset, len := binary.Uvarint(b[pos:])
 	pos += len
-	return cogTile{
+	return tiffTile{
 		zoom:         zoom,
 		x:            uint32(x),
 		y:            uint32(y),
@@ -158,11 +158,11 @@ func cogTileFromBytes(b []byte) extsort.SortType {
 	}
 }
 
-// cogTileLess returns true if the TIFF tag for raster a should come
+// tiffTileLess returns true if the TIFF tag for raster a should come
 // before b in the Cloud-Optimized GeoTIFF file format.
-func cogTileLess(a, b extsort.SortType) bool {
-	aa := a.(cogTile)
-	bb := b.(cogTile)
+func tiffTileLess(a, b extsort.SortType) bool {
+	aa := a.(tiffTile)
+	bb := b.(tiffTile)
 	if aa.zoom != bb.zoom {
 		return aa.zoom > bb.zoom
 	} else if aa.y != bb.y {
