@@ -128,8 +128,8 @@ type TileCount struct {
 // ToBytes serializes a TileCount into a byte array.
 func (c TileCount) ToBytes() []byte {
 	zoom, x, y := c.Key.ZoomXY()
-	buf := make([]byte, binary.MaxVarintLen32*2+binary.MaxVarintLen64+1)
-	pos := binary.PutUvarint(buf, uint64(x))
+	var buf [binary.MaxVarintLen32*2 + binary.MaxVarintLen64 + 1]byte
+	pos := binary.PutUvarint(buf[:], uint64(x))
 	pos += binary.PutUvarint(buf[pos:], uint64(y))
 	pos += binary.PutUvarint(buf[pos:], c.Count)
 	buf[pos] = zoom
