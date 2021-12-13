@@ -84,7 +84,7 @@ func (p *Painter) setupRaster(tile TileKey) (*Raster, error) {
 	for t := p.last.Next(p.zoom - 8); t < rasterTile; t = t.Next(p.zoom - 8) {
 		if t.Contains(rasterTile) {
 			p.raster = NewRaster(t, p.raster)
-		} else {
+		} else if t.Zoom() == p.zoom-8 {
 			err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5))
 			if err != nil {
 				return nil, err
@@ -106,8 +106,10 @@ func (p *Painter) Close() error {
 				return err
 			}
 		}
-		if err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5)); err != nil {
-			return err
+		if t.Zoom() == p.zoom-8 {
+			if err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5)); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -128,34 +130,11 @@ func (p *Painter) emitRaster() error {
 	raster := p.raster
 	p.raster = raster.parent
 	raster.parent = nil
-
-	// About 124K rasters are not strictly uniform, but they have only
-	// marginal differences in color. For those, we can save the effort
-	// of compression.
-	uniform := true
-	viewsPerKm2 := uint32(raster.pixels[0] + 0.5)
-	for i := 1; i < len(raster.pixels); i++ {
-		if uint32(raster.pixels[i]+0.5) != viewsPerKm2 {
-			uniform = false
-			break
-		}
+	if raster.tile.Zoom() == p.zoom-8 {
+		return p.writer.Write(raster)
+	} else {
+		return nil
 	}
-	if uniform {
-		return p.writer.WriteUniform(raster.tile, viewsPerKm2)
-	}
-
-	// TODO: Compress p.raster and store it into TIFF file.
-	// Only about 33K rasters are left to compress here.
-	// Consider (a) converting to raster.pixels to []uint32 when checking
-	// for uniformity, so we don't need ot do the conversion effoert twice;
-	// (b) do the compression in a worker pool, because it is CPU-intensive
-	// and since it needs to flush the output to (slow) disk;
-	// (c) pass the tile index, TIFF offsets and sizes to an external
-	// sorter, which could also take the uniform raster tiles,
-	// to reduce the memory need for keeping the offset index (it also
-	// would simplify the code).
-	// fmt.Println("TODO: compress", raster.tile, raster.pixels[:80])
-	return nil
 }
 
 func NewPainter(numWeeks int, zoom uint8) *Painter {

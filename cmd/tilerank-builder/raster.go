@@ -80,13 +80,29 @@ func NewRasterWriter() *RasterWriter {
 	}
 }
 
-func (w *RasterWriter) Write(r *Raster) {
+func (w *RasterWriter) Write(r *Raster) error {
+	// About 124K rasters are not strictly uniform, but they have only
+	// marginal differences in color. For those, we can save the effort
+	// of compression.
+	uniform := true
+	color := uint32(r.pixels[0] + 0.5)
+	for i := 1; i < len(r.pixels); i++ {
+		if uint32(r.pixels[i]+0.5) != color {
+			uniform = false
+			break
+		}
+	}
+	if uniform {
+		return w.WriteUniform(r.tile, color)
+	}
+	return nil
 }
 
 // WriteUniform produces a raster whose pixels all have the same color.
 // In a typical output, about 55% of all rasters are uniformly coloreds,
 // so we treat them specially as an optimization.
 func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
+	//fmt.Println("WriteUniform", tile)
 	var t tiffTile
 	zoom, x, y := tile.ZoomXY()
 	t.zoom = zoom
