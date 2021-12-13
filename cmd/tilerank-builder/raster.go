@@ -3,8 +3,10 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
+	"runtime"
 
 	"github.com/lanrat/extsort"
 )
@@ -60,11 +62,22 @@ func NewRaster(tile TileKey, parent *Raster) *Raster {
 }
 
 type RasterWriter struct {
-	palette map[uint32]uint16 // color -> index
+	tiffTilesToSort  chan<- extsort.SortType
+	tiffTiles        <-chan extsort.SortType
+	tiffTilesSortErr <-chan error
 }
 
 func NewRasterWriter() *RasterWriter {
-	return &RasterWriter{palette: make(map[uint32]uint16, 65536)}
+	inChan := make(chan extsort.SortType, 10000)
+	config := extsort.DefaultConfig()
+	config.NumWorkers = runtime.NumCPU()
+	sorter, outChan, errChan := extsort.New(inChan, cogTileFromBytes, cogTileLess, config)
+	go sorter.Sort(context.Background())
+	return &RasterWriter{
+		tiffTilesToSort:  inChan,
+		tiffTiles:        outChan,
+		tiffTilesSortErr: errChan,
+	}
 }
 
 func (w *RasterWriter) Write(r *Raster) {
@@ -80,11 +93,18 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 	t.x = x
 	t.y = y
 	t.uniformColor = color
-	//fmt.Printf("TODO: Send %v to sorting channel\n", t)
+	w.tiffTilesToSort <- t
 	return nil
 }
 
 func (w *RasterWriter) Close() error {
+	close(w.tiffTilesToSort)
+	for _ = range w.tiffTiles {
+		// fmt.Printf("TODO: Store %v\n", t)
+	}
+	if err := <-w.tiffTilesSortErr; err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -140,7 +160,7 @@ func cogTileFromBytes(b []byte) extsort.SortType {
 
 // cogTileLess returns true if the TIFF tag for raster a should come
 // before b in the Cloud-Optimized GeoTIFF file format.
-func cogTilekLess(a, b extsort.SortType) bool {
+func cogTileLess(a, b extsort.SortType) bool {
 	aa := a.(cogTile)
 	bb := b.(cogTile)
 	if aa.zoom != bb.zoom {
