@@ -20,7 +20,8 @@ func TestPaint(t *testing.T) {
 	}
 	defer file.Close()
 	readers := []io.Reader{brotli.NewReader(file)}
-	if err := paint("", 17, readers, context.Background()); err != nil {
+	path := filepath.Join(t.TempDir(), "zurich.tif")
+	if err := paint(path, 17, readers, context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -29,7 +30,8 @@ func TestPaint(t *testing.T) {
 // parent tiles have been viewed.
 func TestPaint_ParentNotLogged(t *testing.T) {
 	readers := []io.Reader{strings.NewReader("3/1/1 3\n18/137341/91897 1\n")}
-	if err := paint("", 11, readers, context.Background()); err != nil {
+	path := filepath.Join(t.TempDir(), "notlogged.tif")
+	if err := paint(path, 11, readers, context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -40,8 +42,9 @@ func TestPaint_TooManyCountsForSameTile(t *testing.T) {
 		//strings.NewReader("4/4/10 3\n7/39/87 11\n"),
 		strings.NewReader("4/2/1 2\n7/39/87 22\n7/39/87 33\n7/39/87 44\n"),
 	}
+	path := filepath.Join(t.TempDir(), "toomanycounts.tif")
 	var got string
-	if err := paint("", 16, readers, context.Background()); err != nil {
+	if err := paint(path, 16, readers, context.Background()); err != nil {
 		got = err.Error()
 	}
 	want := "tile 7/39/87 appears more than 1 times in input"

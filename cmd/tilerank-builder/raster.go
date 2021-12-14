@@ -73,7 +73,7 @@ type RasterWriter struct {
 	dataSize         uint64
 }
 
-func NewRasterWriter() (*RasterWriter, error) {
+func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
 	tempFile, err := os.CreateTemp("", "*.tmp")
 	if err != nil {
 		return nil, err
