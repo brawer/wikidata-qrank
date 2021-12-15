@@ -61,7 +61,6 @@ func NewRaster(tile TileKey, parent *Raster) *Raster {
 
 type RasterWriter struct {
 	path         string
-	uniform      map[uint32]tiffTile
 	tempFile     *os.File
 	tempFileSize uint64
 	dataSize     uint64
@@ -72,6 +71,7 @@ type RasterWriter struct {
 	// we need to group together the tiles from the same zoom level.
 	tileOffsets    [][]uint32
 	tileByteCounts [][]uint32
+	uniformTiles   []map[uint32]int
 }
 
 func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
@@ -83,10 +83,15 @@ func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
 	r := &RasterWriter{
 		path:           path,
 		tempFile:       tempFile,
-		uniform:        make(map[uint32]tiffTile, 16),
 		zoom:           zoom,
 		tileOffsets:    make([][]uint32, zoom+1),
 		tileByteCounts: make([][]uint32, zoom+1),
+		uniformTiles:   make([]map[uint32]int, zoom+1),
+	}
+	for z := uint8(0); z <= zoom; z++ {
+		r.tileOffsets[z] = make([]uint32, 1<<(2*z))
+		r.tileByteCounts[z] = make([]uint32, 1<<(2*z))
+		r.uniformTiles[z] = make(map[uint32]int, 16)
 	}
 	return r, nil
 }
@@ -107,9 +112,15 @@ func (w *RasterWriter) Write(r *Raster) error {
 		return w.WriteUniform(r.tile, color)
 	}
 
-	if _, _, err := w.compress(r.tile, r.pixels[:]); err != nil {
+	offset, size, err := w.compress(r.tile, r.pixels[:])
+	if err != nil {
 		return err
 	}
+
+	zoom, x, y := r.tile.ZoomXY()
+	tileIndex := (1<<zoom)*y + x
+	w.tileOffsets[zoom][tileIndex] = uint32(offset)
+	w.tileByteCounts[zoom][tileIndex] = size
 
 	return nil
 }
@@ -118,29 +129,24 @@ func (w *RasterWriter) Write(r *Raster) error {
 // In a typical output, about 55% of all rasters are uniformly colored,
 // so we treat them specially as an optimization.
 func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
-	var t tiffTile
 	zoom, x, y := tile.ZoomXY()
-	t.zoom = zoom
-	t.x = x
-	t.y = y
-	if same, exists := w.uniform[color]; exists {
-		stride := uint32(1 << zoom)
-		w.tileOffsets[zoom][y*stride+x] = uint32(same.offset)
-		w.tileByteCounts[zoom][y*stride+x] = uint32(same.byteCount)
-		t.offset = same.offset
-		t.byteCount = same.byteCount
+	tileIndex := (1<<zoom)*y + x
+	if same, exists := w.uniformTiles[zoom][color]; exists {
+		w.tileOffsets[zoom][tileIndex] = w.tileOffsets[zoom][same]
+		w.tileByteCounts[zoom][tileIndex] = w.tileByteCounts[zoom][same]
 		return nil
 	}
 	var pixels [256 * 256]float32
-	for i := 0; i < 256*256; i++ {
+	for i := 0; i < len(pixels); i++ {
 		pixels[i] = float32(color)
 	}
-	offset, len, err := w.compress(tile, pixels[:])
+	offset, size, err := w.compress(tile, pixels[:])
 	if err != nil {
 		return err
 	}
-	t.offset, t.byteCount = offset, len
-	w.uniform[color] = t
+	w.tileOffsets[zoom][tileIndex] = uint32(offset)
+	w.tileByteCounts[zoom][tileIndex] = size
+	w.uniformTiles[zoom][color] = int(tileIndex)
 	return nil
 }
 
@@ -179,15 +185,6 @@ func (w *RasterWriter) compress(tile TileKey, pixels []float32) (offset uint64, 
 	size = uint32(n)
 	w.tempFileSize += uint64(size)
 
-	zoom, x, y := tile.ZoomXY()
-	if w.tileOffsets[zoom] == nil {
-		w.tileOffsets[zoom] = make([]uint32, 1<<(2*zoom))
-		w.tileByteCounts[zoom] = make([]uint32, 1<<(2*zoom))
-	}
-	stride := uint32(1 << zoom)
-	w.tileOffsets[zoom][y*stride+x] = uint32(offset)
-	w.tileByteCounts[zoom][y*stride+x] = uint32(n)
-	//fmt.Printf("compress %d/%d/%d -> {offset: %d size: %d}\n", zoom, x, y, offset, size)
 	return offset, size, nil
 }
 
@@ -387,24 +384,30 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		return err
 	}
 
-	alreadyWritten := make(map[uint32]uint32, numTiles)
+	uniform := make(map[uint32]bool, len(w.uniformTiles[w.zoom]))
+	uniformPos := make(map[uint32]uint32, len(w.uniformTiles[w.zoom]))
+	for _, t := range w.uniformTiles[w.zoom] {
+		uniform[w.tileOffsets[w.zoom][t]] = true
+	}
+
 	finalTileOffsets := make([]uint32, numTiles)
 	for tile := uint32(0); tile < numTiles; tile++ {
 		tileOffset := w.tileOffsets[w.zoom][tile]
-		if off, exists := alreadyWritten[tileOffset]; !exists {
+		if unipos, exists := uniformPos[tileOffset]; !exists {
 			tileData := make([]byte, w.tileByteCounts[w.zoom][tile])
 			if _, err := w.tempFile.ReadAt(tileData, int64(tileOffset)); err != nil {
 				return err
 			}
-			off = fileSize
-			finalTileOffsets[tile] = off
-			alreadyWritten[tileOffset] = off
+			finalTileOffsets[tile] = fileSize
+			if uniform[tileOffset] {
+				uniformPos[tileOffset] = fileSize
+			}
 			if _, err := out.Write(tileData); err != nil {
 				return err
 			}
 			fileSize += uint32(len(tileData))
 		} else {
-			finalTileOffsets[tile] = off
+			finalTileOffsets[tile] = unipos
 		}
 	}
 
