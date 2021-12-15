@@ -4,7 +4,6 @@ package main
 
 import (
 	"math"
-	"math/rand"
 	"testing"
 )
 
@@ -43,26 +42,4 @@ func wantPixels(t *testing.T, got [256 * 256]float32, want [4][4]float32) {
 			}
 		}
 	}
-}
-
-func TestTiffTile_ToBytes(t *testing.T) {
-	for _, want := range makeRandomTiffTiles(1000) {
-		if got := tiffTileFromBytes(want.ToBytes()).(tiffTile); got != want {
-			t.Errorf("got %v, want %v", got, want)
-		}
-	}
-}
-
-func makeRandomTiffTiles(n int) []tiffTile {
-	tiles := make([]tiffTile, n)
-	for i := 0; i < n; i++ {
-		var t tiffTile
-		t.zoom = uint8(rand.Intn(12))
-		t.x = uint32(rand.Intn(1 << t.zoom))
-		t.y = uint32(rand.Intn(1 << t.zoom))
-		t.offset = uint64(rand.Int63())
-		t.byteCount = uint32(rand.Int63())
-		tiles[i] = t
-	}
-	return tiles
 }

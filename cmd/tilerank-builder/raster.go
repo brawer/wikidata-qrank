@@ -4,13 +4,9 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"os"
-	"runtime"
-
-	"github.com/lanrat/extsort"
 )
 
 type Raster struct {
@@ -64,15 +60,12 @@ func NewRaster(tile TileKey, parent *Raster) *Raster {
 }
 
 type RasterWriter struct {
-	path             string
-	tiffTilesToSort  chan<- extsort.SortType
-	tiffTiles        <-chan extsort.SortType
-	tiffTilesSortErr <-chan error
-	uniform          map[uint32]tiffTile
-	tempFile         *os.File
-	tempFileSize     uint64
-	dataSize         uint64
-	zoom             uint8
+	path         string
+	uniform      map[uint32]tiffTile
+	tempFile     *os.File
+	tempFileSize uint64
+	dataSize     uint64
+	zoom         uint8
 
 	// For each zoom level, tileOffsets is the position of the TileOffset
 	// relative to the start of the temporary file. In the final output,
@@ -87,21 +80,13 @@ func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
 		return nil, err
 	}
 
-	inChan := make(chan extsort.SortType, 10000)
-	config := extsort.DefaultConfig()
-	config.NumWorkers = runtime.NumCPU()
-	sorter, outChan, errChan := extsort.New(inChan, tiffTileFromBytes, tiffTileLess, config)
-	go sorter.Sort(context.Background())
 	r := &RasterWriter{
-		path:             path,
-		tempFile:         tempFile,
-		tiffTilesToSort:  inChan,
-		tiffTiles:        outChan,
-		tiffTilesSortErr: errChan,
-		uniform:          make(map[uint32]tiffTile, 16),
-		zoom:             zoom,
-		tileOffsets:      make([][]uint32, zoom+1),
-		tileByteCounts:   make([][]uint32, zoom+1),
+		path:           path,
+		tempFile:       tempFile,
+		uniform:        make(map[uint32]tiffTile, 16),
+		zoom:           zoom,
+		tileOffsets:    make([][]uint32, zoom+1),
+		tileByteCounts: make([][]uint32, zoom+1),
 	}
 	return r, nil
 }
@@ -122,15 +107,10 @@ func (w *RasterWriter) Write(r *Raster) error {
 		return w.WriteUniform(r.tile, color)
 	}
 
-	offset, byteCount, err := w.compress(r.tile, r.pixels[:])
-	if err != nil {
+	if _, _, err := w.compress(r.tile, r.pixels[:]); err != nil {
 		return err
 	}
 
-	var t tiffTile
-	t.zoom, t.x, t.y = r.tile.ZoomXY()
-	t.offset, t.byteCount = offset, byteCount
-	w.tiffTilesToSort <- t
 	return nil
 }
 
@@ -149,7 +129,6 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 		w.tileByteCounts[zoom][y*stride+x] = uint32(same.byteCount)
 		t.offset = same.offset
 		t.byteCount = same.byteCount
-		w.tiffTilesToSort <- t
 		return nil
 	}
 	var pixels [256 * 256]float32
@@ -162,7 +141,6 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 	}
 	t.offset, t.byteCount = offset, len
 	w.uniform[color] = t
-	w.tiffTilesToSort <- t
 	return nil
 }
 
@@ -214,14 +192,6 @@ func (w *RasterWriter) compress(tile TileKey, pixels []float32) (offset uint64, 
 }
 
 func (w *RasterWriter) Close() error {
-	close(w.tiffTilesToSort)
-	for _ = range w.tiffTiles {
-		// fmt.Printf("TODO: Store %v\n", t)
-	}
-	if err := <-w.tiffTilesSortErr; err != nil {
-		return err
-	}
-
 	out, err := os.Create(w.path + ".tmp")
 	if err != nil {
 		return err
@@ -457,52 +427,4 @@ type tiffTile struct {
 	x, y      uint32
 	byteCount uint32
 	offset    uint64
-}
-
-// ToBytes serializes a tiffTile into a byte array.
-func (c tiffTile) ToBytes() []byte {
-	var buf [1 + 3*binary.MaxVarintLen32 + binary.MaxVarintLen64]byte
-	buf[0] = c.zoom
-	pos := 1
-	pos += binary.PutUvarint(buf[pos:], uint64(c.x))
-	pos += binary.PutUvarint(buf[pos:], uint64(c.y))
-	pos += binary.PutUvarint(buf[pos:], uint64(c.byteCount))
-	pos += binary.PutUvarint(buf[pos:], c.offset)
-	return buf[0:pos]
-}
-
-// Function tiffTileFromBytes de-serializes a tiffTile from a byte slice.
-// The result is returned as an extsort.SortType because that is
-// needed by the library for external sorting.
-func tiffTileFromBytes(b []byte) extsort.SortType {
-	zoom, pos := b[0], 1
-	x, len := binary.Uvarint(b[1:])
-	pos += len
-	y, len := binary.Uvarint(b[pos:])
-	pos += len
-	byteCount, len := binary.Uvarint(b[pos:])
-	pos += len
-	offset, len := binary.Uvarint(b[pos:])
-	pos += len
-	return tiffTile{
-		zoom:      zoom,
-		x:         uint32(x),
-		y:         uint32(y),
-		byteCount: uint32(byteCount),
-		offset:    offset,
-	}
-}
-
-// tiffTileLess returns true if the TIFF tag for raster a should come
-// before b in the Cloud-Optimized GeoTIFF file format.
-func tiffTileLess(a, b extsort.SortType) bool {
-	aa := a.(tiffTile)
-	bb := b.(tiffTile)
-	if aa.zoom != bb.zoom {
-		return aa.zoom > bb.zoom
-	} else if aa.y != bb.y {
-		return aa.y < bb.y
-	} else {
-		return aa.x < bb.x
-	}
 }
