@@ -231,10 +231,28 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		tileByteCounts   = 325
 		sampleFormat     = 339
 
+		geoKeyDirectory = 34735
+		geoAsciiParams  = 34737
+
 		asciiFormat = 2
 		shortFormat = 3
 		longFormat  = 4
 	)
+
+	// The following was done by analyzing the hex dump of this command:
+	// $ gdal_translate -a_srs EPSG:3857 image.tif geotiff.tif
+	geoAscii := "WGS 84 / Pseudo-Mercator|WGS 84|\u0000"
+	geoKeys := []uint16{
+		1, 1, 0, // Version: 1.1.0
+		7,             // NumberOfKeys: 7
+		1024, 0, 1, 1, // GTModelType: 2D projected
+		1025, 0, 1, 1, // GTRasterTyp: PixelIsArea
+		1026, geoAsciiParams, 25, 0, // GTCitation: "WGS 84 / Pseudo-Mercator"
+		2049, geoAsciiParams, 7, 25, // GeodeticCitation: "WGS 84"
+		2054, 0, 1, 9102, // GeogAngularUnits: degree [EPSG unit 9102]
+		3072, 0, 1, 3857, // ProjectedCRS: Web Mercator [epsg.io/3857]
+		3076, 0, 1, 9001, // ProjLinearUnits: meter [EPSG unit 9001]
+	}
 
 	// TODO: To emit overviews, make this a loop over multiple zooms,
 	// and patch the IFD offsets so they form a linked list in the TIFF file.
@@ -259,6 +277,8 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		{tileOffsets, 0},
 		{tileByteCounts, 0},
 		{sampleFormat, 3}, // 3 = IEEE floating point, TIFF spec page 80
+		{geoKeyDirectory, 0},
+		{geoAsciiParams, 0},
 	}
 
 	// Position of extra data that does not fit inline in Image File Directory,
@@ -294,6 +314,15 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 
 		case software:
 			s := []byte("TileRank\u0000")
+			typ, count, value = asciiFormat, uint32(len(s)), extraPos+uint32(extraBuf.Len())
+			extraBuf.Write(s)
+
+		case geoKeyDirectory:
+			typ, count, value = shortFormat, uint32(len(geoKeys)), extraPos+uint32(extraBuf.Len())
+			binary.Write(&extraBuf, binary.LittleEndian, geoKeys)
+
+		case geoAsciiParams:
+			s := []byte(geoAscii)
 			typ, count, value = asciiFormat, uint32(len(s)), extraPos+uint32(extraBuf.Len())
 			extraBuf.Write(s)
 
