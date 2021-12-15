@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -151,41 +152,28 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 }
 
 func (w *RasterWriter) compress(tile TileKey, pixels []float32) (offset uint64, size uint32, err error) {
-	var buf bytes.Buffer
-	buf.Grow(len(pixels) * 4)
-	if err := binary.Write(&buf, binary.LittleEndian, pixels); err != nil {
+	var compressed bytes.Buffer
+	writer, err := zlib.NewWriterLevel(&compressed, zlib.BestCompression)
+	if err != nil {
 		return 0, 0, err
 	}
 
-	//var compressed bytes.Buffer
-	//writer, err := zlib.NewWriterLevel(&compressed, zlib.BestCompression)
-	//if err != nil {
-	//	return 0, 0, err
-	//}
-	//
-	//if _, err := writer.Write(testImage[:]); err != nil {
-	//	return 0, 0, err
-	//}
-	//
-	//if err := writer.Close(); err != nil {
-	//	return 0, 0, err
-	//}
-
-	n := buf.Len()
-	if _, err := buf.WriteTo(w.tempFile); err != nil {
+	if err := binary.Write(writer, binary.LittleEndian, pixels); err != nil {
 		return 0, 0, err
 	}
 
-	//n, err := compressed.WriteTo(w.tempFile)
-	//if err != nil {
-	//	return 0, 0, err
-	//}
+	if err := writer.Close(); err != nil {
+		return 0, 0, err
+	}
+
+	n, err := compressed.WriteTo(w.tempFile)
+	if err != nil {
+		return 0, 0, err
+	}
 
 	offset = w.tempFileSize
-	size = uint32(n)
-	w.tempFileSize += uint64(size)
-
-	return offset, size, nil
+	w.tempFileSize += uint64(n)
+	return offset, uint32(n), nil
 }
 
 func (w *RasterWriter) Close() error {
@@ -260,7 +248,7 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		{imageWidth, 1 << (w.zoom + 8)},
 		{imageHeight, 1 << (w.zoom + 8)},
 		{bitsPerSample, 32},
-		{compression, 1}, // 1 = no compression; 8 = zlib/flate
+		{compression, 8}, // 1 = no compression; 8 = zlib/flate
 		{photometric, 1}, // 1 = BlackIsZero
 		{imageDescription, 0},
 		{samplesPerPixel, 1},
