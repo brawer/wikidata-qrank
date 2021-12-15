@@ -21,7 +21,7 @@ func TestPaint(t *testing.T) {
 	defer file.Close()
 	readers := []io.Reader{brotli.NewReader(file)}
 	path := filepath.Join(t.TempDir(), "zurich.tif")
-	if err := paint(path, 17, readers, context.Background()); err != nil {
+	if err := paint(path, 9, readers, context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }

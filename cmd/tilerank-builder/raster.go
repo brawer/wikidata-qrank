@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"compress/flate"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -145,6 +144,9 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 	t.x = x
 	t.y = y
 	if same, exists := w.uniform[color]; exists {
+		stride := uint32(1 << zoom)
+		w.tileOffsets[zoom][y*stride+x] = uint32(same.offset)
+		w.tileByteCounts[zoom][y*stride+x] = uint32(same.byteCount)
 		t.offset = same.offset
 		t.byteCount = same.byteCount
 		w.tiffTilesToSort <- t
@@ -171,36 +173,44 @@ func (w *RasterWriter) compress(tile TileKey, pixels []float32) (offset uint64, 
 		return 0, 0, err
 	}
 
-	var compressed bytes.Buffer
-	writer, err := flate.NewWriter(&compressed, flate.BestCompression)
-	if err != nil {
+	//var compressed bytes.Buffer
+	//writer, err := zlib.NewWriterLevel(&compressed, zlib.BestCompression)
+	//if err != nil {
+	//	return 0, 0, err
+	//}
+	//
+	//if _, err := writer.Write(testImage[:]); err != nil {
+	//	return 0, 0, err
+	//}
+	//
+	//if err := writer.Close(); err != nil {
+	//	return 0, 0, err
+	//}
+
+	n := buf.Len()
+	if _, err := buf.WriteTo(w.tempFile); err != nil {
 		return 0, 0, err
 	}
 
-	if _, err := writer.Write(buf.Bytes()); err != nil {
-		return 0, 0, err
-	}
-
-	if err := writer.Close(); err != nil {
-		return 0, 0, err
-	}
-
-	len, err := w.tempFile.Write(compressed.Bytes())
-	if err != nil {
-		return 0, 0, err
-	}
+	//n, err := compressed.WriteTo(w.tempFile)
+	//if err != nil {
+	//	return 0, 0, err
+	//}
 
 	offset = w.tempFileSize
-	w.tempFileSize += uint64(len)
+	size = uint32(n)
+	w.tempFileSize += uint64(size)
 
-	zoom, _, _ := tile.ZoomXY()
+	zoom, x, y := tile.ZoomXY()
 	if w.tileOffsets[zoom] == nil {
 		w.tileOffsets[zoom] = make([]uint32, 1<<(2*zoom))
 		w.tileByteCounts[zoom] = make([]uint32, 1<<(2*zoom))
 	}
-	// TODO: Store offset/len into tileOffset/tileByteCount.
-
-	return offset, uint32(len), nil
+	stride := uint32(1 << zoom)
+	w.tileOffsets[zoom][y*stride+x] = uint32(offset)
+	w.tileByteCounts[zoom][y*stride+x] = uint32(n)
+	//fmt.Printf("compress %d/%d/%d -> {offset: %d size: %d}\n", zoom, x, y, offset, size)
+	return offset, size, nil
 }
 
 func (w *RasterWriter) Close() error {
@@ -255,8 +265,10 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		imageHeight      = 257
 		bitsPerSample    = 258
 		compression      = 259
+		photometric      = 262
 		imageDescription = 270
 		samplesPerPixel  = 277
+		planarConfig     = 284
 		software         = 305
 		tileWidth        = 322
 		tileLength       = 323
@@ -267,8 +279,6 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		asciiFormat = 2
 		shortFormat = 3
 		longFormat  = 4
-
-		flateCompression = 8
 	)
 
 	// TODO: To emit overviews, make this a loop over multiple zooms,
@@ -283,15 +293,17 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		{imageWidth, 1 << (w.zoom + 8)},
 		{imageHeight, 1 << (w.zoom + 8)},
 		{bitsPerSample, 32},
-		{compression, flateCompression},
+		{compression, 1}, // 1 = no compression; 8 = zlib/flate
+		{photometric, 1}, // 1 = BlackIsZero
 		{imageDescription, 0},
 		{samplesPerPixel, 1},
+		{planarConfig, 1},
 		{software, 0},
 		{tileWidth, 256},
 		{tileLength, 256},
 		{tileOffsets, 0},
 		{tileByteCounts, 0},
-		{sampleFormat, 3}, // 3 = IEEE floating point data, TIFF spec p.80
+		{sampleFormat, 3}, // 3 = IEEE floating point, TIFF spec page 80
 	}
 
 	// Position of extra data that does not fit inline in Image File Directory,
@@ -384,6 +396,7 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 	if fileSize != tileByteCountsPos {
 		panic("fileSize != tileByteCountsPos")
 	}
+
 	if err := binary.Write(out, binary.LittleEndian, w.tileByteCounts[w.zoom]); err != nil {
 		return err
 	}
@@ -398,10 +411,11 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 	if fileSize != extraPos {
 		panic("fileSize != extraPos")
 	}
+
+	fileSize += uint32(extraBuf.Len())
 	if _, err := extraBuf.WriteTo(out); err != nil {
 		return err
 	}
-	fileSize += uint32(extraBuf.Len())
 
 	alreadyWritten := make(map[uint32]uint32, numTiles)
 	finalTileOffsets := make([]uint32, numTiles)
