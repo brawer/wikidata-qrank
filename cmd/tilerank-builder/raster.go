@@ -7,6 +7,7 @@ import (
 	"compress/zlib"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -73,6 +74,11 @@ type RasterWriter struct {
 	tileOffsets    [][]uint32
 	tileByteCounts [][]uint32
 	uniformTiles   []map[uint32]int
+
+	// For each zoom level, tileOffsetsPos is the position of the pointer
+	// to the tileOffsets array within the Image File Directory,
+	// relative to the start of the final output TIFF file.
+	tileOffsetsPos []uint32
 }
 
 func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
@@ -88,6 +94,7 @@ func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
 		tileOffsets:    make([][]uint32, zoom+1),
 		tileByteCounts: make([][]uint32, zoom+1),
 		uniformTiles:   make([]map[uint32]int, zoom+1),
+		tileOffsetsPos: make([]uint32, zoom+1),
 	}
 	for z := uint8(0); z <= zoom; z++ {
 		r.tileOffsets[z] = make([]uint32, 1<<(2*z))
@@ -283,8 +290,8 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 
 	// Position of extra data that does not fit inline in Image File Directory,
 	// relative to start of TIFF file.
-	tileOffsetsPos := fileSize + uint32(len(ifd)*12+6)
-	tileByteCountsPos := tileOffsetsPos + uint32(numTiles*4)
+	w.tileOffsetsPos[w.zoom] = fileSize + uint32(len(ifd)*12+6)
+	tileByteCountsPos := w.tileOffsetsPos[w.zoom] + uint32(numTiles*4)
 	extraPos := tileByteCountsPos + uint32(numTiles*4)
 
 	var buf, extraBuf bytes.Buffer
@@ -327,7 +334,7 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 			extraBuf.Write(s)
 
 		case tileOffsets:
-			typ, count, value = longFormat, numTiles, tileOffsetsPos
+			typ, count, value = longFormat, numTiles, w.tileOffsetsPos[w.zoom]
 
 		case tileByteCounts:
 			typ, count, value = longFormat, numTiles, tileByteCountsPos
@@ -362,7 +369,7 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 	// Reserve space for tileOffsets. We will overwrite tileOffsets
 	// later, when writing out the actual data, since only then we’ll
 	// know the actual offsets in the file.
-	if fileSize != tileOffsetsPos {
+	if fileSize != w.tileOffsetsPos[w.zoom] {
 		panic("fileSize != tileOffsetsPos")
 	}
 	numRows := 1 << w.zoom
@@ -401,37 +408,73 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		return err
 	}
 
-	uniform := make(map[uint32]bool, len(w.uniformTiles[w.zoom]))
-	uniformPos := make(map[uint32]uint32, len(w.uniformTiles[w.zoom]))
-	for _, t := range w.uniformTiles[w.zoom] {
-		uniform[w.tileOffsets[w.zoom][t]] = true
+	if err := w.writeTiles(w.zoom, out); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// writeTiles writes the tile data for a zoom level to the output TIFF file.
+// For each written tile, its offset within the TIFF file is stored into
+// the TileOffsets array in the zoom level’s Image File Directory.
+func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
+	fileSize, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+
+	numTiles := uint32(1 << (zoom * 2))
+
+	// w.uniformTiles[zoom] maps a pixel color to the index,
+	// in TileOffsets and TileByteCounts, of a compressed tile
+	// that has this same color uniformly across all its pixels.
+	// Sharing tile data for uniform tiles saves a lot of space,
+	// so of course we want to do this tile data sharing also in
+	// our final output, not just in the temporary file.
+	//
+	// uniform[t] is true if the data at offset t in the temp file
+	// is for a uniform raster whose data is shared by multiple tiles.
+	// This array gets populated before entering the loop.
+	//
+	// uniformPos[t] indicates the position of the shared uniform
+	// tile data (whose data starts at offset t in the temporary file)
+	// in the final output TIFF file. This array gets populated
+	// when actually writing the output to the output TIFF.
+	uniform := make(map[uint32]bool, len(w.uniformTiles[zoom]))
+	uniformPos := make(map[uint32]uint32, len(w.uniformTiles[zoom]))
+	for _, t := range w.uniformTiles[zoom] {
+		uniform[w.tileOffsets[zoom][t]] = true
 	}
 
 	finalTileOffsets := make([]uint32, numTiles)
 	for tile := uint32(0); tile < numTiles; tile++ {
-		tileOffset := w.tileOffsets[w.zoom][tile]
+		tileOffset := w.tileOffsets[zoom][tile]
 		if unipos, exists := uniformPos[tileOffset]; !exists {
-			tileData := make([]byte, w.tileByteCounts[w.zoom][tile])
+			// TODO: Write tile data leaders and trailers, like GDAL.
+			// https://gdal.org/drivers/raster/cog.html#tile-data-leader-and-trailer
+			tileData := make([]byte, w.tileByteCounts[zoom][tile])
 			if _, err := w.tempFile.ReadAt(tileData, int64(tileOffset)); err != nil {
 				return err
 			}
-			finalTileOffsets[tile] = fileSize
+			finalTileOffsets[tile] = uint32(fileSize)
 			if uniform[tileOffset] {
-				uniformPos[tileOffset] = fileSize
+				uniformPos[tileOffset] = uint32(fileSize)
 			}
-			if _, err := out.Write(tileData); err != nil {
+			if _, err := f.Write(tileData); err != nil {
 				return err
 			}
-			fileSize += uint32(len(tileData))
+			fileSize += int64(len(tileData))
 		} else {
 			finalTileOffsets[tile] = unipos
 		}
 	}
 
-	if _, err := out.Seek(int64(tileOffsetsPos), 0); err != nil {
+	if _, err := f.Seek(int64(w.tileOffsetsPos[zoom]), 0); err != nil {
 		return err
 	}
-	if err := binary.Write(out, binary.LittleEndian, finalTileOffsets); err != nil {
+
+	if err := binary.Write(f, binary.LittleEndian, finalTileOffsets); err != nil {
 		return err
 	}
 
