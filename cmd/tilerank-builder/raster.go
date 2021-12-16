@@ -437,14 +437,3 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 
 	return nil
 }
-
-// tiffTile represents a raster tile that will be written into
-// a Cloud-Optimized GeoTIFF file. The file format requires
-// a specific arrangement of the data, which is different from
-// the order in which we’re painting our raster tiles.
-type tiffTile struct {
-	zoom      uint8
-	x, y      uint32
-	byteCount uint32
-	offset    uint64
-}
