@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 type Raster struct {
@@ -214,14 +215,49 @@ func (w *RasterWriter) Close() error {
 }
 
 func (w *RasterWriter) writeTiff(out *os.File) error {
-	// Magic header for little-endian TIFF files smaller than 4GiB,
-	// followed by offset to the first Image File Directory.
-	magic := []byte{'I', 'I', 42, 0, 8, 0, 0, 0}
+	// Magic header for a little-endian TIFF file that is smaller than 4GiB.
+	// Our output is “only” a few hundred megabytes, so we do not need to
+	// care about BigTIFF.
+	magic := []byte{'I', 'I', 42, 0}
 	if _, err := out.Write(magic); err != nil {
 		return err
 	}
 
-	// TODO: Write structural hints for GDAL (and compatible readers).
+	// Structural Metadata for GDAL and compatible readers.
+	// https://gdal.org/drivers/raster/cog.html#header-ghost-area
+	//
+	// Note that we do **not** use BLOCK_ORDER=ROW_MAJOR because
+	// that would mean we couldn’t share tile data among tiles.
+	// In our output image, we have very many tiles with uniform
+	// color across all pixels, and sharing this data between
+	// all tiles using them saves a lot of space.
+	smd := `LAYOUT=IFDS_BEFORE_DATA
+BLOCK_LEADER=SIZE_AS_UINT4
+BLOCK_TRAILER=LAST_4_BYTES_REPEATED
+KNOWN_INCOMPATIBLE_EDITION=NO 
+MASK_INTERLEAVED_WITH_IMAGERY=YES
+`
+	if !strings.Contains(smd, "=NO \n") {
+		panic("missing space after NO") // as per GDAL documentation
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("GDAL_STRUCTURAL_METADATA_SIZE=%06d bytes\n", len(smd)))
+	buf.WriteString(smd)
+	if err := addPadding(&buf); err != nil {
+		return err
+	}
+
+	// Offset to first Image File Directory in file.
+	firstIFDPos := uint32(len(magic) + 4 + buf.Len())
+	if err := binary.Write(out, binary.LittleEndian, firstIFDPos); err != nil {
+		return err
+	}
+
+	if _, err := out.Write(buf.Bytes()); err != nil {
+		return err
+	}
+
 	// TODO: Also write overview zoom levels, not just deepest zoom.
 	if _, err := w.writeIFD(w.zoom, out); err != nil {
 		return err
@@ -414,11 +450,8 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 	}
 	fileSize += int64(len(w.tileByteCounts[zoom]) * 4)
 
-	// Add padding to extraBuf so its length is a multiple of four.
-	if pad := (4 - extraBuf.Len()%4) % 4; pad > 0 {
-		if _, err := extraBuf.Write([]byte{0, 0, 0, 0}[:pad]); err != nil {
-			return 0, err
-		}
+	if err := addPadding(&extraBuf); err != nil {
+		return 0, err
 	}
 	if fileSize != extraPos {
 		panic("fileSize != extraPos")
@@ -524,5 +557,15 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 		return err
 	}
 
+	return nil
+}
+
+// addPadding writes zero bytes to buf to make its length a multiple of two.
+func addPadding(buf *bytes.Buffer) error {
+	if buf.Len()&1 != 0 {
+		if err := buf.WriteByte(0); err != nil {
+			return err
+		}
+	}
 	return nil
 }
