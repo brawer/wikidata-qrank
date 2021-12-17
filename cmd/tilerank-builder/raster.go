@@ -614,7 +614,7 @@ func addPadding(buf *bytes.Buffer) error {
 	return nil
 }
 
-func patchOffset(f *os.File, pos int64, value int64) error {
+func patchOffset(f io.WriteSeeker, pos int64, value int64) error {
 	if value < 0 || value > 0xffffffff {
 		// If this triggers, there probably is a bug in the code that has
 		// calculatied the passed value. If we really had to deal with

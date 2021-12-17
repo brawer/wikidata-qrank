@@ -6,6 +6,7 @@ require (
 	github.com/andybalholm/brotli v1.0.4
 	github.com/dsnet/compress v0.0.1
 	github.com/lanrat/extsort v1.0.0
+	github.com/orcaman/writerseeker v0.0.0-20200621085525-1d3f536ff85e
 	github.com/prometheus/client_golang v1.9.0
 	github.com/ulikunitz/xz v0.5.8
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
