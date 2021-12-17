@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -265,8 +266,10 @@ MASK_INTERLEAVED_WITH_IMAGERY=YES
 		return err
 	}
 
-	if err := w.writeTiles(w.zoom, out); err != nil {
-		return err
+	for zoom := uint8(0); zoom <= w.zoom; zoom++ {
+		if err := w.writeTiles(zoom, out); err != nil {
+			return err
+		}
 	}
 
 	// TileByteCounts at the end, as per Cloud-Optimized GeoTIFF discussion:
@@ -326,27 +329,34 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 	}
 
 	numTiles := uint32(1 << (zoom * 2))
-	ifd := []struct {
+	type ifdEntry struct {
 		tag uint16
 		val uint32
-	}{
+	}
+	ifd := []ifdEntry{
 		{imageWidth, 1 << (zoom + 8)},
 		{imageHeight, 1 << (zoom + 8)},
 		{bitsPerSample, 32},
 		{compression, 8}, // 1 = no compression; 8 = zlib/flate
 		{photometric, 0}, // 0 = WhiteIsZero
-		{imageDescription, 0},
 		{samplesPerPixel, 1},
 		{planarConfig, 1},
-		{software, 0},
 		{tileWidth, 256},
 		{tileLength, 256},
 		{tileOffsets, 0},
 		{tileByteCounts, 0},
 		{sampleFormat, 3}, // 3 = IEEE floating point, TIFF spec page 80
-		{geoKeyDirectory, 0},
-		{geoAsciiParams, 0},
 	}
+
+	// Some TIFF tags are only used on the main (highest resolution) image.
+	if zoom == w.zoom {
+		ifd = append(ifd, ifdEntry{imageDescription, 0})
+		ifd = append(ifd, ifdEntry{software, 0})
+		ifd = append(ifd, ifdEntry{geoKeyDirectory, 0})
+		ifd = append(ifd, ifdEntry{geoAsciiParams, 0})
+	}
+
+	sort.Slice(ifd, func(i, j int) bool { return ifd[i].tag < ifd[j].tag })
 
 	// Position of extra data that does not fit inline in Image File Directory,
 	// relative to start of TIFF file.
@@ -456,6 +466,12 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 // For each written tile, its offset within the TIFF file is stored into
 // the TileOffsets array in the zoom level’s Image File Directory.
 func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
+	// Only write byte counts for a zoom level if we have previously written
+	// an Image File Directory.
+	if w.tileByteCountsPos[zoom] == 0 {
+		return nil
+	}
+
 	fileSize, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
 		return err
