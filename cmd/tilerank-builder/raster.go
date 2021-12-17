@@ -79,7 +79,8 @@ type RasterWriter struct {
 	// For each zoom level, tileOffsetsPos is the position of the pointer
 	// to the tileOffsets array within the Image File Directory,
 	// relative to the start of the final output TIFF file.
-	tileOffsetsPos []uint32
+	tileOffsetsPos    []uint32
+	tileByteCountsPos []int64
 }
 
 func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
@@ -89,13 +90,14 @@ func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
 	}
 
 	r := &RasterWriter{
-		path:           path,
-		tempFile:       tempFile,
-		zoom:           zoom,
-		tileOffsets:    make([][]uint32, zoom+1),
-		tileByteCounts: make([][]uint32, zoom+1),
-		uniformTiles:   make([]map[uint32]int, zoom+1),
-		tileOffsetsPos: make([]uint32, zoom+1),
+		path:              path,
+		tempFile:          tempFile,
+		zoom:              zoom,
+		tileOffsets:       make([][]uint32, zoom+1),
+		tileByteCounts:    make([][]uint32, zoom+1),
+		uniformTiles:      make([]map[uint32]int, zoom+1),
+		tileOffsetsPos:    make([]uint32, zoom+1),
+		tileByteCountsPos: make([]int64, zoom+1),
 	}
 	for z := uint8(0); z <= zoom; z++ {
 		r.tileOffsets[z] = make([]uint32, 1<<(2*z))
@@ -267,6 +269,14 @@ MASK_INTERLEAVED_WITH_IMAGERY=YES
 		return err
 	}
 
+	// TileByteCounts at the end, as per Cloud-Optimized GeoTIFF discussion:
+	// https://github.com/cogeotiff/cog-spec/issues/5#issuecomment-996511137
+	for zoom := uint8(0); zoom <= w.zoom; zoom++ {
+		if err := w.writeTileByteCounts(zoom, out); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -342,7 +352,7 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 	// relative to start of TIFF file.
 	w.tileOffsetsPos[zoom] = uint32(fileSize) + uint32(len(ifd)*12+6)
 	tileByteCountsPos := int64(w.tileOffsetsPos[zoom]) + int64(numTiles*4)
-	extraPos := tileByteCountsPos + int64(numTiles*4)
+	extraPos := tileByteCountsPos
 
 	var buf, extraBuf bytes.Buffer
 	if err := binary.Write(&buf, binary.LittleEndian, uint16(len(ifd))); err != nil {
@@ -350,7 +360,11 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 	}
 
 	lastTag := uint16(0)
-	for _, e := range ifd {
+	for i, e := range ifd {
+		// Compute the position of the currently written IFD entry,
+		// relative to the start of the output TIFF file.
+		ifdEntryPos := fileSize + int64(2+i*12) // 2 bytes for number of entries
+
 		// Sanity check that our tags appear in the Image File Directory
 		// in increasing order, as required by the TIFF specification.
 		if e.tag <= lastTag {
@@ -393,7 +407,8 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 			typ, count, value = longFormat, numTiles, w.tileOffsetsPos[zoom]
 
 		case tileByteCounts:
-			typ, count, value = longFormat, numTiles, uint32(tileByteCountsPos)
+			typ, count, value = longFormat, numTiles, 0xdeadbeef
+			w.tileByteCountsPos[zoom] = ifdEntryPos + 8
 
 		default:
 			typ, count, value = longFormat, uint32(1), e.val
@@ -437,18 +452,6 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 		}
 	}
 	fileSize += int64(numTiles * 4)
-
-	// Write tileByteCounts. Unlike tileOffsets, we already know the
-	// final byte counts because the tile size is the same as in the
-	// temporary file.
-	if fileSize != tileByteCountsPos {
-		panic("fileSize != tileByteCountsPos")
-	}
-
-	if err := binary.Write(f, binary.LittleEndian, w.tileByteCounts[zoom]); err != nil {
-		return 0, err
-	}
-	fileSize += int64(len(w.tileByteCounts[zoom]) * 4)
 
 	if err := addPadding(&extraBuf); err != nil {
 		return 0, err
@@ -554,6 +557,34 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 	}
 
 	if err := binary.Write(f, binary.LittleEndian, finalTileOffsets); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// writeTileByteCounts stores the TileByteCounts array into the output TIFF.
+func (w *RasterWriter) writeTileByteCounts(zoom uint8, f *os.File) error {
+	// Only write byte counts for a zoom level if we have previously written
+	// an Image File Directory.
+	if w.tileByteCountsPos[zoom] == 0 {
+		return nil
+	}
+
+	pos, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+
+	if err := binary.Write(f, binary.LittleEndian, w.tileByteCounts[zoom]); err != nil {
+		return err
+	}
+
+	if _, err := f.Seek(w.tileByteCountsPos[zoom], io.SeekStart); err != nil {
+		return err
+	}
+
+	if err := binary.Write(f, binary.LittleEndian, uint32(pos)); err != nil {
 		return err
 	}
 
