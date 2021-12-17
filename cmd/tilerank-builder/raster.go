@@ -79,7 +79,7 @@ type RasterWriter struct {
 	// For each zoom level, tileOffsetsPos is the position of the pointer
 	// to the tileOffsets array within the Image File Directory,
 	// relative to the start of the final output TIFF file.
-	tileOffsetsPos    []uint32
+	tileOffsetsPos    []int64
 	tileByteCountsPos []int64
 }
 
@@ -96,7 +96,7 @@ func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
 		tileOffsets:       make([][]uint32, zoom+1),
 		tileByteCounts:    make([][]uint32, zoom+1),
 		uniformTiles:      make([]map[uint32]int, zoom+1),
-		tileOffsetsPos:    make([]uint32, zoom+1),
+		tileOffsetsPos:    make([]int64, zoom+1),
 		tileByteCountsPos: make([]int64, zoom+1),
 	}
 	for z := uint8(0); z <= zoom; z++ {
@@ -350,9 +350,7 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 
 	// Position of extra data that does not fit inline in Image File Directory,
 	// relative to start of TIFF file.
-	w.tileOffsetsPos[zoom] = uint32(fileSize) + uint32(len(ifd)*12+6)
-	tileByteCountsPos := int64(w.tileOffsetsPos[zoom]) + int64(numTiles*4)
-	extraPos := tileByteCountsPos
+	extraPos := fileSize + int64(2+len(ifd)*12+4)
 
 	var buf, extraBuf bytes.Buffer
 	if err := binary.Write(&buf, binary.LittleEndian, uint16(len(ifd))); err != nil {
@@ -404,7 +402,8 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 			}
 
 		case tileOffsets:
-			typ, count, value = longFormat, numTiles, w.tileOffsetsPos[zoom]
+			typ, count, value = longFormat, numTiles, 0xdeadbeef
+			w.tileOffsetsPos[zoom] = ifdEntryPos + 8
 
 		case tileByteCounts:
 			typ, count, value = longFormat, numTiles, 0xdeadbeef
@@ -438,21 +437,6 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 	}
 	fileSize += int64(buf.Len())
 
-	// Reserve space for tileOffsets. We will overwrite tileOffsets
-	// later, when writing out the actual data, since only then we’ll
-	// know the actual offsets in the file.
-	if fileSize != int64(w.tileOffsetsPos[w.zoom]) {
-		panic("fileSize != tileOffsetsPos")
-	}
-	numRows := 1 << zoom
-	emptyRow := make([]byte, numRows*4)
-	for y := 0; y < numRows; y++ {
-		if _, err := f.Write(emptyRow); err != nil {
-			return 0, err
-		}
-	}
-	fileSize += int64(numTiles * 4)
-
 	if err := addPadding(&extraBuf); err != nil {
 		return 0, err
 	}
@@ -478,6 +462,18 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 	}
 
 	numTiles := uint32(1 << (zoom * 2))
+
+	// Reserve space for tileOffsets. We will overwrite tileOffsets below,
+	// once we know the actual offset of each tile.
+	tileOffsetsPos := fileSize
+	numRows := 1 << zoom
+	emptyRow := make([]byte, numRows*4)
+	for y := 0; y < numRows; y++ {
+		if _, err := f.Write(emptyRow); err != nil {
+			return err
+		}
+	}
+	fileSize += int64(numTiles * 4)
 
 	// w.uniformTiles[zoom] maps a pixel color to the index,
 	// in TileOffsets and TileByteCounts, of a compressed tile
@@ -552,11 +548,21 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 		}
 	}
 
-	if _, err := f.Seek(int64(w.tileOffsetsPos[zoom]), 0); err != nil {
+	if _, err := f.Seek(tileOffsetsPos, io.SeekStart); err != nil {
 		return err
 	}
 
 	if err := binary.Write(f, binary.LittleEndian, finalTileOffsets); err != nil {
+		return err
+	}
+
+	// Patch up the Image File Directory so its TileOffsets entry points
+	// to the freshly TileOffsets array.
+	if _, err := f.Seek(w.tileOffsetsPos[zoom], io.SeekStart); err != nil {
+		return err
+	}
+
+	if err := binary.Write(f, binary.LittleEndian, uint32(tileOffsetsPos)); err != nil {
 		return err
 	}
 
