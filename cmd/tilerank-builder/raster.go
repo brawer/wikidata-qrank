@@ -238,7 +238,6 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 BLOCK_LEADER=SIZE_AS_UINT4
 BLOCK_TRAILER=LAST_4_BYTES_REPEATED
 KNOWN_INCOMPATIBLE_EDITION=NO 
-MASK_INTERLEAVED_WITH_IMAGERY=YES
 `
 	if !strings.Contains(smd, "=NO \n") {
 		panic("missing space after NO") // as per GDAL documentation
