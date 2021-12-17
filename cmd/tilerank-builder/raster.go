@@ -466,22 +466,51 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 
 	finalTileOffsets := make([]uint32, numTiles)
 	for tile := uint32(0); tile < numTiles; tile++ {
-		tileOffset := w.tileOffsets[zoom][tile]
+		tileOffset := w.tileOffsets[zoom][tile] // offset in temp file
 		if unipos, exists := uniformPos[tileOffset]; !exists {
-			// TODO: Write tile data leaders and trailers, like GDAL.
+			// Copy tile data into the final TIFF file. We also write
+			// a “tile data leader” and “trailer”, like GDAL does.
 			// https://gdal.org/drivers/raster/cog.html#tile-data-leader-and-trailer
-			tileData := make([]byte, w.tileByteCounts[zoom][tile])
-			if _, err := w.tempFile.ReadAt(tileData, int64(tileOffset)); err != nil {
+			tileSize := w.tileByteCounts[zoom][tile]
+			data := make([]byte, tileSize+8)
+			payload := data[4 : 4+tileSize]
+			if _, err := w.tempFile.ReadAt(payload, int64(tileOffset)); err != nil {
 				return err
 			}
-			finalTileOffsets[tile] = uint32(fileSize)
+
+			// The “tile data leader” for tile t is four bytes containing
+			// TileByteCount[t] in little-endian encoding, stored in the
+			// TIFF file at position TileOffsets[i] - 4.  With this,
+			// clients do not need to access the TileByteCounts array
+			// for reading a tile. This can speed up reading TIFF files
+			// over a network. (The GDAL documentation does not make it
+			// clear whether the leader is always in little-encoding,
+			// or whether it’s matching the encoding of the TIFF file.
+			// Since we always write our output in little-encoding,
+			// even when we’re running on a big-endian machine, it does
+			// not matter for us).
+			var leader bytes.Buffer
+			if err := binary.Write(&leader, binary.LittleEndian, uint32(tileSize)); err != nil {
+				return err
+			}
+			copy(data[0:4], leader.Bytes())
+
+			// The “tile data trailer” is four bytes that repeat the last
+			// four bytes of the compressed tile data. In the TIFF file,
+			// it gets stored immediately after the tile data. Clients use
+			// this trailer to detect file changes by software that does
+			// not support the “tile data leader and trailer” convention.
+			copy(data[len(data)-4:], payload[len(payload)-4:])
+
+			finalTileOffset := uint32(fileSize) + 4
+			finalTileOffsets[tile] = finalTileOffset
 			if uniform[tileOffset] {
-				uniformPos[tileOffset] = uint32(fileSize)
+				uniformPos[tileOffset] = finalTileOffset
 			}
-			if _, err := f.Write(tileData); err != nil {
+			if _, err := f.Write(data); err != nil {
 				return err
 			}
-			fileSize += int64(len(tileData))
+			fileSize += int64(len(data))
 		} else {
 			finalTileOffsets[tile] = unipos
 		}
