@@ -573,12 +573,8 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 	}
 
 	// Patch up the Image File Directory so its TileOffsets entry points
-	// to the freshly TileOffsets array.
-	if _, err := f.Seek(w.tileOffsetsPos[zoom], io.SeekStart); err != nil {
-		return err
-	}
-
-	if err := binary.Write(f, binary.LittleEndian, uint32(tileOffsetsPos)); err != nil {
+	// to the freshly written TileOffsets array.
+	if err := patchOffset(f, w.tileOffsetsPos[zoom], tileOffsetsPos); err != nil {
 		return err
 	}
 
@@ -602,11 +598,7 @@ func (w *RasterWriter) writeTileByteCounts(zoom uint8, f *os.File) error {
 		return err
 	}
 
-	if _, err := f.Seek(w.tileByteCountsPos[zoom], io.SeekStart); err != nil {
-		return err
-	}
-
-	if err := binary.Write(f, binary.LittleEndian, uint32(pos)); err != nil {
+	if err := patchOffset(f, w.tileByteCountsPos[zoom], pos); err != nil {
 		return err
 	}
 
@@ -620,5 +612,25 @@ func addPadding(buf *bytes.Buffer) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func patchOffset(f *os.File, pos int64, value int64) error {
+	if value < 0 || value > 0xffffffff {
+		// If this triggers, there probably is a bug in the code that has
+		// calculatied the passed value. If we really had to deal with
+		// file offsets above 2^32, we could implement BigTIFF, but this
+		// seems rather unlikely because our data size is not that large.
+		panic("offset value out of range")
+	}
+
+	if _, err := f.Seek(pos, io.SeekStart); err != nil {
+		return err
+	}
+
+	if err := binary.Write(f, binary.LittleEndian, uint32(value)); err != nil {
+		return err
+	}
+
 	return nil
 }
