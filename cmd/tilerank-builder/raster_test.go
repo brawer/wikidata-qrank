@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"testing"
@@ -44,6 +45,50 @@ func wantPixels(t *testing.T, got [256 * 256]float32, want [4][4]float32) {
 				t.Errorf("pixel (%d, %d): got %f, want %f", x, y, gotPix, wantPix)
 			}
 		}
+	}
+}
+
+func TestRasterWriter_writeTileByteCounts_singleTile(t *testing.T) {
+	f := &writerseeker.WriterSeeker{}
+	f.Write([]byte{0, 1, 2, 3, 4, 5, 6, 7})
+	r := &RasterWriter{
+		tileByteCounts:    [][]uint32{{0xfffefdfc}},
+		tileByteCountsPos: []int64{2},
+	}
+	if err := r.writeTileByteCounts(0, f); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := io.ReadAll(f.Reader())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "[0 1 252 253 254 255 6 7]"
+	if got := fmt.Sprintf("%v", b); got != want {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestRasterWriter_writeTileByteCounts_multiTile(t *testing.T) {
+	f := &writerseeker.WriterSeeker{}
+	f.Write([]byte{0, 1, 2, 3, 4, 5, 6, 7})
+	r := &RasterWriter{
+		tileByteCounts:    [][]uint32{{0xfffefdfc, 0x28272625}},
+		tileByteCountsPos: []int64{2},
+	}
+	if err := r.writeTileByteCounts(0, f); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := io.ReadAll(f.Reader())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "[0 1 8 0 0 0 6 7 252 253 254 255 37 38 39 40]"
+	if got := fmt.Sprintf("%v", b); got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

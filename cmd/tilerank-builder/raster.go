@@ -581,23 +581,37 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 }
 
 // writeTileByteCounts stores the TileByteCounts array into the output TIFF.
-func (w *RasterWriter) writeTileByteCounts(zoom uint8, f *os.File) error {
+func (w *RasterWriter) writeTileByteCounts(zoom uint8, f io.WriteSeeker) error {
+	pos, sizes := w.tileByteCountsPos[zoom], w.tileByteCounts[zoom]
+
 	// Only write byte counts for a zoom level if we have previously written
 	// an Image File Directory.
-	if w.tileByteCountsPos[zoom] == 0 {
+	if pos == 0 {
 		return nil
 	}
 
-	pos, err := f.Seek(0, io.SeekEnd)
+	// If the TileByteCounts array has just one single entry, it fits into
+	// the Image File Directory and _has_ to be inlined (as per TIFF spec).
+	if len(sizes) == 1 {
+		if _, err := f.Seek(pos, io.SeekStart); err != nil {
+			return err
+		}
+		if err := binary.Write(f, binary.LittleEndian, sizes); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	arrayPos, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
 		return err
 	}
 
-	if err := binary.Write(f, binary.LittleEndian, w.tileByteCounts[zoom]); err != nil {
+	if err := binary.Write(f, binary.LittleEndian, sizes); err != nil {
 		return err
 	}
 
-	if err := patchOffset(f, w.tileByteCountsPos[zoom], pos); err != nil {
+	if err := patchOffset(f, pos, arrayPos); err != nil {
 		return err
 	}
 
