@@ -563,6 +563,17 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 		}
 	}
 
+	if len(finalTileOffsets) == 1 {
+		if _, err := f.Seek(w.tileOffsetsPos[zoom], io.SeekStart); err != nil {
+			return err
+		}
+		if err := binary.Write(f, binary.LittleEndian, finalTileOffsets[0]); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if _, err := f.Seek(tileOffsetsPos, io.SeekStart); err != nil {
 		return err
 	}
