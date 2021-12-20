@@ -37,6 +37,19 @@ func TestRaster_Paint_SubPixel(t *testing.T) {
 	})
 }
 
+func TestRaster_PaintChild(t *testing.T) {
+	r := NewRaster(MakeTileKey(1, 1, 1), NewRaster(WorldTile, nil))
+	r.pixels[1] = 123456
+	r.pixels[256] = 789123
+	r.parent.PaintChild(r)
+	wantPixels(t, r.parent.pixels, [4][4]float32{
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 789123, 0},
+		{0, 0, 0, 0},
+	})
+}
+
 func wantPixels(t *testing.T, got [256 * 256]float32, want [4][4]float32) {
 	px := []int{0, 64, 128, 192}
 	for j, vals := range want {

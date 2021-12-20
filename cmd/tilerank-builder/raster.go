@@ -47,6 +47,39 @@ func (r *Raster) Paint(tile TileKey, viewsPerKm2 float32) {
 	}
 }
 
+// PaintChild subsamples a child raster into the parent. Called when a child
+// is finished painting, this is used for constructing overview images
+// in the output GeoTIFF. Child must be an immediate child of r, exactly
+// one zoom level deeper.
+func (r *Raster) PaintChild(child *Raster) {
+	if child.parent != r {
+		panic(fmt.Sprintf("child %v has wrong parent %v, expected %v", child.tile, child.parent.tile, r.tile))
+	}
+
+	czoom, cx, cy := child.tile.ZoomXY()
+	pzoom, px, py := r.tile.ZoomXY()
+	if czoom != pzoom+1 {
+		panic(fmt.Sprintf("child %v has wrong zoom level %d, expected %d", child.tile, czoom, pzoom+1))
+	}
+
+	x0, y0 := (cx-(px<<1))*128, (cy-(py<<1))*128
+	for y := uint32(0); y < 256; y += 2 {
+		for x := uint32(0); x < 256; x += 2 {
+			max := child.pixels[y<<8+x]
+			if p := child.pixels[(y+0)<<8+(x+1)]; p > max {
+				max = p
+			}
+			if p := child.pixels[(y+1)<<8+(x+0)]; p > max {
+				max = p
+			}
+			if p := child.pixels[(y+1)<<8+(x+1)]; p > max {
+				max = p
+			}
+			r.pixels[(y0+y>>1)<<8+(x0+x>>1)] = max
+		}
+	}
+}
+
 func NewRaster(tile TileKey, parent *Raster) *Raster {
 	zoom := tile.Zoom()
 
