@@ -476,6 +476,16 @@ func (w *RasterWriter) writeTiles(zoom uint8, f *os.File) error {
 		return err
 	}
 
+	// Align position to four-byte offset relative to start of file.
+	if fileSize&3 != 0 {
+		padding := []byte{0, 0, 0}[fileSize&3-1:]
+		if n, err := f.Write(padding); err == nil {
+			fileSize += int64(n)
+		} else {
+			return err
+		}
+	}
+
 	numTiles := uint32(1 << (zoom * 2))
 
 	// Reserve space for tileOffsets. We will overwrite tileOffsets below,
@@ -616,6 +626,16 @@ func (w *RasterWriter) writeTileByteCounts(zoom uint8, f io.WriteSeeker) error {
 	arrayPos, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
 		return err
+	}
+
+	// Align array position to four-byte offset relative to start of file.
+	if arrayPos&3 != 0 {
+		padding := []byte{0, 0, 0}[arrayPos&3-1:]
+		if n, err := f.Write(padding); err == nil {
+			arrayPos += int64(n)
+		} else {
+			return err
+		}
 	}
 
 	if err := binary.Write(f, binary.LittleEndian, sizes); err != nil {
