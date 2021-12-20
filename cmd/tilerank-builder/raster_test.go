@@ -50,6 +50,60 @@ func wantPixels(t *testing.T, got [256 * 256]float32, want [4][4]float32) {
 	}
 }
 
+func TestRasterWriter_writeIFDList(t *testing.T) {
+	f := &writerseeker.WriterSeeker{}
+	f.Write([]byte{
+		// Byte 0..3: File magic for Little-Endian TIFF less than 4GiB.
+		'I', 'I', 42, 0,
+
+		// Byte 4..7: Offset of first Image File Directory (IFD).
+		0xff, 0xff, 0xff, 0xff, // to be overwritten
+
+		// Byte 8..11: Ghost are; actually used for GDAL structural metadata.
+		9, 8, 7, 6,
+
+		// Byte 12..41: First IFD with 2 entries.
+		2, 0, // numEntries
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, // entry #0
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, // entry #1
+		0xde, 0xad, 0xbe, 0xef, // Bytes 38..41: nextOffset, overwritten
+
+		// Byte 42..59: Second IFD with 1 entries.
+		1, 0, // numEntries
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, // entry #0
+		0xde, 0xad, 0xbe, 0xef, // Bytes 56..59: nextOffset, overwritten
+	})
+	r := &RasterWriter{
+		zoom:       2,
+		ifdPos:     []int64{42, 0, 12},
+		nextIFDPos: []int64{56, 0, 38},
+	}
+	if err := r.writeIFDList(f); err != nil {
+		t.Fatal(err)
+	}
+
+	b, _ := io.ReadAll(f.Reader())
+	got := make([]uint32, 0, 2)
+	p := int64(4)
+	for {
+		var ifd uint32
+		binary.Read(bytes.NewReader(b[p:p+4]), binary.LittleEndian, &ifd)
+		if ifd == 0 {
+			break
+		}
+		got = append(got, ifd)
+		p = int64(ifd)
+		var numEntries uint16
+		binary.Read(bytes.NewReader(b[p:p+2]), binary.LittleEndian, &numEntries)
+		p += int64(2 + numEntries*12)
+	}
+
+	want := []uint32{12, 42}
+	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestRasterWriter_writeTileByteCounts_singleTile(t *testing.T) {
 	f := &writerseeker.WriterSeeker{}
 	f.Write([]byte{0, 1, 2, 3, 4, 5, 6, 7})

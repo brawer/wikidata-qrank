@@ -80,6 +80,8 @@ type RasterWriter struct {
 	// For each zoom level, tileOffsetsPos is the position of the pointer
 	// to the tileOffsets array within the Image File Directory,
 	// relative to the start of the final output TIFF file.
+	ifdPos            []int64
+	nextIFDPos        []int64
 	tileOffsetsPos    []int64
 	tileByteCountsPos []int64
 }
@@ -97,6 +99,8 @@ func NewRasterWriter(path string, zoom uint8) (*RasterWriter, error) {
 		tileOffsets:       make([][]uint32, zoom+1),
 		tileByteCounts:    make([][]uint32, zoom+1),
 		uniformTiles:      make([]map[uint32]int, zoom+1),
+		ifdPos:            make([]int64, zoom+1),
+		nextIFDPos:        make([]int64, zoom+1),
 		tileOffsetsPos:    make([]int64, zoom+1),
 		tileByteCountsPos: make([]int64, zoom+1),
 	}
@@ -261,7 +265,11 @@ KNOWN_INCOMPATIBLE_EDITION=NO
 	}
 
 	// TODO: Also write overview zoom levels, not just deepest zoom.
-	if _, err := w.writeIFD(w.zoom, out); err != nil {
+	if err := w.writeIFD(w.zoom, out); err != nil {
+		return err
+	}
+
+	if err := w.writeIFDList(out); err != nil {
 		return err
 	}
 
@@ -282,7 +290,7 @@ KNOWN_INCOMPATIBLE_EDITION=NO
 	return nil
 }
 
-func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
+func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 	const (
 		imageWidth       = 256
 		imageHeight      = 257
@@ -309,8 +317,10 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 
 	fileSize, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
-		return 0, err
+		return err
 	}
+
+	w.ifdPos[zoom] = fileSize
 
 	// The following was done by analyzing the hex dump of this command:
 	// $ gdal_translate -a_srs EPSG:3857 image.tif geotiff.tif
@@ -363,7 +373,7 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 
 	var buf, extraBuf bytes.Buffer
 	if err := binary.Write(&buf, binary.LittleEndian, uint16(len(ifd))); err != nil {
-		return 0, err
+		return err
 	}
 
 	lastTag := uint16(0)
@@ -380,7 +390,7 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 		lastTag = e.tag
 
 		if err := binary.Write(&buf, binary.LittleEndian, e.tag); err != nil {
-			return 0, err
+			return err
 		}
 		var typ uint16
 		var count, value uint32
@@ -389,7 +399,7 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 			s := []byte("OpenStreetMap view density, in weekly user views per km2\u0000")
 			typ, count, value = asciiFormat, uint32(len(s)), uint32(extraPos)+uint32(extraBuf.Len())
 			if _, err := extraBuf.Write(s); err != nil {
-				return 0, err
+				return err
 			}
 
 		case software:
@@ -400,14 +410,14 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 		case geoKeyDirectory:
 			typ, count, value = shortFormat, uint32(len(geoKeys)), uint32(extraPos)+uint32(extraBuf.Len())
 			if err := binary.Write(&extraBuf, binary.LittleEndian, geoKeys); err != nil {
-				return 0, err
+				return err
 			}
 
 		case geoAsciiParams:
 			s := []byte(geoAscii)
 			typ, count, value = asciiFormat, uint32(len(s)), uint32(extraPos)+uint32(extraBuf.Len())
 			if _, err := extraBuf.Write(s); err != nil {
-				return 0, err
+				return err
 			}
 
 		case tileOffsets:
@@ -425,29 +435,30 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 			}
 		}
 		if err := binary.Write(&buf, binary.LittleEndian, typ); err != nil {
-			return 0, err
+			return err
 		}
 		if err := binary.Write(&buf, binary.LittleEndian, count); err != nil {
-			return 0, err
+			return err
 		}
 		if err := binary.Write(&buf, binary.LittleEndian, value); err != nil {
-			return 0, err
+			return err
 		}
 	}
 
 	nextIFD := uint32(0)
-	nextIFDPos := int64(fileSize) + int64(buf.Len())
+	nextIFDPos := fileSize + int64(buf.Len())
+	w.nextIFDPos[zoom] = nextIFDPos
 	if err := binary.Write(&buf, binary.LittleEndian, nextIFD); err != nil {
-		return 0, err
+		return err
 	}
 
 	if _, err := f.Write(buf.Bytes()); err != nil {
-		return 0, err
+		return err
 	}
 	fileSize += int64(buf.Len())
 
 	if err := addPadding(&extraBuf); err != nil {
-		return 0, err
+		return err
 	}
 	if fileSize != extraPos {
 		panic("fileSize != extraPos")
@@ -455,10 +466,28 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) (int64, error) {
 
 	fileSize += int64(extraBuf.Len())
 	if _, err := extraBuf.WriteTo(f); err != nil {
-		return 0, err
+		return err
 	}
 
-	return nextIFDPos, nil
+	return nil
+}
+
+// writeIFDList sets up a linked list of TIFF Image File Directories,
+// ranging from most detailed image to coarsest overview.
+func (w *RasterWriter) writeIFDList(f io.WriteSeeker) error {
+	pos := int64(4)
+	for zoom := int(w.zoom); zoom >= 0; zoom-- {
+		if w.ifdPos[zoom] != 0 {
+			if err := patchOffset(f, pos, w.ifdPos[zoom]); err != nil {
+				return err
+			}
+			pos = w.nextIFDPos[zoom]
+		}
+	}
+	if err := patchOffset(f, pos, 0); err != nil {
+		return err
+	}
+	return nil
 }
 
 // writeTiles writes the tile data for a zoom level to the output TIFF file.
