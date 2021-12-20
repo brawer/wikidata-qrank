@@ -230,6 +230,13 @@ func (w *RasterWriter) writeTiff(out *os.File) error {
 		return err
 	}
 
+	// Offset to first Image File Directory in file. This gets overwritten
+	// by writeIFDList(), once the actual IFD position is known. But we need
+	// to allocate space for the offset here.
+	if err := binary.Write(out, binary.LittleEndian, uint32(0)); err != nil {
+		return err
+	}
+
 	// Structural Metadata for GDAL and compatible readers.
 	// https://gdal.org/drivers/raster/cog.html#header-ghost-area
 	//
@@ -251,12 +258,6 @@ KNOWN_INCOMPATIBLE_EDITION=NO
 	buf.WriteString(fmt.Sprintf("GDAL_STRUCTURAL_METADATA_SIZE=%06d bytes\n", len(smd)))
 	buf.WriteString(smd)
 	if err := addPadding(&buf); err != nil {
-		return err
-	}
-
-	// Offset to first Image File Directory in file.
-	firstIFDPos := uint32(len(magic) + 4 + buf.Len())
-	if err := binary.Write(out, binary.LittleEndian, firstIFDPos); err != nil {
 		return err
 	}
 
