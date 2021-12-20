@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -69,6 +70,7 @@ type RasterWriter struct {
 	tempFileSize uint64
 	dataSize     uint64
 	zoom         uint8
+	maxValue     float32
 
 	// For each zoom level, tileOffsets is the position of the TileOffset
 	// relative to the start of the temporary file. In the final output,
@@ -118,10 +120,14 @@ func (w *RasterWriter) Write(r *Raster) error {
 	// of compression.
 	uniform := true
 	color := uint32(r.pixels[0] + 0.5)
-	for i := 1; i < len(r.pixels); i++ {
-		if uint32(r.pixels[i]+0.5) != color {
+	for i := 0; i < len(r.pixels); i++ {
+		col := r.pixels[i]
+		if uint32(col+0.5) != color {
 			uniform = false
 			break
+		}
+		if col > w.maxValue {
+			w.maxValue = r.pixels[i]
 		}
 	}
 	if uniform {
@@ -152,9 +158,13 @@ func (w *RasterWriter) WriteUniform(tile TileKey, color uint32) error {
 		w.tileByteCounts[zoom][tileIndex] = w.tileByteCounts[zoom][same]
 		return nil
 	}
+	col := float32(color)
+	if col > w.maxValue {
+		w.maxValue = col
+	}
 	var pixels [256 * 256]float32
 	for i := 0; i < len(pixels); i++ {
-		pixels[i] = float32(color)
+		pixels[i] = col
 	}
 	offset, size, err := w.compress(tile, pixels[:])
 	if err != nil {
@@ -307,6 +317,8 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		tileOffsets      = 324
 		tileByteCounts   = 325
 		sampleFormat     = 339
+		sMinSampleValue  = 340
+		sMaxSampleValue  = 341
 
 		geoKeyDirectory = 34735
 		geoAsciiParams  = 34737
@@ -314,6 +326,7 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		asciiFormat = 2
 		shortFormat = 3
 		longFormat  = 4
+		floatFormat = 11
 	)
 
 	fileSize, err := f.Seek(0, io.SeekEnd)
@@ -364,6 +377,8 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		ifd = append(ifd, ifdEntry{software, 0})
 		ifd = append(ifd, ifdEntry{geoKeyDirectory, 0})
 		ifd = append(ifd, ifdEntry{geoAsciiParams, 0})
+		ifd = append(ifd, ifdEntry{sMinSampleValue, 0})
+		ifd = append(ifd, ifdEntry{sMaxSampleValue, 0})
 	}
 
 	sort.Slice(ifd, func(i, j int) bool { return ifd[i].tag < ifd[j].tag })
@@ -407,6 +422,12 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 			s := []byte("TileRank\u0000")
 			typ, count, value = asciiFormat, uint32(len(s)), uint32(extraPos)+uint32(extraBuf.Len())
 			extraBuf.Write(s)
+
+		case sMinSampleValue:
+			typ, count, value = floatFormat, 1, math.Float32bits(0)
+
+		case sMaxSampleValue:
+			typ, count, value = floatFormat, 1, math.Float32bits(w.maxValue)
 
 		case geoKeyDirectory:
 			typ, count, value = shortFormat, uint32(len(geoKeys)), uint32(extraPos)+uint32(extraBuf.Len())
