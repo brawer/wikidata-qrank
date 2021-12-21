@@ -355,13 +355,16 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		sMinSampleValue  = 340
 		sMaxSampleValue  = 341
 
+		modelPixelScale = 33550
+		modelTiepoint   = 33922
 		geoKeyDirectory = 34735
 		geoAsciiParams  = 34737
 
-		asciiFormat = 2
-		shortFormat = 3
-		longFormat  = 4
-		floatFormat = 11
+		asciiFormat  = 2
+		shortFormat  = 3
+		longFormat   = 4
+		floatFormat  = 11
+		doubleFormat = 12
 	)
 
 	fileSize, err := f.Seek(0, io.SeekEnd)
@@ -372,7 +375,9 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 	w.ifdPos[zoom] = fileSize
 
 	// The following was done by analyzing the hex dump of this command:
-	// $ gdal_translate -a_srs EPSG:3857 image.tif geotiff.tif
+	// $ gdal_translate -a_srs EPSG:3857 \
+	//     -a_ullr -20037508.34 20037508.34 20037508.34 -20037508.34 \
+	//     image.tif geotiff.tif
 	geoAscii := "WGS 84 / Pseudo-Mercator|WGS 84|\u0000"
 	geoKeys := []uint16{
 		1, 1, 0, // Version: 1.1.0
@@ -385,6 +390,13 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		3072, 0, 1, 3857, // ProjectedCRS: Web Mercator [epsg.io/3857]
 		3076, 0, 1, 9001, // ProjLinearUnits: meter [EPSG unit 9001]
 	}
+
+	// As per WGS 84, the circumference of the Earth at the equator is
+	// defined to be 40075017 meters.
+	const earthCircumference = 40075017.0
+	metersPerPixel := earthCircumference / float64(uint64(1<<(w.zoom+8))) // at equator
+	geoModelPixelScale := []float64{metersPerPixel, metersPerPixel, 0}
+	geoModelTiepoints := []float64{0, 0, 0, -20037508.34, 20037508.34, 0}
 
 	numTiles := uint32(1 << (zoom * 2))
 	type ifdEntry struct {
@@ -410,6 +422,8 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 	if zoom == w.zoom {
 		ifd = append(ifd, ifdEntry{imageDescription, 0})
 		ifd = append(ifd, ifdEntry{software, 0})
+		ifd = append(ifd, ifdEntry{modelPixelScale, 0})
+		ifd = append(ifd, ifdEntry{modelTiepoint, 0})
 		ifd = append(ifd, ifdEntry{geoKeyDirectory, 0})
 		ifd = append(ifd, ifdEntry{geoAsciiParams, 0})
 		ifd = append(ifd, ifdEntry{sMinSampleValue, 0})
@@ -474,6 +488,18 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		case geoKeyDirectory:
 			typ, count, value = shortFormat, uint32(len(geoKeys)), uint32(extraPos)+uint32(extraBuf.Len())
 			if err := binary.Write(&extraBuf, binary.LittleEndian, geoKeys); err != nil {
+				return err
+			}
+
+		case modelPixelScale:
+			typ, count, value = doubleFormat, uint32(len(geoModelPixelScale)), uint32(extraPos)+uint32(extraBuf.Len())
+			if err := binary.Write(&extraBuf, binary.LittleEndian, geoModelPixelScale); err != nil {
+				return err
+			}
+
+		case modelTiepoint:
+			typ, count, value = doubleFormat, uint32(len(geoModelTiepoints)), uint32(extraPos)+uint32(extraBuf.Len())
+			if err := binary.Write(&extraBuf, binary.LittleEndian, geoModelTiepoints); err != nil {
 				return err
 			}
 
