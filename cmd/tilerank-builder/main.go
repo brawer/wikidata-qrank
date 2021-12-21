@@ -29,7 +29,7 @@ func main() {
 		logger.Fatal(err)
 	}
 	path := filepath.Join(cachedir, "out.tif")
-	if err := paint(path, 17, tilecounts, ctx); err != nil {
+	if err := paint(path, 18, tilecounts, ctx); err != nil {
 		logger.Fatal(err)
 	}
 }
