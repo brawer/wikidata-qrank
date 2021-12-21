@@ -84,7 +84,7 @@ func (p *Painter) setupRaster(tile TileKey) (*Raster, error) {
 	for t := p.last.Next(p.zoom - 8); t < rasterTile; t = t.Next(p.zoom - 8) {
 		if t.Contains(rasterTile) {
 			p.raster = NewRaster(t, p.raster)
-		} else if t.Zoom() == p.zoom-8 {
+		} else {
 			err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5))
 			if err != nil {
 				return nil, err
@@ -106,10 +106,8 @@ func (p *Painter) Close() error {
 				return err
 			}
 		}
-		if t.Zoom() == p.zoom-8 {
-			if err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5)); err != nil {
-				return err
-			}
+		if err := p.writer.WriteUniform(t, uint32(p.raster.viewsPerKm2+0.5)); err != nil {
+			return err
 		}
 	}
 
@@ -128,13 +126,12 @@ func (p *Painter) Close() error {
 // TODO: Subsample pixels to parent raster on behalf of GeoTIFF overview.
 func (p *Painter) emitRaster() error {
 	raster := p.raster
+	if raster.parent != nil {
+		raster.parent.PaintChild(raster)
+	}
 	p.raster = raster.parent
 	raster.parent = nil
-	if raster.tile.Zoom() == p.zoom-8 {
-		return p.writer.Write(raster)
-	} else {
-		return nil
-	}
+	return p.writer.Write(raster)
 }
 
 func NewPainter(path string, numWeeks int, zoom uint8) (*Painter, error) {

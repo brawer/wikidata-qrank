@@ -308,9 +308,10 @@ KNOWN_INCOMPATIBLE_EDITION=NO
 		return err
 	}
 
-	// TODO: Also write overview zoom levels, not just deepest zoom.
-	if err := w.writeIFD(w.zoom, out); err != nil {
-		return err
+	for zoom := int(w.zoom); zoom >= 0; zoom-- {
+		if err := w.writeIFD(uint8(zoom), out); err != nil {
+			return err
+		}
 	}
 
 	if err := w.writeIFDList(out); err != nil {
@@ -336,6 +337,7 @@ KNOWN_INCOMPATIBLE_EDITION=NO
 
 func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 	const (
+		newSubfileType   = 254
 		imageWidth       = 256
 		imageHeight      = 257
 		bitsPerSample    = 258
@@ -412,6 +414,10 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		ifd = append(ifd, ifdEntry{geoAsciiParams, 0})
 		ifd = append(ifd, ifdEntry{sMinSampleValue, 0})
 		ifd = append(ifd, ifdEntry{sMaxSampleValue, 0})
+	} else {
+		// 1 = subsampled low-resolution version of main image
+		// TIFF 6.0 specification, page 36
+		ifd = append(ifd, ifdEntry{newSubfileType, 1})
 	}
 
 	sort.Slice(ifd, func(i, j int) bool { return ifd[i].tag < ifd[j].tag })
@@ -444,6 +450,9 @@ func (w *RasterWriter) writeIFD(zoom uint8, f *os.File) error {
 		var typ uint16
 		var count, value uint32
 		switch e.tag {
+		case newSubfileType:
+			typ, count, value = longFormat, 1, e.val
+
 		case imageDescription:
 			s := []byte("OpenStreetMap view density, in weekly user views per km2\u0000")
 			typ, count, value = asciiFormat, uint32(len(s)), uint32(extraPos)+uint32(extraBuf.Len())
