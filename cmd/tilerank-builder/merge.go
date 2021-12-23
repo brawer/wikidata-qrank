@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
 )
 
 // TODO: Implement k-way merge of sorted TileCount files.
@@ -32,19 +31,9 @@ func mergeTileCounts(r []io.Reader, out chan<- TileCount, ctx context.Context) e
 		default:
 		}
 
-		match := tileLogRegexp.FindStringSubmatch(scanner.Text())
-		if match == nil || len(match) != 5 {
-			continue
+		if tc := ParseTileCount(scanner.Text()); tc.Count > 0 {
+			out <- tc
 		}
-		zoom, _ := strconv.Atoi(match[1])
-		if zoom < 0 {
-			continue
-		}
-		x, _ := strconv.ParseUint(match[2], 10, 32)
-		y, _ := strconv.ParseUint(match[3], 10, 32)
-		count, _ := strconv.ParseUint(match[4], 10, 64)
-		key := MakeTileKey(uint8(zoom), uint32(x), uint32(y))
-		out <- TileCount{Key: key, Count: count}
 	}
 
 	if err := scanner.Err(); err != nil {

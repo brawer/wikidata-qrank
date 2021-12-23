@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
+	"strconv"
 
 	"github.com/lanrat/extsort"
 )
@@ -123,6 +124,25 @@ func (t TileKey) Next(maxZoom uint8) TileKey {
 type TileCount struct {
 	Key   TileKey
 	Count uint64
+}
+
+func ParseTileCount(s string) TileCount {
+	match := tileLogRegexp.FindStringSubmatch(s)
+	if match == nil || len(match) != 5 {
+		return TileCount{NoTile, 0}
+	}
+	zoom, _ := strconv.Atoi(match[1])
+	if zoom < 0 || zoom > 24 {
+		return TileCount{NoTile, 0}
+	}
+	x, _ := strconv.ParseUint(match[2], 10, 32)
+	y, _ := strconv.ParseUint(match[3], 10, 32)
+	if x >= 1<<zoom || y >= 1<<zoom {
+		return TileCount{NoTile, 0}
+	}
+	count, _ := strconv.ParseUint(match[4], 10, 64)
+	key := MakeTileKey(uint8(zoom), uint32(x), uint32(y))
+	return TileCount{Key: key, Count: count}
 }
 
 // ToBytes serializes a TileCount into a byte array.

@@ -227,20 +227,8 @@ func fetchTileLogs(day time.Time, client *http.Client, ch chan<- extsort.SortTyp
 		default:
 		}
 
-		match := tileLogRegexp.FindStringSubmatch(scanner.Text())
-		if match == nil || len(match) != 5 {
-			continue
-		}
-		zoom, _ := strconv.Atoi(match[1])
-		if zoom < 0 || zoom > 24 {
-			continue
-		}
-		x, _ := strconv.ParseUint(match[2], 10, 32)
-		y, _ := strconv.ParseUint(match[3], 10, 32)
-		key := MakeTileKey(uint8(zoom), uint32(x), uint32(y))
-		count, _ := strconv.ParseUint(match[4], 10, 64)
-		if count > 0 {
-			ch <- TileCount{Key: key, Count: count}
+		if tc := ParseTileCount(scanner.Text()); tc.Count > 0 {
+			ch <- tc
 		}
 	}
 	if err := scanner.Err(); err != nil {

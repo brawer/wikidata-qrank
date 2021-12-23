@@ -396,6 +396,13 @@ func makeTestTileKeys(n int) []TileKey {
 	return keys
 }
 
+func ExampleParseTileCount() {
+	fmt.Println(ParseTileCount("7/42/23 98765"))
+	fmt.Println(ParseTileCount("1/207/400 10"), ParseTileCount("junk"))
+	// Output: {7/42/23 98765}
+	// {NoTile 0} {NoTile 0}
+}
+
 func TestTileCountRoundTrip(t *testing.T) {
 	for _, key := range makeTestTileKeys(1000) {
 		tc := TileCount{Key: key, Count: rand.Uint64()}
