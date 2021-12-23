@@ -30,11 +30,6 @@ func TestMergeTileCounts(t *testing.T) {
 	// TileCount.Count indicates which reader supplied the value.
 	readers := make([]io.Reader, 0, 100)
 	for i := 0; i < 100; i++ {
-		// TODO: Remove this once k-way merging is implemented.
-		if i != 99 {
-			continue
-		}
-
 		var buf strings.Builder
 		counts := make([]TileCount, 0, 100)
 		for _, tileKey := range makeTestTileKeys(rand.Intn(100)) {

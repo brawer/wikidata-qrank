@@ -23,7 +23,7 @@ func main() {
 
 	ctx := context.Background()
 	cachedir := "cache"
-	maxWeeks := 3 * 52 // 3 years
+	maxWeeks := 52 // 1 year
 	tilecounts, err := fetchWeeklyLogs(cachedir, maxWeeks)
 	if err != nil {
 		logger.Fatal(err)
