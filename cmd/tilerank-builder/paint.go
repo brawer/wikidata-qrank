@@ -24,21 +24,15 @@ func (p *Painter) Paint(tile TileKey, counts []uint64) error {
 		return err
 	}
 
-	// Compute the average weekly views per km² for this tile.
-	// TODO: Since the counts are already in sorted order, we could
-	// easily ignore the top and bottom percentiles. This might
-	// help to smoothen out short-term peaks. Figure out if this
-	// is worth doing, and what percentile thresholds to use.
-	// Don't forget we also have (p.numWeeks - len(counts)) weeks
-	// that had zero views for this tile. For the current averaging,
-	// this is accounted for because we divide by p.numWeeks; please
-	// make sure to consider this when changing the aggregation logic.
-	sum := uint64(0)
-	for _, c := range counts {
-		sum += c
+	// Compute the median weekly views per km² for this tile.
+	numWeeksWithoutData := p.numWeeks - len(counts)
+	medianPos := p.numWeeks/2 - numWeeksWithoutData
+	var median float32
+	if medianPos >= 0 {
+		median = float32(counts[medianPos])
 	}
 	zoom, _, y := tile.ZoomXY()
-	viewsPerKm2 := float32(sum) / (float32(p.numWeeks) * float32(TileArea(zoom, y)))
+	viewsPerKm2 := median / float32(TileArea(zoom, y))
 
 	if tile == raster.tile {
 		raster.viewsPerKm2 = viewsPerKm2
