@@ -24,8 +24,8 @@ jobs:
         upx qrank-builder
         go build -ldflags="-s -w" -v ./cmd/qrank-webserver
         upx qrank-webserver
-        go build -ldflags="-s -w" -v ./cmd/tilerank-builder
-        upx tilerank-builder
+        go build -ldflags="-s -w" -v ./cmd/osmviews-builder
+        upx osmviews-builder
 
     - name: Test
       run: go test -v ./...
