@@ -233,3 +233,7 @@ func TestWeekStart(t *testing.T) {
 		}
 	}
 }
+
+func ExampleParseWeek() {
+	fmt.Println(ParseWeek("2018-W51")) // Output: 2018 51 <nil>
+}

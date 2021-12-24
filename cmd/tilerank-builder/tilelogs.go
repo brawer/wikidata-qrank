@@ -77,7 +77,6 @@ func GetAvailableWeeks(client *http.Client) ([]string, error) {
 	return result, nil
 }
 
-var isoWeekRegexp = regexp.MustCompile(`(\d{4})-W(\d{2})`)
 var tileLogRegexp = regexp.MustCompile(`^(\d+)/(\d+)/(\d+)\s+(\d+)$`)
 
 // GetTileLogs returns an io.Reader for the sorted log records of a week.
@@ -180,14 +179,12 @@ func GetTileLogs(week string, client *http.Client, cachedir string) (io.Reader, 
 func fetchWeeklyTileLogs(week string, client *http.Client, ch chan<- extsort.SortType, ctx context.Context) error {
 	defer close(ch)
 
-	match := isoWeekRegexp.FindStringSubmatch(week)
-	if match == nil || len(match) != 3 {
-		return fmt.Errorf("week not in ISO 8601 format: %s", week)
+	// Fetch the tile logs for the seven days in this week, in parallel.
+	parsedYear, parsedWeek, err := ParseWeek(week)
+	if err != nil {
+		return err
 	}
 
-	// Fetch the tile logs for the seven days in this week, in parallel.
-	parsedYear, _ := strconv.Atoi(match[1])
-	parsedWeek, _ := strconv.Atoi(match[2])
 	firstDay := weekStart(parsedYear, parsedWeek)
 	g, subCtx := errgroup.WithContext(ctx)
 	for i := 0; i < 7; i++ {
@@ -250,4 +247,18 @@ func weekStart(year, week int) time.Time {
 
 	_, w := t.ISOWeek()
 	return t.AddDate(0, 0, (week-w)*7)
+}
+
+var isoWeekRegexp = regexp.MustCompile(`(\d{4})-W(\d{2})`)
+
+// ParseWeek gives the year and week for an ISO week string like "2018-W34".
+func ParseWeek(s string) (year int, week int, err error) {
+	match := isoWeekRegexp.FindStringSubmatch(s)
+	if match == nil || len(match) != 3 {
+		return 0, 0, fmt.Errorf("week not in ISO 8601 format: %s", s)
+	}
+
+	year, _ = strconv.Atoi(match[1])
+	week, _ = strconv.Atoi(match[2])
+	return year, week, nil
 }
