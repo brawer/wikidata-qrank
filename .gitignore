@@ -1,6 +1,8 @@
 *~
-./qrank-builder
-./qrank-webserver
+/osmviews-builder
+/qrank-builder
+/qrank-webserver
 cache/
 cache-testrun/
-
+keys/
+logs/
