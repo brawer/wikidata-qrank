@@ -64,19 +64,20 @@ func main() {
 		logger.Fatal(err)
 	}
 	lastDay := weekStart(year, week).AddDate(0, 0, 6)
-	date := lastDay.Format("2006-01-02")
+	date := lastDay.Format("20060102")
+	bucket := "qrank"
 	localpath := fmt.Sprintf("osmviews-%s.tiff", date)
-	remotepath := fmt.Sprintf("osmviews/osmviews-%s.tiff", date)
+	remotepath := fmt.Sprintf("public/osmviews-%s.tiff", date)
 
 	// Check if the output file already exists in storage.
 	// If we can retrieve object stats without an error, we don’t need
 	// to do anything and are completely done.
 	if storage != nil {
 		opts := minio.StatObjectOptions{}
-		_, err := storage.StatObject(ctx, "qrank", remotepath, opts)
+		_, err := storage.StatObject(ctx, bucket, remotepath, opts)
 		if err == nil {
-			fmt.Printf("Already in storage: %s\n", remotepath)
-			logger.Printf("Already in storage: %s", remotepath)
+			fmt.Printf("Already in storage: %s/%s\n", bucket, remotepath)
+			logger.Printf("Already in storage: %s/%s", bucket, remotepath)
 			return
 		}
 	}
@@ -91,12 +92,13 @@ func main() {
 		opts := minio.PutObjectOptions{
 			ContentType: "image/tiff",
 		}
-		info, err := storage.FPutObject(ctx, "qrank", remotepath, localpath, opts)
+		info, err := storage.FPutObject(ctx, bucket, remotepath, localpath, opts)
 		if err != nil {
 			logger.Fatal(err)
 		} else {
-			fmt.Printf("Uploaded to storage: %s, ETag: %s\n", remotepath, info.ETag)
-			logger.Printf("Uploaded to storage: %s, ETag: %s", remotepath, info.ETag)
+			msg := fmt.Sprintf("Uploaded to storage: %s/%s, ETag: %s\n", bucket, remotepath, info.ETag)
+			fmt.Println(msg)
+			logger.Println(msg)
 		}
 	}
 }
