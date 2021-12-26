@@ -118,6 +118,7 @@ func createLogFile() (*os.File, error) {
 	return logfile, nil
 }
 
+// NewStorageClient sets up a client for accessing S3-compatible object storage.
 func NewStorageClient(keypath string) (*minio.Client, error) {
 	data, err := os.ReadFile(keypath)
 	if err != nil {
