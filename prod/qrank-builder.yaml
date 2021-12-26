@@ -24,7 +24,7 @@ spec:
           - name: qrank-builder
             workingDir: /data/project/qrank
             image: docker-registry.tools.wmflabs.org/toolforge-buster-standalone:latest
-            command: [ "bin/qrank-builder", "-dumps=/public/dumps/public" ]
+            command: [ "bin/qrank-builder", "-dumps=/public/dumps/public", "-storage-key=keys/storage-key" ]
             resources:
               # https://phabricator.wikimedia.org/T277457
               requests:
