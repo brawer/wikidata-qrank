@@ -118,13 +118,13 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
-	stats, err := buildStats(edate, qrank, outDir)
+	_, err = buildStats(edate, qrank, outDir)
 	if err != nil {
 		return err
 	}
 
 	if storage != nil {
-		if err := upload(edate, qrank, stats, storage); err != nil {
+		if err := upload(edate, qrank, storage); err != nil {
 			return err
 		}
 	}
@@ -132,23 +132,16 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	return nil
 }
 
-// Upload puts the final output files into an S3-compatible object storage.
-func upload(date time.Time, qrank string, stats string, storage *minio.Client) error {
+// Upload puts the final output file into an S3-compatible object storage.
+func upload(date time.Time, qrank string, storage *minio.Client) error {
 	ctx := context.Background()
-	dir := fmt.Sprintf("qrank/%s", date.Format("2006-01-02"))
+	dest := fmt.Sprintf("public/qrank-%s.csv.gz", date.Format("20060102"))
 	bucket := "qrank"
 
-	qrankPath := fmt.Sprintf("%s/qrank.csv.gz", dir)
-	statsPath := fmt.Sprintf("%s/stats.json", dir)
-
-	// Check if the two output files already exist in storage.
-	opts := minio.StatObjectOptions{}
-	_, err := storage.StatObject(ctx, bucket, qrankPath, opts)
-	hasQrank := err == nil
-	_, err = storage.StatObject(ctx, bucket, statsPath, opts)
-	hasStats := err == nil
-	if hasQrank && hasStats {
-		logmsg := fmt.Sprintf("Already in object storage: qrank/%s", dir)
+	// Check if the output file already exists in storage.
+	_, err := storage.StatObject(ctx, bucket, dest, minio.StatObjectOptions{})
+	if err == nil {
+		logmsg := fmt.Sprintf("Already in object storage: %s/%s", bucket, dest)
 		fmt.Println(logmsg)
 		if logger != nil {
 			logger.Println(logmsg)
@@ -156,19 +149,13 @@ func upload(date time.Time, qrank string, stats string, storage *minio.Client) e
 		return nil
 	}
 
-	qrankOpts := minio.PutObjectOptions{ContentType: "text/csv"}
-	_, err = storage.FPutObject(ctx, bucket, qrankPath, qrank, qrankOpts)
+	opts := minio.PutObjectOptions{ContentType: "text/csv"}
+	_, err = storage.FPutObject(ctx, bucket, dest, qrank, opts)
 	if err != nil {
 		return err
 	}
 
-	statsOpts := minio.PutObjectOptions{ContentType: "application/json"}
-	_, err = storage.FPutObject(ctx, bucket, statsPath, stats, statsOpts)
-	if err != nil {
-		return err
-	}
-
-	logmsg := fmt.Sprintf("Uploaded to object storage: qrank/%s", dir)
+	logmsg := fmt.Sprintf("Uploaded to object storage: %s/%s", bucket, dest)
 	fmt.Println(logmsg)
 	if logger != nil {
 		logger.Println(logmsg)
