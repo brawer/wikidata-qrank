@@ -18,7 +18,7 @@ import (
 
 func main() {
 	port := flag.Int("port", 0, "port for serving HTTP requests")
-	storagekey := flag.String("storage-key", "", "path to key with storage access credentials")
+	storagekey := flag.String("storage-key", "keys/storage-key", "path to key with storage access credentials")
 	workdir := flag.String("workdir", "webserver-workdir", "path to working directory on local disk")
 	flag.Parse()
 
