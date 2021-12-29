@@ -22,8 +22,8 @@ jobs:
       run: |
         go build -ldflags="-s -w" -v ./cmd/qrank-builder
         upx qrank-builder
-        go build -ldflags="-s -w" -v ./cmd/qrank-webserver
-        upx qrank-webserver
+        go build -ldflags="-s -w" -v ./cmd/webserver
+        upx webserver
         go build -ldflags="-s -w" -v ./cmd/osmviews-builder
         upx osmviews-builder
 
