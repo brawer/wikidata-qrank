@@ -2,7 +2,9 @@
 /osmviews-builder
 /qrank-builder
 /qrank-webserver
+/webserver
 cache/
 cache-testrun/
 keys/
 logs/
+webserver-workdir/
