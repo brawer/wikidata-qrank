@@ -64,7 +64,7 @@ func main() {
 	lastDay := weekStart(year, week).AddDate(0, 0, 6)
 	date := lastDay.Format("20060102")
 	bucket := "qrank"
-	localpath := fmt.Sprintf("osmviews-%s.tiff", date)
+	localpath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-%s.tiff", date))
 	remotepath := fmt.Sprintf("public/osmviews-%s.tiff", date)
 
 	// Check if the output file already exists in storage.
