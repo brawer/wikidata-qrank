@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -14,7 +13,6 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 var logger *log.Logger
@@ -33,7 +31,7 @@ func main() {
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 
-	var storage *minio.Client
+	var storage StorageClient
 	if *storagekey != "" {
 		storage, err = NewStorageClient(*storagekey)
 		if err != nil {
@@ -87,7 +85,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	// Upload the output file to storage.
+	// Upload the output file to storage, and garbage-collect old files.
 	if storage != nil {
 		opts := minio.PutObjectOptions{
 			ContentType: "image/tiff",
@@ -99,6 +97,10 @@ func main() {
 			msg := fmt.Sprintf("Uploaded to storage: %s/%s, ETag: %s\n", bucket, remotepath, info.ETag)
 			fmt.Println(msg)
 			logger.Println(msg)
+		}
+
+		if err := Cleanup(storage); err != nil {
+			logger.Fatal(err)
 		}
 	}
 }
@@ -118,30 +120,6 @@ func createLogFile() (*os.File, error) {
 	}
 
 	return logfile, nil
-}
-
-// NewStorageClient sets up a client for accessing S3-compatible object storage.
-func NewStorageClient(keypath string) (*minio.Client, error) {
-	data, err := os.ReadFile(keypath)
-	if err != nil {
-		return nil, err
-	}
-
-	var config struct{ Endpoint, Key, Secret string }
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-
-	client, err := minio.New(config.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.Key, config.Secret, ""),
-		Secure: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	client.SetAppInfo("QRankOSMViewsBuilder", "0.1")
-	return client, nil
 }
 
 // Fetch log data for up to `maxWeeks` weeks from planet.openstreetmap.org.
