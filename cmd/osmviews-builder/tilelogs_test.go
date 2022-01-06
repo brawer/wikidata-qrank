@@ -81,7 +81,8 @@ func TestGetTileLogs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	reader, err := GetTileLogs("2567-W12", client, cachedir)
+	s := NewFakeStorageClient()
+	reader, err := GetTileLogs("2567-W12", client, cachedir, s)
 	if err != nil {
 		t.Error(err)
 		return
@@ -191,7 +192,8 @@ func TestGetTileLogs(t *testing.T) {
 }
 
 func TestGetTileLogsCached(t *testing.T) {
-	reader, err := GetTileLogs("2042-W08", nil, "testdata")
+	s := NewFakeStorageClient()
+	reader, err := GetTileLogs("2042-W08", nil, "testdata", s)
 	if err != nil {
 		t.Error(err)
 		return

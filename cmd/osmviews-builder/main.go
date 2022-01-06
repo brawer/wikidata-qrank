@@ -48,7 +48,7 @@ func main() {
 	}
 
 	maxWeeks := 52 // 1 year
-	tilecounts, lastWeek, err := fetchWeeklyLogs(*cachedir, maxWeeks)
+	tilecounts, lastWeek, err := fetchWeeklyLogs(*cachedir, storage, maxWeeks)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func createLogFile() (*os.File, error) {
 // is run periodically, it will only fetch the content that has not been
 // downloaded before. The result is an array of readers (one for each week),
 // and the ISO week string (like "2021-W28") for the last available week.
-func fetchWeeklyLogs(cachedir string, maxWeeks int) ([]io.Reader, string, error) {
+func fetchWeeklyLogs(cachedir string, storage StorageClient, maxWeeks int) ([]io.Reader, string, error) {
 	client := &http.Client{}
 	weeks, err := GetAvailableWeeks(client)
 	if err != nil {
@@ -149,7 +149,7 @@ func fetchWeeklyLogs(cachedir string, maxWeeks int) ([]io.Reader, string, error)
 
 	readers := make([]io.Reader, 0, len(weeks))
 	for _, week := range weeks {
-		if r, err := GetTileLogs(week, client, cachedir); err == nil {
+		if r, err := GetTileLogs(week, client, cachedir, storage); err == nil {
 			readers = append(readers, r)
 		} else {
 			return nil, "", err

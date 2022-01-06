@@ -19,6 +19,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/lanrat/extsort"
+	// "github.com/minio/minio-go/v7"
 	"github.com/ulikunitz/xz"
 	"golang.org/x/sync/errgroup"
 )
@@ -85,8 +86,11 @@ var tileLogRegexp = regexp.MustCompile(`^(\d+)/(\d+)/(\d+)\s+(\d+)$`)
 // for the requested week are fetched from the OpenStreetMap planet server,
 // uncompressed, sorted by TileKey, and stored as a compressed file into
 // cachedir.
-func GetTileLogs(week string, client *http.Client, cachedir string) (io.Reader, error) {
+func GetTileLogs(week string, client *http.Client, cachedir string, storage StorageClient) (io.Reader, error) {
 	ctx := context.Background()
+
+	// path := fmt.Sprintf("internal/osmviews-builder/tilelogs-%s.br", week)
+
 	path := filepath.Join(cachedir, fmt.Sprintf("tilelogs-%s.br", week))
 	if f, err := os.Open(path); err == nil {
 		return brotli.NewReader(f), nil
