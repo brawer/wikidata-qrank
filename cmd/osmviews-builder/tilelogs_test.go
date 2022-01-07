@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/minio/minio-go/v7"
 )
 
 // A fake HTTP transport that answers the same requests as planet.osm.org.
@@ -188,6 +191,17 @@ func TestGetTileLogs(t *testing.T) {
 	if expected != got {
 		t.Errorf("expected %v, got %v", expected, got)
 		fmt.Println(got)
+	}
+
+	ctx := context.Background()
+	remotePath := "internal/osmviews-builder/tilelogs-2567-W12.br"
+	stat, err := s.StatObject(ctx, "qrank", remotePath, minio.StatObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := "application/x-brotli"; stat.ContentType != want {
+		t.Errorf(`got "%s", want "%s"`, stat.ContentType, want)
 	}
 }
 

@@ -19,7 +19,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/lanrat/extsort"
-	// "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	"github.com/ulikunitz/xz"
 	"golang.org/x/sync/errgroup"
 )
@@ -86,12 +86,21 @@ var tileLogRegexp = regexp.MustCompile(`^(\d+)/(\d+)/(\d+)\s+(\d+)$`)
 // for the requested week are fetched from the OpenStreetMap planet server,
 // uncompressed, sorted by TileKey, and stored as a compressed file into
 // cachedir.
-func GetTileLogs(week string, client *http.Client, cachedir string, storage StorageClient) (io.Reader, error) {
+func GetTileLogs(week string, client *http.Client, workdir string, storage StorageClient) (io.Reader, error) {
 	ctx := context.Background()
 
-	// path := fmt.Sprintf("internal/osmviews-builder/tilelogs-%s.br", week)
+	remotePath := fmt.Sprintf("internal/osmviews-builder/tilelogs-%s.br", week)
+	if storage != nil {
+		var statOpts minio.StatObjectOptions
+		if _, err := storage.StatObject(ctx, "qrank", remotePath, statOpts); err == nil {
+			opts := minio.GetObjectOptions{}
+			if r, err := storage.GetObject(ctx, "qrank", remotePath, opts); err == nil {
+				return brotli.NewReader(r), nil
+			}
+		}
+	}
 
-	path := filepath.Join(cachedir, fmt.Sprintf("tilelogs-%s.br", week))
+	path := filepath.Join(workdir, fmt.Sprintf("tilelogs-%s.br", week))
 	if f, err := os.Open(path); err == nil {
 		return brotli.NewReader(f), nil
 	}
@@ -100,7 +109,7 @@ func GetTileLogs(week string, client *http.Client, cachedir string, storage Stor
 		logger.Printf("building %s", path)
 	}
 
-	if err := os.MkdirAll(cachedir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(workdir, os.ModePerm); err != nil {
 		return nil, err
 	}
 
@@ -170,6 +179,19 @@ func GetTileLogs(week string, client *http.Client, cachedir string, storage Stor
 	// Now that we have the result on disk, rename it to final path.
 	if err := os.Rename(tmppath, path); err != nil {
 		return nil, err
+	}
+
+	// Upload the file to object storage and return a reader for it.
+	if storage != nil {
+		opts := minio.PutObjectOptions{ContentType: "application/x-brotli"}
+		if _, err := storage.FPutObject(ctx, "qrank", remotePath, path, opts); err != nil {
+			return nil, err
+		}
+
+		getOpts := minio.GetObjectOptions{}
+		if r, err := storage.GetObject(ctx, "qrank", remotePath, getOpts); err == nil {
+			return brotli.NewReader(r), nil
+		}
 	}
 
 	// Open the file for reading and return a reader for it.
