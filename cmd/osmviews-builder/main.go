@@ -11,8 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/minio/minio-go/v7"
 )
 
 var logger *log.Logger
@@ -31,13 +29,12 @@ func main() {
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 
-	var storage StorageClient
+	var storage Storage
 	if *storagekey != "" {
-		storage, err = NewStorageClient(*storagekey)
+		storage, err = NewStorage(*storagekey)
 		if err != nil {
 			logger.Fatal(err)
 		}
-
 		bucketExists, err := storage.BucketExists(ctx, "qrank")
 		if err != nil {
 			logger.Fatal(err)
@@ -71,8 +68,7 @@ func main() {
 	// If we can retrieve object stats without an error, we don’t need
 	// to do anything and are completely done.
 	if storage != nil {
-		opts := minio.StatObjectOptions{}
-		_, err := storage.StatObject(ctx, bucket, remotepath, opts)
+		_, err := storage.Stat(ctx, bucket, remotepath)
 		if err == nil {
 			fmt.Printf("Already in storage: %s/%s\n", bucket, remotepath)
 			logger.Printf("Already in storage: %s/%s", bucket, remotepath)
@@ -87,14 +83,11 @@ func main() {
 
 	// Upload the output file to storage, and garbage-collect old files.
 	if storage != nil {
-		opts := minio.PutObjectOptions{
-			ContentType: "image/tiff",
-		}
-		info, err := storage.FPutObject(ctx, bucket, remotepath, localpath, opts)
+		err := storage.PutFile(ctx, bucket, remotepath, localpath, "image/tiff")
 		if err != nil {
 			logger.Fatal(err)
 		} else {
-			msg := fmt.Sprintf("Uploaded to storage: %s/%s, ETag: %s\n", bucket, remotepath, info.ETag)
+			msg := fmt.Sprintf("Uploaded to storage: %s/%s\n", bucket, remotepath)
 			fmt.Println(msg)
 			logger.Println(msg)
 		}
@@ -130,7 +123,7 @@ func createLogFile() (*os.File, error) {
 // is run periodically, it will only fetch the content that has not been
 // downloaded before. The result is an array of readers (one for each week),
 // and the ISO week string (like "2021-W28") for the last available week.
-func fetchWeeklyLogs(cachedir string, storage StorageClient, maxWeeks int) ([]io.Reader, string, error) {
+func fetchWeeklyLogs(cachedir string, storage Storage, maxWeeks int) ([]io.Reader, string, error) {
 	client := &http.Client{}
 	weeks, err := GetAvailableWeeks(client)
 	if err != nil {

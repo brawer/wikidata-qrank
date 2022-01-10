@@ -19,7 +19,6 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/lanrat/extsort"
-	"github.com/minio/minio-go/v7"
 	"github.com/ulikunitz/xz"
 	"golang.org/x/sync/errgroup"
 )
@@ -86,15 +85,13 @@ var tileLogRegexp = regexp.MustCompile(`^(\d+)/(\d+)/(\d+)\s+(\d+)$`)
 // for the requested week are fetched from the OpenStreetMap planet server,
 // uncompressed, sorted by TileKey, and stored as a compressed file into
 // cachedir.
-func GetTileLogs(week string, client *http.Client, workdir string, storage StorageClient) (io.Reader, error) {
+func GetTileLogs(week string, client *http.Client, workdir string, storage Storage) (io.Reader, error) {
 	ctx := context.Background()
 
 	remotePath := fmt.Sprintf("internal/osmviews-builder/tilelogs-%s.br", week)
 	if storage != nil {
-		var statOpts minio.StatObjectOptions
-		if _, err := storage.StatObject(ctx, "qrank", remotePath, statOpts); err == nil {
-			opts := minio.GetObjectOptions{}
-			if r, err := storage.GetObject(ctx, "qrank", remotePath, opts); err == nil {
+		if _, err := storage.Stat(ctx, "qrank", remotePath); err == nil {
+			if r, err := storage.Get(ctx, "qrank", remotePath); err == nil {
 				return brotli.NewReader(r), nil
 			}
 		}
@@ -183,13 +180,12 @@ func GetTileLogs(week string, client *http.Client, workdir string, storage Stora
 
 	// Upload the file to object storage and return a reader for it.
 	if storage != nil {
-		opts := minio.PutObjectOptions{ContentType: "application/x-brotli"}
-		if _, err := storage.FPutObject(ctx, "qrank", remotePath, path, opts); err != nil {
+		contentType := "application/x-brotli"
+		if err := storage.PutFile(ctx, "qrank", remotePath, path, contentType); err != nil {
 			return nil, err
 		}
 
-		getOpts := minio.GetObjectOptions{}
-		if r, err := storage.GetObject(ctx, "qrank", remotePath, getOpts); err == nil {
+		if r, err := storage.Get(ctx, "qrank", remotePath); err == nil {
 			return brotli.NewReader(r), nil
 		}
 	}

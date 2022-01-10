@@ -1,17 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/minio/minio-go/v7"
 )
 
 func TestCleanup(t *testing.T) {
@@ -22,7 +22,7 @@ func TestCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := NewFakeStorageClient()
+	s := NewFakeStorage()
 	for _, path := range []string{
 		"public/osmviews-20211205.tiff",
 		"public/osmviews-20211212.tiff",
@@ -31,14 +31,20 @@ func TestCleanup(t *testing.T) {
 		"public/osmviews-20220109.tiff",
 		"public/osmviews-not-matching-pattern.txt",
 	} {
-		s.FPutObject(ctx, "qrank", path, localpath, minio.PutObjectOptions{})
+		if err := s.PutFile(ctx, "qrank", path, localpath, "image/tiff"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := Cleanup(s); err != nil {
 		t.Fatal(err)
 	}
 
 	got := make([]string, 0)
-	for f := range s.ListObjects(ctx, "qrank", minio.ListObjectsOptions{}) {
+	files, err := s.List(ctx, "qrank", "public/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
 		got = append(got, f.Key)
 	}
 	sort.Strings(got)
@@ -56,70 +62,64 @@ func TestCleanup(t *testing.T) {
 
 type FakeStorageObject struct {
 	Content []byte
-	Info    minio.ObjectInfo
+	Info    ObjectInfo
 }
 
-type FakeStorageClient struct {
+type FakeStorage struct {
 	Files map[string]*FakeStorageObject
 }
 
-func (s *FakeStorageClient) BucketExists(ctx context.Context, bucket string) (bool, error) {
+func (s *FakeStorage) BucketExists(ctx context.Context, bucket string) (bool, error) {
 	return bucket == "qrank", nil
 }
 
-func (s *FakeStorageClient) FPutObject(ctx context.Context, bucket string, remotepath string, localpath string, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
-	stat, err := os.Stat(localpath)
-	if err != nil {
-		return minio.UploadInfo{}, err
-	}
-
+func (s *FakeStorage) PutFile(ctx context.Context, bucket string, remotepath string, localpath string, contentType string) error {
 	content, err := os.ReadFile(localpath)
 	if err != nil {
-		return minio.UploadInfo{}, err
+		return err
 	}
 
 	digest := md5.Sum(content)
 	etag := base64.RawStdEncoding.EncodeToString(digest[0:len(digest)])
-	info := minio.ObjectInfo{
-		Key:          remotepath,
-		ContentType:  opts.ContentType,
-		LastModified: stat.ModTime(),
-		ETag:         etag,
-		Size:         int64(len(content)),
+	info := ObjectInfo{
+		Key:         remotepath,
+		ContentType: contentType,
+		ETag:        etag,
 	}
 
 	s.Files[remotepath] = &FakeStorageObject{content, info}
-	return minio.UploadInfo{ETag: info.ETag}, nil
-}
-
-func (s *FakeStorageClient) GetObject(ctx context.Context, bucketName, objectName string, opts minio.GetObjectOptions) (*minio.Object, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (s *FakeStorageClient) ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
-	ch := make(chan minio.ObjectInfo)
-	go func() {
-		for _, fakeFile := range s.Files {
-			ch <- fakeFile.Info
-		}
-		close(ch)
-	}()
-	return ch
-}
-
-func (s *FakeStorageClient) RemoveObject(ctx context.Context, bucketName, objectName string, opts minio.RemoveObjectOptions) error {
-	delete(s.Files, objectName)
 	return nil
 }
 
-func (s *FakeStorageClient) StatObject(ctx context.Context, bucket string, path string, opts minio.StatObjectOptions) (minio.ObjectInfo, error) {
+func (s *FakeStorage) Get(ctx context.Context, bucket, path string) (io.Reader, error) {
+	f, present := s.Files[path]
+	if !present {
+		return nil, fmt.Errorf("file not found: %s", path)
+	}
+	return bytes.NewReader(f.Content), nil
+}
+
+func (s *FakeStorage) List(ctx context.Context, bucket, prefix string) ([]ObjectInfo, error) {
+	result := make([]ObjectInfo, 0, len(s.Files))
+	for _, f := range s.Files {
+		result = append(result, f.Info)
+	}
+	return result, nil
+}
+
+func (s *FakeStorage) Remove(ctx context.Context, bucketName, path string) error {
+	delete(s.Files, path)
+	return nil
+}
+
+func (s *FakeStorage) Stat(ctx context.Context, bucket string, path string) (ObjectInfo, error) {
 	if f, present := s.Files[path]; present {
 		return f.Info, nil
 	} else {
-		return minio.ObjectInfo{}, fmt.Errorf("no such file: %s", path)
+		return ObjectInfo{}, fmt.Errorf("no such file: %s", path)
 	}
 }
 
-func NewFakeStorageClient() *FakeStorageClient {
-	return &FakeStorageClient{Files: make(map[string]*FakeStorageObject)}
+func NewFakeStorage() *FakeStorage {
+	return &FakeStorage{Files: make(map[string]*FakeStorageObject)}
 }

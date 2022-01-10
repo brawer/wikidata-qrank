@@ -12,8 +12,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/minio/minio-go/v7"
 )
 
 // A fake HTTP transport that answers the same requests as planet.osm.org.
@@ -84,7 +82,7 @@ func TestGetTileLogs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	s := NewFakeStorageClient()
+	s := NewFakeStorage()
 	reader, err := GetTileLogs("2567-W12", client, cachedir, s)
 	if err != nil {
 		t.Error(err)
@@ -195,7 +193,7 @@ func TestGetTileLogs(t *testing.T) {
 
 	ctx := context.Background()
 	remotePath := "internal/osmviews-builder/tilelogs-2567-W12.br"
-	stat, err := s.StatObject(ctx, "qrank", remotePath, minio.StatObjectOptions{})
+	stat, err := s.Stat(ctx, "qrank", remotePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +204,7 @@ func TestGetTileLogs(t *testing.T) {
 }
 
 func TestGetTileLogsCached(t *testing.T) {
-	s := NewFakeStorageClient()
+	s := NewFakeStorage()
 	reader, err := GetTileLogs("2042-W08", nil, "testdata", s)
 	if err != nil {
 		t.Error(err)
