@@ -185,6 +185,10 @@ func GetTileLogs(week string, client *http.Client, workdir string, storage Stora
 			return nil, err
 		}
 
+		if err := os.Remove(path); err != nil {
+			return nil, err
+		}
+
 		if r, err := storage.Get(ctx, "qrank", remotePath); err == nil {
 			return brotli.NewReader(r), nil
 		}

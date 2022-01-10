@@ -204,8 +204,12 @@ func TestGetTileLogs(t *testing.T) {
 }
 
 func TestGetTileLogsCached(t *testing.T) {
+	ctx := context.Background()
 	s := NewFakeStorage()
-	reader, err := GetTileLogs("2042-W08", nil, "testdata", s)
+	if err := s.PutFile(ctx, "qrank", "internal/osmviews-builder/tilelogs-2042-W08.br", "testdata/tilelogs-2042-W08.br", "application/x-brotli"); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := GetTileLogs("2042-W08", nil, "", s)
 	if err != nil {
 		t.Error(err)
 		return
