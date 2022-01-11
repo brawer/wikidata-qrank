@@ -211,16 +211,14 @@ func fetchWeeklyTileLogs(week string, client *http.Client, ch chan<- extsort.Sor
 		return err
 	}
 
+	// Initially we did the fetches in parallel, but planet.openstreetmap.org
+	// only seems to accept 1-2 connections from the same IP address.
 	firstDay := weekStart(parsedYear, parsedWeek)
-	g, subCtx := errgroup.WithContext(ctx)
 	for i := 0; i < 7; i++ {
 		day := firstDay.AddDate(0, 0, i)
-		g.Go(func() error {
-			return fetchTileLogs(day, client, ch, subCtx)
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return err
+		if err := fetchTileLogs(day, client, ch, ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
