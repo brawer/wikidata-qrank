@@ -32,7 +32,7 @@ func main() {
 }
 
 func PlotDistribution(fontPath, qrankPath, outPath string) error {
-	axisWidth := 30.0
+	axisWidth := 35.0
 	plotWidth := 1000.0
 	logX, logY := false, true
 	dc := gg.NewContext(int(plotWidth+axisWidth), int(plotWidth+axisWidth))
@@ -66,10 +66,11 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 		return err
 	}
 	numRanks -= 1 // Don’t count CSV header.
+	numRanksInMillions := int(numRanks / 1000000)
 
 	scaleX := plotWidth / math.Ceil(math.Log(float64(numRanks)))
 	if !logX {
-		scaleX = plotWidth / float64(numRanks)
+		scaleX = plotWidth / (float64(numRanksInMillions+1) * 1e6)
 	}
 
 	if logX {
@@ -83,6 +84,15 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 			dc.DrawString("e", x-3, plotWidth+23)
 			dc.SetFontFace(smallFont)
 			dc.DrawString(strconv.Itoa(i), x-3+eWidth, plotWidth+23-eHeight/2)
+		}
+	} else {
+		for i := 0; i <= numRanksInMillions; i += 2 {
+			x := axisWidth + float64(i)*1e6*scaleX
+			dc.MoveTo(x, plotWidth)
+			dc.LineTo(x, plotWidth+5)
+			dc.Stroke()
+			dc.SetFontFace(font)
+			dc.DrawString(strconv.Itoa(i)+"M", x-3, plotWidth+23)
 		}
 	}
 
@@ -124,7 +134,7 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 		if line == 2 { // first item in file
 			maxValue = float64(val)
 			if logY {
-				scaleY = plotWidth / math.Ceil(math.Log(maxValue))
+				scaleY = plotWidth / math.Ceil(math.Log10(maxValue))
 			} else {
 				scaleY = plotWidth / maxValue
 			}
@@ -134,7 +144,7 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 		if !logX {
 			x = float64(line-1)*scaleX + axisWidth
 		}
-		y := plotWidth - math.Log(float64(val))*scaleY
+		y := plotWidth - math.Log10(float64(val))*scaleY
 		if !logY {
 			y = plotWidth - float64(val)*scaleY
 		}
@@ -172,20 +182,24 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 	dc.DrawString("Views", plotWidth/2, axisWidth+24)
 	dc.Pop()
 
-	dc.MoveTo(axisWidth, plotWidth-math.Log(maxValue)*scaleY)
+	dc.MoveTo(axisWidth, plotWidth-math.Log10(maxValue)*scaleY)
 	dc.LineTo(axisWidth, plotWidth)
-	dc.LineTo(axisWidth+math.Log(float64(numRanks))*scaleX, plotWidth)
+	if logX {
+		dc.LineTo(axisWidth+math.Log(float64(numRanks))*scaleX, plotWidth)
+	} else {
+		dc.LineTo(axisWidth+float64(numRanks)*scaleX, plotWidth)
+	}
 	dc.Stroke()
 
 	if logY {
-		for i := 0; i <= int(math.Log(float64(maxValue))); i++ {
+		for i := 0; i <= int(math.Log10(float64(maxValue))); i++ {
 			y := plotWidth - float64(i)*scaleY
 			dc.MoveTo(axisWidth-5, y)
 			dc.LineTo(axisWidth, y)
 			dc.Stroke()
 			dc.SetFontFace(font)
-			eWidth, eHeight := dc.MeasureString("e")
-			dc.DrawString("e", 5, y)
+			eWidth, eHeight := dc.MeasureString("10")
+			dc.DrawString("10", 5, y)
 			dc.SetFontFace(smallFont)
 			dc.DrawString(strconv.Itoa(i), 5+eWidth, y-eHeight/2)
 		}
