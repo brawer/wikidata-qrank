@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
+SPDX-License-Identifier: MIT
+-->
+
 # Wikidata QRank: Technical Design
 
 QRank is a ranking signal for [Wikidata](https://www.wikidata.org/)
