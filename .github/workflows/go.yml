@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: REUSE Compliance Check
+    - name: Check REUSE Compliance
       uses: fsfe/reuse-action@v1
 
     - name: Install Go
@@ -26,19 +26,7 @@ jobs:
 
     - name: Build
       run: |
-        go build -ldflags="-s -w" -v ./cmd/qrank-builder
-        upx qrank-builder
-        go build -ldflags="-s -w" -v ./cmd/webserver
-        upx webserver
-        go build -ldflags="-s -w" -v ./cmd/osmviews-builder
-        upx osmviews-builder
+        go build -ldflags="-s -w" -v ./cmd/...
 
     - name: Test
       run: go test -v ./...
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: qrank
-        path: qrank-builder
-        retention-days: 7
