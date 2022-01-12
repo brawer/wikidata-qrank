@@ -34,6 +34,7 @@ func main() {
 func PlotDistribution(fontPath, qrankPath, outPath string) error {
 	axisWidth := 30.0
 	plotWidth := 1000.0
+	logX, logY := false, true
 	dc := gg.NewContext(int(plotWidth+axisWidth), int(plotWidth+axisWidth))
 	dc.SetRGB(1, 1, 1)
 	dc.Clear()
@@ -67,17 +68,24 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 	numRanks -= 1 // Don’t count CSV header.
 
 	scaleX := plotWidth / math.Ceil(math.Log(float64(numRanks)))
-	for i := 0; i <= int(math.Log(float64(numRanks))); i++ {
-		x := axisWidth + float64(i)*scaleX
-		dc.MoveTo(x, plotWidth)
-		dc.LineTo(x, plotWidth+5)
-		dc.Stroke()
-		dc.SetFontFace(font)
-		eWidth, eHeight := dc.MeasureString("e")
-		dc.DrawString("e", x-3, plotWidth+23)
-		dc.SetFontFace(smallFont)
-		dc.DrawString(strconv.Itoa(i), x-3+eWidth, plotWidth+23-eHeight/2)
+	if !logX {
+		scaleX = plotWidth / float64(numRanks)
 	}
+
+	if logX {
+		for i := 0; i <= int(math.Log(float64(numRanks))); i++ {
+			x := axisWidth + float64(i)*scaleX
+			dc.MoveTo(x, plotWidth)
+			dc.LineTo(x, plotWidth+5)
+			dc.Stroke()
+			dc.SetFontFace(font)
+			eWidth, eHeight := dc.MeasureString("e")
+			dc.DrawString("e", x-3, plotWidth+23)
+			dc.SetFontFace(smallFont)
+			dc.DrawString(strconv.Itoa(i), x-3+eWidth, plotWidth+23-eHeight/2)
+		}
+	}
+
 	if _, err := qrankFile.Seek(0, os.SEEK_SET); err != nil {
 		return err
 	}
@@ -115,11 +123,22 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 
 		if line == 2 { // first item in file
 			maxValue = float64(val)
-			scaleY = plotWidth / math.Ceil(math.Log(maxValue))
+			if logY {
+				scaleY = plotWidth / math.Ceil(math.Log(maxValue))
+			} else {
+				scaleY = plotWidth / maxValue
+			}
 		}
 
 		x := math.Log(float64(line-1))*scaleX + axisWidth
+		if !logX {
+			x = float64(line-1)*scaleX + axisWidth
+		}
 		y := plotWidth - math.Log(float64(val))*scaleY
+		if !logY {
+			y = plotWidth - float64(val)*scaleY
+		}
+
 		if line == 2 || x-lastX > 1 || y-lastY > 1 {
 			lastX, lastY = x, y
 			graph = append(graph, point{x, y})
@@ -158,16 +177,18 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 	dc.LineTo(axisWidth+math.Log(float64(numRanks))*scaleX, plotWidth)
 	dc.Stroke()
 
-	for i := 0; i <= int(math.Log(float64(maxValue))); i++ {
-		y := plotWidth - float64(i)*scaleY
-		dc.MoveTo(axisWidth-5, y)
-		dc.LineTo(axisWidth, y)
-		dc.Stroke()
-		dc.SetFontFace(font)
-		eWidth, eHeight := dc.MeasureString("e")
-		dc.DrawString("e", 5, y)
-		dc.SetFontFace(smallFont)
-		dc.DrawString(strconv.Itoa(i), 5+eWidth, y-eHeight/2)
+	if logY {
+		for i := 0; i <= int(math.Log(float64(maxValue))); i++ {
+			y := plotWidth - float64(i)*scaleY
+			dc.MoveTo(axisWidth-5, y)
+			dc.LineTo(axisWidth, y)
+			dc.Stroke()
+			dc.SetFontFace(font)
+			eWidth, eHeight := dc.MeasureString("e")
+			dc.DrawString("e", 5, y)
+			dc.SetFontFace(smallFont)
+			dc.DrawString(strconv.Itoa(i), 5+eWidth, y-eHeight/2)
+		}
 	}
 
 	if err := dc.SavePNG(outPath); err != nil {
