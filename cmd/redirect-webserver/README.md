@@ -3,19 +3,20 @@ SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
 SPDX-License-Identifier: MIT
 -->
 
-# Wikidata QRank: Redirect Webserver
+# Redirect Webserver
 
 Before January 2022, the QRank project had been running on
 [Toolforge](https://toolforge.org/), but then it moved to the
 [Wikimedia Cloud](https://wmcloud.org/).  This webserver runs on
 the old Toolforge infrastructure at
-[https://qrank.toolforge.org/](qrank.toolforge.org) and redirects any
-incoming requests to the new location.
+[https://qrank.toolforge.org/](https://qrank.toolforge.org/),
+redirecting any incoming requests to the new location.
+
 
 ## Release instructions
 
-We currently don’t have a real release process for this mini-server.
 If ever needed, here’s how to manually push a new version of the binary.
+We currently don’t have a real release process for this mini-server.
 
 ```bash
 $ GOOS=linux go build ./cmd/redirect-webserver && scp ./redirect-webserver sascha@bastion.toolforge.org:/data/project/qrank/bin/redirect-webserver
