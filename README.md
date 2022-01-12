@@ -8,6 +8,7 @@ SPDX-License-Identifier: MIT
 [![CI](https://github.com/brawer/wikidata-qrank/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/brawer/wikidata-qrank/actions/workflows/go.yml)
 [![Data License: CC0-1.0](https://img.shields.io/badge/Data%20License-CC0%201.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
 [![Code License: MIT](https://img.shields.io/badge/Code%20License-MIT-lightgrey.svg)](https://opensource.org/licenses/MIT)
+[![REUSE status](https://api.reuse.software/badge/github.com/brawer/wikidata-qrank)](https://api.reuse.software/info/github.com/brawer/wikidata-qrank)
 
 QRank is a ranking signal for [Wikidata](https://www.wikidata.org/) entities.
 It gets computed by aggregating page view statistics for Wikipedia, Wikitravel,
