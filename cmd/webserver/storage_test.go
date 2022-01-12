@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
 // SPDX-License-Identifier: MIT
 
 package main

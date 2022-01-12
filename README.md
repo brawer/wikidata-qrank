@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
+SPDX-License-Identifier: MIT
+-->
+
 # Wikidata QRank
 
 [![CI](https://github.com/brawer/wikidata-qrank/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/brawer/wikidata-qrank/actions/workflows/go.yml)

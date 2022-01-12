@@ -1,6 +1,6 @@
 // Tool for plotting the QRank distribution.
 //
-// Copyright 2022 Sascha Brawer <sascha@brawer.ch>
+// SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
 // SPDX-License-Identifier: MIT
 
 package main

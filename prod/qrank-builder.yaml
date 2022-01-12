@@ -1,4 +1,6 @@
 # Cronjob for running qrank-builder in production.
+#
+# SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
 # SPDX-License-Identifier: MIT
 
 apiVersion: batch/v1beta1
