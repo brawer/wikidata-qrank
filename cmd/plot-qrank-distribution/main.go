@@ -138,7 +138,7 @@ func PlotDistribution(fontPath, qrankPath, outPath, outStatsPath string) error {
 	type point struct{ x, y float64 }
 	graph := make([]point, 0, int(plotWidth))
 
-	const sampleDistanceSq = 15.0 * 15.0
+	const sampleDistanceSq = 4.0 * 4.0
 
 	var id string
 	var rank, val int64
