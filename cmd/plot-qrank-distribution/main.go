@@ -22,10 +22,7 @@ import (
 	"github.com/fogleman/gg"
 )
 
-type Sample struct {
-	Id          string
-	Rank, Views int64
-}
+type Sample []interface{} // [ID, Rank, Value]
 
 type Stats struct {
 	Count   int64
@@ -37,7 +34,7 @@ func main() {
 	font := flag.String("font", "./RobotoSlab-Light.ttf", "path to label font")
 	qrank := flag.String("qrank", "qrank.csv.gz", "path to QRank file")
 	out := flag.String("out", "qrank-distribution.png", "path to output file being written")
-	outStats := flag.String("outStats", "stats.json", "path to output stats file")
+	outStats := flag.String("outStats", "qrank-stats.json", "path to output stats file")
 	flag.Parse()
 	if err := PlotDistribution(*font, *qrank, *out, *outStats); err != nil {
 		log.Fatal(err)
