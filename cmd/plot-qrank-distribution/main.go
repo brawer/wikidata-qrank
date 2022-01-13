@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -21,17 +22,29 @@ import (
 	"github.com/fogleman/gg"
 )
 
+type Sample struct {
+	Id          string
+	Rank, Views int64
+}
+
+type Stats struct {
+	Count   int64
+	Median  int
+	Samples []Sample
+}
+
 func main() {
 	font := flag.String("font", "./RobotoSlab-Light.ttf", "path to label font")
 	qrank := flag.String("qrank", "qrank.csv.gz", "path to QRank file")
 	out := flag.String("out", "qrank-distribution.png", "path to output file being written")
+	outStats := flag.String("outStats", "stats.json", "path to output stats file")
 	flag.Parse()
-	if err := PlotDistribution(*font, *qrank, *out); err != nil {
+	if err := PlotDistribution(*font, *qrank, *out, *outStats); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func PlotDistribution(fontPath, qrankPath, outPath string) error {
+func PlotDistribution(fontPath, qrankPath, outPath, outStatsPath string) error {
 	axisWidth := 35.0
 	plotWidth := 1000.0
 	logX, logY := false, true
@@ -67,6 +80,7 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 	}
 	numRanks -= 1 // Don’t count CSV header.
 	numRanksInMillions := int(numRanks / 1000000)
+	medianRank := numRanks / 2
 
 	scaleX := plotWidth / math.Ceil(math.Log(float64(numRanks)))
 	if !logX {
@@ -118,20 +132,30 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 	var maxValue float64
 	var lastX, lastY float64
 
+	var stats Stats
+	stats.Count = numRanks
+	stats.Samples = make([]Sample, 0, 200)
 	type point struct{ x, y float64 }
 	graph := make([]point, 0, int(plotWidth))
+
+	const sampleDistanceSq = 15.0 * 15.0
+
+	var id string
+	var rank, val int64
 	for scanner.Scan() {
 		line += 1
 		cols := strings.Split(scanner.Text(), ",")
 		if len(cols) < 2 {
 			return fmt.Errorf("%s:%d: less than 2 columns", qrankPath, line)
 		}
-		val, err := strconv.ParseInt(cols[1], 10, 64)
+
+		id, rank = cols[0], line-1
+		val, err = strconv.ParseInt(cols[1], 10, 64)
 		if err != nil {
 			return err
 		}
 
-		if line == 2 { // first item in file
+		if rank == 1 { // first item in file
 			maxValue = float64(val)
 			if logY {
 				scaleY = plotWidth / math.Ceil(math.Log10(maxValue))
@@ -149,18 +173,30 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 			y = plotWidth - float64(val)*scaleY
 		}
 
-		if line == 2 || x-lastX > 1 || y-lastY > 1 {
+		distance := (x-lastX)*(x-lastX) + (y-lastY)*(y-lastY)
+		if rank == 1 || distance >= sampleDistanceSq {
 			lastX, lastY = x, y
 			graph = append(graph, point{x, y})
 		}
 
-		if false && line == 50000 {
-			break
+		if rank == medianRank {
+			if distance < sampleDistanceSq {
+				stats.Samples = stats.Samples[:len(stats.Samples)-1]
+			}
+		}
+
+		if rank <= 50 || rank == medianRank || distance >= sampleDistanceSq {
+			stats.Samples = append(stats.Samples, Sample{id, rank, val})
+		}
+
+		if rank == medianRank {
+			stats.Median = len(stats.Samples) - 1
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return err
 	}
+	stats.Samples[len(stats.Samples)-1] = Sample{id, rank, val}
 
 	for i, p := range graph {
 		if i == 0 {
@@ -206,6 +242,16 @@ func PlotDistribution(fontPath, qrankPath, outPath string) error {
 	}
 
 	if err := dc.SavePNG(outPath); err != nil {
+		return err
+	}
+
+	fmt.Printf("Median = %d %v\n", stats.Median, stats.Samples[stats.Median])
+
+	jsonData, err := json.Marshal(stats)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(outStatsPath, jsonData, os.ModePerm); err != nil {
 		return err
 	}
 
