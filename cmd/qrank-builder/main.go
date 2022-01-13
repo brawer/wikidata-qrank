@@ -121,7 +121,7 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
-	_, err = buildStats(edate, qrank, outDir)
+	_, err = buildStats(edate, qrank, 50, 1000, outDir)
 	if err != nil {
 		return err
 	}
