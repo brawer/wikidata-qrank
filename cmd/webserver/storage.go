@@ -74,7 +74,7 @@ func NewStorage(keypath, workdir string) (*Storage, error) {
 	}, nil
 }
 
-var objRegexp = regexp.MustCompile(`public/([a-z]+)\-(2[0-9]{7})\.([a-z0-9\.]+)`)
+var objRegexp = regexp.MustCompile(`public/([a-z\-]+)\-(2[0-9]{7})\.([a-z0-9\.]+)`)
 
 // Reload caches public content from remote object storage to local disk.
 // Any old content (which is not live anymore) is deleted from local disk.
@@ -125,10 +125,12 @@ func (s *Storage) Reload(ctx context.Context) error {
 		}
 
 		switch filepath.Ext(filename) {
-		case ".tiff":
-			loc.ContentType = "image/tiff"
 		case ".gz":
 			loc.ContentType = "application/gzip"
+		case ".json":
+			loc.ContentType = "application/json"
+		case ".tiff":
+			loc.ContentType = "image/tiff"
 		case ".txt":
 			loc.ContentType = "text/plain"
 		}
