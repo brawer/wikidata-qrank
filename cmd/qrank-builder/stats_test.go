@@ -12,17 +12,6 @@ import (
 	"time"
 )
 
-/* TODO: Remove this once we’re sure the code works.
-
-func TestBuildStats222222(t *testing.T) {
-	statsPath, err := buildStats(time.Now(), "/Users/sascha/src/wikidata-qrank/cache/qrank-20211220.gz", 50, 1000, "/Users/sascha/src/wikidata-qrank/testout")
-	if err != nil {
-	   t.Fatal(err)
-	}
-	fmt.Println("******************", statsPath)
-}
-*/
-
 func TestBuildStats(t *testing.T) {
 	qrank := filepath.Join(t.TempDir(), "TestStats-qrank.gz")
 	writeGzipFile(qrank,
@@ -37,7 +26,7 @@ Q7,1
 Q8,1
 Q9,1
 `)
-	statsPath, err := buildStats(time.Now(), qrank, 2, 5, t.TempDir())
+	statsPath, err := buildStats(time.Now(), qrank, 2, 8, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

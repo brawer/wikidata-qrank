@@ -55,13 +55,13 @@ func buildStats(date time.Time, qrankPath string, topN int, numSamples int, outD
 		return "", err
 	}
 
-	samplingDistanceSq := 1.0 / float64(numSamples)
+	samplingDistanceSq := 4.0 * 4.0
 	var stats Stats
 	stats.Samples = make([]Sample, 0, numSamples)
 	var id string
 	var rank, value int64
 	var lastX, lastY, scaleY float64
-	scaleX := 1.0 / float64(numRanks)
+	scaleX := float64(numSamples) / float64(numRanks)
 	scanner := bufio.NewScanner(qrankReader)
 	scanner.Scan() // Skip CSV header.
 	for scanner.Scan() {
@@ -78,7 +78,7 @@ func buildStats(date time.Time, qrankPath string, topN int, numSamples int, outD
 		}
 
 		if rank == 1 { // first item in file, this is the maximum value
-			scaleY = 1.0 / math.Log10(float64(value))
+			scaleY = float64(numSamples) / math.Log10(float64(value))
 		}
 
 		x, y := float64(rank)*scaleX, math.Log10(float64(value))*scaleY
@@ -110,7 +110,7 @@ func buildStats(date time.Time, qrankPath string, topN int, numSamples int, outD
 
 	statsPath := filepath.Join(
 		outDir,
-		fmt.Sprintf("stats-%04d%02d%02d.json", date.Year(), date.Month(), date.Day()))
+		fmt.Sprintf("qrank-stats-%04d%02d%02d.json", date.Year(), date.Month(), date.Day()))
 	tmpStatsPath := statsPath + ".tmp"
 
 	j, err := json.Marshal(stats)
