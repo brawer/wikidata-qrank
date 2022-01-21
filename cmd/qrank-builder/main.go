@@ -121,13 +121,13 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
-	_, err = buildStats(edate, qrank, 50, 1000, outDir)
+	stats, err := buildStats(edate, qrank, 50, 1000, outDir)
 	if err != nil {
 		return err
 	}
 
 	if storage != nil {
-		if err := upload(edate, qrank, storage); err != nil {
+		if err := upload(edate, qrank, stats, storage); err != nil {
 			return err
 		}
 	}
@@ -135,10 +135,25 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	return nil
 }
 
-// Upload puts the final output file into an S3-compatible object storage.
-func upload(date time.Time, qrank string, storage *minio.Client) error {
+// Upload puts the final output files into an S3-compatible object storage.
+func upload(date time.Time, qrank, stats string, storage *minio.Client) error {
+	ymd := date.Format("20060102")
+	qrankDest := fmt.Sprintf("public/qrank-%s.csv.gz", ymd)
+	if err := uploadFile(qrankDest, qrank, "text/csv", storage); err != nil {
+		return err
+	}
+
+	statsDest := fmt.Sprintf("public/qrank-stats-%s.csv.gz", ymd)
+	if err := uploadFile(statsDest, stats, "application/json", storage); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UploadFile puts one single file into an S3-compatible object storage.
+func uploadFile(dest, src, contentType string, storage *minio.Client) error {
 	ctx := context.Background()
-	dest := fmt.Sprintf("public/qrank-%s.csv.gz", date.Format("20060102"))
 	bucket := "qrank"
 
 	// Check if the output file already exists in storage.
@@ -152,8 +167,8 @@ func upload(date time.Time, qrank string, storage *minio.Client) error {
 		return nil
 	}
 
-	opts := minio.PutObjectOptions{ContentType: "text/csv"}
-	_, err = storage.FPutObject(ctx, bucket, dest, qrank, opts)
+	opts := minio.PutObjectOptions{ContentType: contentType}
+	_, err = storage.FPutObject(ctx, bucket, dest, src, opts)
 	if err != nil {
 		return err
 	}
