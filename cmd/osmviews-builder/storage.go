@@ -100,29 +100,45 @@ func NewStorage(keypath string) (Storage, error) {
 }
 
 func Cleanup(s Storage) error {
-	ctx := context.Background()
-	re := regexp.MustCompile(`public/osmviews-\d{8}\.tiff`)
+	for _, p := range []struct {
+		prefix, pattern string
+		keep            int
+	}{
+		{"internal/osmviews-builder/tilelogs-", `internal/osmviews-builder/tilelogs-\d{4}-W\d{2}\.br`, 60},
+		{"public/osmviews-", `public/osmviews-\d{8}\.tiff`, 3},
+		{"public/osmviews-stats-", `public/osmviews-stats-\d{8}\.json`, 3},
+	} {
+		if err := cleanupPath("qrank", p.prefix, p.pattern, p.keep, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	osmviews := make([]string, 0, 10)
-	files, err := s.List(ctx, "qrank", "public/osmviews-")
+func cleanupPath(bucket, prefix, pattern string, keep int, s Storage) error {
+	ctx := context.Background()
+	re := regexp.MustCompile(pattern)
+
+	found := make([]string, 0, keep+10)
+	files, err := s.List(ctx, bucket, prefix)
 	if err != nil {
 		return err
 	}
 	for _, f := range files {
 		if re.MatchString(f.Key) {
-			osmviews = append(osmviews, f.Key)
+			found = append(found, f.Key)
 		}
 	}
 
-	if len(osmviews) > 3 {
-		sort.Strings(osmviews)
-		for _, path := range osmviews[0 : len(osmviews)-3] {
-			msg := fmt.Sprintf("Deleting from storage: qrank/%s", path)
+	if len(found) > keep {
+		sort.Strings(found)
+		for _, path := range found[0 : len(found)-keep] {
+			msg := fmt.Sprintf("Deleting from storage: %s/%s", bucket, path)
 			fmt.Println(msg)
 			if logger != nil {
 				logger.Println(msg)
 			}
-			if err := s.Remove(ctx, "qrank", path); err != nil {
+			if err := s.Remove(ctx, bucket, path); err != nil {
 				return err
 			}
 		}
