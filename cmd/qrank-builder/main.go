@@ -143,7 +143,7 @@ func upload(date time.Time, qrank, stats string, storage *minio.Client) error {
 		return err
 	}
 
-	statsDest := fmt.Sprintf("public/qrank-stats-%s.csv.gz", ymd)
+	statsDest := fmt.Sprintf("public/qrank-stats-%s.json", ymd)
 	if err := uploadFile(statsDest, stats, "application/json", storage); err != nil {
 		return err
 	}
