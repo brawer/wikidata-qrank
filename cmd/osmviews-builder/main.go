@@ -30,6 +30,12 @@ func main() {
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 
+	if err := buildStats(filepath.Join(*cachedir, "osmviews-20220124.tiff"), "osmviews-stats-20220124.json"); err != nil {
+		fmt.Println(err)
+		logger.Fatal(err)
+	}
+	return
+
 	var storage Storage
 	if *storagekey != "" {
 		storage, err = NewStorage(*storagekey)
@@ -63,7 +69,9 @@ func main() {
 	date := lastDay.Format("20060102")
 	bucket := "qrank"
 	localpath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-%s.tiff", date))
+	localStatsPath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-stats-%s.json", date))
 	remotepath := fmt.Sprintf("public/osmviews-%s.tiff", date)
+	//remoteStatsPath := fmt.Sprintf("public/osmviews-stats-%s.json", date)
 
 	// Check if the output file already exists in storage.
 	// If we can retrieve object stats without an error, we don’t need
@@ -79,6 +87,10 @@ func main() {
 
 	// Paint the output GeoTIFF file.
 	if err := paint(localpath, 18, tilecounts, ctx); err != nil {
+		logger.Fatal(err)
+	}
+
+	if err := buildStats(localpath, localStatsPath); err != nil {
 		logger.Fatal(err)
 	}
 
