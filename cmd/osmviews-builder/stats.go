@@ -289,6 +289,27 @@ func findSharedTiles(tileOffsets []uint32) SharedTiles {
 	return shared
 }
 
+func (s SharedTiles) Plot(dc *gg.Context, tileOffsets []uint32) {
+	dc.SetRGB(1, 1, 1)
+	dc.Clear()
+	dc.SetRGB(0.8, 0.8, 1)
+	stride := 1 << (math.Ilogb(float64(len(tileOffsets))) / 2)
+	for ti, off := range tileOffsets {
+		if s[off] != nil {
+			dc.SetPixel(ti%stride, ti/stride)
+		}
+	}
+
+	dc.SetRGB(0.6, 0.6, 1)
+	for _, t := range s {
+		for _, tile := range t.SampleTiles {
+			tileX, tileY := int(tile)%stride, int(tile)/stride
+			dc.DrawCircle(float64(tileX), float64(tileY), 1.5)
+			dc.Fill()
+		}
+	}
+}
+
 type histogram struct {
 	buckets map[uint64]bucket
 }
@@ -328,21 +349,7 @@ func buildHistogram(t *TiffReader) ([]bucket, error) {
 	var n int
 
 	dc1 := gg.NewContext(tileStride, tileStride)
-	dc1.SetRGB(1, 1, 1)
-	dc1.Clear()
-	dc1.SetRGB(0.8, 0.8, 1)
-	for tii, off := range t.tileOffsets {
-		if sharedTiles[off] != nil {
-			dc1.SetPixel(tii%tileStride, tii/tileStride)
-		}
-	}
-
-	dc1.SetRGB(0, 0.4, 1)
-	for ti, _ := range sharedTileSamples {
-		tileX, tileY := int(ti)%tileStride, int(ti)/tileStride
-		dc1.DrawCircle(float64(tileX), float64(tileY), 2.0)
-		dc1.Fill()
-	}
+	sharedTiles.Plot(dc1, t.tileOffsets)
 
 	if err := dc1.SavePNG("debug.png"); err != nil {
 		return nil, err
