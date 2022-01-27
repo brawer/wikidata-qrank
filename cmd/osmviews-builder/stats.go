@@ -338,17 +338,10 @@ func buildHistogram(t *TiffReader) ([]bucket, error) {
 	}
 
 	dc1.SetRGB(0, 0.4, 1)
-	for tii, off := range t.tileOffsets {
-		ti := TileIndex(tii)
-		shared := sharedTiles[off]
-		if shared != nil && !sharedTileSamples[ti] {
-			continue
-		}
-		tileX, tileY := tii%tileStride, tii/tileStride
-		if shared != nil {
-			dc1.DrawCircle(float64(tileX), float64(tileY), 2.0)
-			dc1.Fill()
-		}
+	for ti, _ := range sharedTileSamples {
+		tileX, tileY := int(ti)%tileStride, int(ti)/tileStride
+		dc1.DrawCircle(float64(tileX), float64(tileY), 2.0)
+		dc1.Fill()
 	}
 
 	if err := dc1.SavePNG("debug.png"); err != nil {
