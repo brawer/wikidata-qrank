@@ -14,7 +14,6 @@ import (
 	"math/rand"
 	"os"
 	"sort"
-	"time"
 
 	"github.com/fogleman/gg"
 )
@@ -200,7 +199,7 @@ func (t *TiffReader) readIntArray(typ uint16, count, value uint32) ([]uint32, er
 	return result, nil
 }
 
-func (t *TiffReader) readTile(index int, data []float32) error {
+func (t *TiffReader) readTile(index TileIndex, data []float32) error {
 	if _, err := t.r.Seek(int64(t.tileOffsets[index]), os.SEEK_SET); err != nil {
 		return err
 	}
@@ -311,103 +310,192 @@ func (s SharedTiles) Plot(dc *gg.Context, tileOffsets []uint32) {
 }
 
 type histogram struct {
-	buckets map[uint64]bucket
+	imageWidth, imageHeight int
+	tileWidth, tileHeight   int
+	stride, zoom            int
+	tileWidthBits           int
+	buckets                 map[uint64]bucket2
+	extraSamples            map[uint64][]bucketSample
 }
 
-func newHistogram() *histogram {
-	h := &histogram{}
-	h.buckets = make(map[uint64]bucket, 250000) // 210037 for 2022-01-24 data
+type bucket2 struct {
+	Count  int64
+	Sample bucketSample
+}
+
+func newHistogram(imageWidth, imageHeight, tileWidth, tileHeight int) *histogram {
+	h := &histogram{imageWidth: imageWidth, imageHeight: imageHeight, tileWidth: tileWidth, tileHeight: tileHeight}
+	h.stride = (imageWidth + tileWidth - 1) / tileWidth
+	h.zoom = math.Ilogb(float64(imageWidth))
+	h.tileWidthBits = math.Ilogb(float64(tileWidth))
+	h.buckets = make(map[uint64]bucket2, 250000) // 210037 for 2022-01-24 data
+	h.extraSamples = make(map[uint64][]bucketSample, 50)
+	for i := uint64(0); i < 10; i++ {
+		h.extraSamples[i] = make([]bucketSample, 0, 1000)
+	}
 	return h
 }
 
-func (h *histogram) process(data []float32, uses int) {
+func (h *histogram) Add(data []float32, uses int, samples []TileIndex) {
+	numSamples, numSamplesTaken := 2, 0
+	for y := 0; y < h.tileHeight; y++ {
+		pos := y * h.tileWidth
+		for x := 0; x < h.tileWidth; x++ {
+			val := data[pos]
+			pos++
+			key := uint64(val + 0.5) //+ 100
+			if b, ok := h.buckets[key]; ok && numSamplesTaken >= numSamples {
+				// Frequent code path, taken 4.7 billion times (without numSamples check); TODO times now.
+				b.Count += int64(uses)
+			} else {
+				// Infrequent code path, taken 210 thousand times.
+				// Not worth optimizing.
+				tileX := int(samples[0]) % h.stride
+				pixelX := uint32(tileX<<h.tileWidthBits + x)
+				lng := float32(pixelX)/float32(h.imageWidth)*360.0 - 180.0
+
+				tileY := int(samples[0]) / h.stride
+				pixelY := uint32(tileY<<h.tileWidthBits + y)
+				lat := float32(TileLatitude(uint8(h.zoom), pixelY) * (180 / math.Pi))
+
+				count := h.buckets[key].Count + int64(uses)
+				h.buckets[key] = bucket2{count, bucketSample{val, lat, lng}}
+				numSamplesTaken += 1
+			}
+		}
+	}
 }
 
-func buildHistogram(t *TiffReader) ([]bucket, error) {
-	sharedTiles := findSharedTiles(t.tileOffsets)
+func (h *histogram) Plot(dc *gg.Context) {
+	ctr := make(map[uint64]int)
+	dc.SetRGB(1, 0, 0)
+	z := uint8(h.zoom - h.tileWidthBits)
+	for _, b := range h.buckets {
+		x, y := TileFromLatLng(float64(b.Sample.lat), float64(b.Sample.lng), z)
+		dc.DrawCircle(float64(x)+0.5, float64(y)+0.5, 4.0)
+		dc.Fill()
+		ctr[uint64(y)*1024+uint64(x)] += 1
+	}
+	fmt.Println("**** Number of unique lat/lng samples:", len(ctr))
+}
 
-	sharedTileSamples := make(map[TileIndex]bool, 1000) // 894 for 2022-01-24
-	for _, t := range sharedTiles {
-		for _, sample := range t.SampleTiles {
-			sharedTileSamples[sample] = true
+func buildHistogram(t *TiffReader) ([]bucket2, error) {
+	sharedTiles := findSharedTiles(t.tileOffsets)
+	stride := 1 << (math.Ilogb(float64(len(t.tileOffsets))) / 2)
+	h3 := newHistogram(int(t.imageWidth), int(t.imageHeight), int(t.tileWidth), int(t.tileHeight))
+
+	data := make([]float32, t.tileWidth*t.tileHeight)
+	nn := 0
+	for _, y := range rand.Perm(stride) {
+		for _, x := range rand.Perm(stride) {
+			ti := TileIndex(y*stride + x)
+			off := t.tileOffsets[ti]
+			if _, isShared := sharedTiles[off]; isShared {
+				continue
+			}
+			//if nn > 8 { break }
+			if err := t.readTile(ti, data); err != nil {
+				return nil, err
+			}
+			h3.Add(data, 1, []TileIndex{ti})
+			nn++
 		}
 	}
 
-	tileUses := make(map[uint32]int, 80000) // 72138 for TIFF of Jan 24, 2022
-	tile := make(map[uint32]int, 80000)
-	for i, off := range t.tileOffsets {
-		tile[off] = i
-		tileUses[off] += 1
+	for _, st := range sharedTiles {
+		if err := t.readTile(st.SampleTiles[0], data); err != nil {
+			return nil, err
+		}
+		h3.Add(data, st.UseCount, st.SampleTiles)
 	}
 
-	fmt.Println("*** GIRAFFE", time.Now().Format(time.RFC3339), len(tile), len(tileUses), len(t.tileOffsets))
-	data := make([]float32, t.tileWidth*t.tileHeight)
-	tileStride := int((t.imageWidth + t.tileWidth - 1) / t.tileWidth)
-	zoom := uint8(math.Ilogb(float64(t.imageWidth)))
-	hist := make(map[int64]bucket, 250000) // 210037 for TIFF of Jan 24, 2022
-	//hist2 := newHistogram()
-	var n int
+	buckets := make([]bucket2, 0, len(h3.buckets))
+	for _, h := range h3.buckets {
+		buckets = append(buckets, h)
+	}
+	sort.Slice(buckets, func(i, j int) bool {
+		return buckets[i].Sample.value >= buckets[j].Sample.value
+	})
 
-	dc1 := gg.NewContext(tileStride, tileStride)
+	dc1 := gg.NewContext(h3.stride, h3.stride)
 	sharedTiles.Plot(dc1, t.tileOffsets)
-
+	h3.Plot(dc1)
+	fmt.Println("len(h3.buckets):", len(h3.buckets))
 	if err := dc1.SavePNG("debug.png"); err != nil {
 		return nil, err
 	}
+	return buckets, nil
 
-	for off, ti := range tile {
-		continue
-		if err := t.readTile(ti, data); err != nil {
+	/*
+		tileUses := make(map[uint32]int, 80000) // 72138 for TIFF of Jan 24, 2022
+		tile := make(map[uint32]int, 80000)
+		for i, off := range t.tileOffsets {
+			tile[off] = i
+			tileUses[off] += 1
+		}
+
+		stride = int((t.imageWidth + t.tileWidth - 1) / t.tileWidth)
+		hist := make(map[int64]bucket, 250000) // 210037 for TIFF of Jan 24, 2022
+		//hist2 := newHistogram()
+		var n int
+
+		sharedTiles.Plot(dc1, t.tileOffsets)
+		if err := dc1.SavePNG("debug.png"); err != nil {
 			return nil, err
 		}
-		uses := int64(tileUses[off])
-		tileX, tileY := ti%tileStride, ti/tileStride
-		for px, value := range data {
-			key := int64(value + 0.5) //+ 100
-			// Collect more samples for small values.
-			if value < 100 {
-				//key = int64(value*100 + 0.5)
-			}
-			if h, present := hist[key]; present {
-				// frequent code path
-				h.count += uses
-				hist[key] = h
-			} else {
-				// infrequent code path, taken ~200K times
-				x := uint32(tileX)*t.tileWidth + uint32(px)%t.tileWidth
-				y := uint32(tileY)*t.tileHeight + uint32(px)/t.tileWidth
-				lng := float32(x)/float32(t.imageWidth)*360.0 - 180.0
-				lat := float32(TileLatitude(zoom+8, y) * (180 / math.Pi))
-				//lng, lat := float32(x), float32(y)
-				hist[key] = bucket{uses, bucketSample{value, lat, lng}}
-			}
-		}
-		n += 1
-		if n > 0 && n%5000 == 0 {
-			fmt.Println("*** GIRAFFE-1", time.Now().Format(time.RFC3339), n)
-		}
-		//if n > 5000 { break }
-	}
 
-	buckets := make([]bucket, 0, len(hist))
-	for _, h := range hist {
-		buckets = append(buckets, h)
-	}
-	fmt.Printf("**** ZEBRA len(hist)=%d\n", len(hist))
-	sort.Slice(buckets, func(i, j int) bool {
-		return buckets[i].sample.value >= buckets[j].sample.value
-	})
-	return buckets, nil
+		zoom := uint8(math.Ilogb(float64(t.imageWidth)))
+		for off, ti := range tile {
+			continue
+			if err := t.readTile(TileIndex(ti), data); err != nil {
+				return nil, err
+			}
+			uses := int64(tileUses[off])
+			tileX, tileY := ti%stride, ti/stride
+			for px, value := range data {
+				key := int64(value + 0.5) //+ 100
+				// Collect more samples for small values.
+				if value < 100 {
+					//key = int64(value*100 + 0.5)
+				}
+				if h, present := hist[key]; present {
+					// frequent code path
+					h.count += uses
+					hist[key] = h
+				} else {
+					// infrequent code path, taken ~200K times
+					x := uint32(tileX)*t.tileWidth + uint32(px)%t.tileWidth
+					y := uint32(tileY)*t.tileHeight + uint32(px)/t.tileWidth
+					lng := float32(x)/float32(t.imageWidth)*360.0 - 180.0
+					lat := float32(TileLatitude(zoom+8, y) * (180 / math.Pi))
+					//lng, lat := float32(x), float32(y)
+					hist[key] = bucket{uses, bucketSample{value, lat, lng}}
+				}
+			}
+			n += 1
+			//if n > 5000 { break }
+		}
+
+		buckets := make([]bucket, 0, len(hist))
+		for _, h := range hist {
+			buckets = append(buckets, h)
+		}
+		//fmt.Printf("**** ZEBRA len(hist)=%d\n", len(hist))
+		sort.Slice(buckets, func(i, j int) bool {
+			return buckets[i].sample.value >= buckets[j].sample.value
+		})
+		return buckets, nil
+	*/
 }
 
-func calcStats(hist []bucket) (*Stats, error) {
+func calcStats(hist []bucket2) (*Stats, error) {
 	var maxVal float32
 	var totalCount int64
 	for _, h := range hist {
-		if h.sample.value > maxVal {
-			maxVal = h.sample.value
+		if h.Sample.value > maxVal {
+			maxVal = h.Sample.value
 		}
-		totalCount += h.count
+		totalCount += h.Count
 	}
 
 	var x, y, lastX, lastY float64
@@ -432,7 +520,7 @@ func calcStats(hist []bucket) (*Stats, error) {
 		} else if x > 1000 {
 			x = 1000
 		}
-		y = math.Log10(float64(b.sample.value)) * scaleY
+		y = math.Log10(float64(b.Sample.value)) * scaleY
 		if y < 0 {
 			y = 0
 		} else if y > 1000 {
@@ -441,13 +529,13 @@ func calcStats(hist []bucket) (*Stats, error) {
 		dist := (x-lastX)*(x-lastX) + (y-lastY)*(y-lastY)
 		if dist >= 16.0 || i == len(hist)-1 {
 			graph = append(graph, Point{x, y})
-			stats.Samples = append(stats.Samples, Sample{[]float32{b.sample.lat, b.sample.lng}, rank, b.sample.value})
+			stats.Samples = append(stats.Samples, Sample{[]float32{b.Sample.lat, b.Sample.lng}, rank, b.Sample.value})
 			lastX, lastY = x, y
 			if stats.Median == 0 && rank >= totalCount/2 {
 				stats.Median = len(stats.Samples) - 1
 			}
 		}
-		rank += b.count
+		rank += b.Count
 	}
 
 	dc.MoveTo(10, 10)
