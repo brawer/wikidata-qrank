@@ -27,6 +27,16 @@ func TileArea(zoom uint8, y uint32) float64 {
 	return earthSurface * latFraction / float64(uint32(1)<<zoom)
 }
 
+// TileFromLatLng returns tile coordinates for WGS84 latitude and longitude.
+func TileFromLatLng(lat, lng float64, zoom uint8) (x, y uint32) {
+	// https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
+	lat_rad := lat * (math.Pi / 180.0)
+	z := 1 << zoom
+	x = uint32((lng + 180.0) / 360.0 * float64(z))
+	y = uint32((1.0 - math.Asinh(math.Tan(lat_rad))/math.Pi) / 2.0 * float64(z))
+	return x, y
+}
+
 // TileKey encodes a zoom/x/y tile into an uin64. Containing tiles get
 // sorted before all their content; when sorting a set of tile keys,
 // the resulting order is that of a depth-first pre-order tree traversal.
