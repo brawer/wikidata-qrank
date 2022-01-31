@@ -30,12 +30,6 @@ func main() {
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 
-	if err := BuildStats(filepath.Join(*cachedir, "osmviews-20220124.tiff"), "osmviews-stats-20220124.json", "osmviews-statsplot-20220124.png"); err != nil {
-		fmt.Println(err)
-		logger.Fatal(err)
-	}
-	return
-
 	var storage Storage
 	if *storagekey != "" {
 		storage, err = NewStorage(*storagekey)
