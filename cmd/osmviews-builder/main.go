@@ -63,16 +63,25 @@ func main() {
 	date := lastDay.Format("20060102")
 	bucket := "qrank"
 	localpath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-%s.tiff", date))
+	localStatsPath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-stats-%s.json", date))
+	localStatsPlotPath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-statsplot-%s.png", date))
 	remotepath := fmt.Sprintf("public/osmviews-%s.tiff", date)
+	remoteStatsPath := fmt.Sprintf("public/osmviews-stats-%s.json", date)
 
 	// Check if the output file already exists in storage.
 	// If we can retrieve object stats without an error, we don’t need
 	// to do anything and are completely done.
 	if storage != nil {
 		_, err := storage.Stat(ctx, bucket, remotepath)
-		if err == nil {
-			fmt.Printf("Already in storage: %s/%s\n", bucket, remotepath)
-			logger.Printf("Already in storage: %s/%s", bucket, remotepath)
+		hasGeoTiff := err != nil
+		_, err = storage.Stat(ctx, bucket, remoteStatsPath)
+		hasStats := err != nil
+		if hasGeoTiff && hasStats {
+			msg := fmt.Sprintf("Already in storage: %s/%s and %s/%s", bucket, remotepath, bucket, remoteStatsPath)
+			fmt.Println(msg)
+			if logger != nil {
+				logger.Println(msg)
+			}
 			return
 		}
 	}
@@ -82,16 +91,25 @@ func main() {
 		logger.Fatal(err)
 	}
 
+	if err := BuildStats(localpath, localStatsPath, localStatsPlotPath); err != nil {
+		logger.Fatal(err)
+	}
+
 	// Upload the output file to storage, and garbage-collect old files.
 	if storage != nil {
 		err := storage.PutFile(ctx, bucket, remotepath, localpath, "image/tiff")
 		if err != nil {
 			logger.Fatal(err)
-		} else {
-			msg := fmt.Sprintf("Uploaded to storage: %s/%s\n", bucket, remotepath)
-			fmt.Println(msg)
-			logger.Println(msg)
 		}
+
+		err = storage.PutFile(ctx, bucket, remoteStatsPath, localStatsPath, "application/json")
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		msg := fmt.Sprintf("Uploaded to storage: %s/%s and %s/%s\n", bucket, remotepath, bucket, remoteStatsPath)
+		fmt.Println(msg)
+		logger.Println(msg)
 
 		if err := Cleanup(storage); err != nil {
 			logger.Fatal(err)

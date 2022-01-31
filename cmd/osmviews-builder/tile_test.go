@@ -328,6 +328,10 @@ func TestTileKey_Area(t *testing.T) {
 	}
 }
 
+func ExampleTileFromLatLng() {
+	fmt.Println(TileFromLatLng(47.373878, 8.545094, 10)) // Output: 536 358
+}
+
 func TestTileKey_ToZoom(t *testing.T) {
 	type TK struct {
 		z    uint8
