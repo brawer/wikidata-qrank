@@ -30,7 +30,7 @@ func main() {
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 
-	if err := buildStats(filepath.Join(*cachedir, "osmviews-20220124.tiff"), "osmviews-stats-20220124.json"); err != nil {
+	if err := BuildStats(filepath.Join(*cachedir, "osmviews-20220124.tiff"), "osmviews-stats-20220124.json", "osmviews-statsplot-20220124.png"); err != nil {
 		fmt.Println(err)
 		logger.Fatal(err)
 	}
@@ -70,17 +70,24 @@ func main() {
 	bucket := "qrank"
 	localpath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-%s.tiff", date))
 	localStatsPath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-stats-%s.json", date))
+	localStatsPlotPath := filepath.Join(*cachedir, fmt.Sprintf("osmviews-statsplot-%s.png", date))
 	remotepath := fmt.Sprintf("public/osmviews-%s.tiff", date)
-	//remoteStatsPath := fmt.Sprintf("public/osmviews-stats-%s.json", date)
+	remoteStatsPath := fmt.Sprintf("public/osmviews-stats-%s.json", date)
 
 	// Check if the output file already exists in storage.
 	// If we can retrieve object stats without an error, we don’t need
 	// to do anything and are completely done.
 	if storage != nil {
 		_, err := storage.Stat(ctx, bucket, remotepath)
-		if err == nil {
-			fmt.Printf("Already in storage: %s/%s\n", bucket, remotepath)
-			logger.Printf("Already in storage: %s/%s", bucket, remotepath)
+		hasGeoTiff := err != nil
+		_, err = storage.Stat(ctx, bucket, remoteStatsPath)
+		hasStats := err != nil
+		if hasGeoTiff && hasStats {
+			msg := fmt.Sprintf("Already in storage: %s/%s and %s/%s", bucket, remotepath, bucket, remoteStatsPath)
+			fmt.Println(msg)
+			if logger != nil {
+				logger.Println(msg)
+			}
 			return
 		}
 	}
@@ -90,7 +97,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	if err := buildStats(localpath, localStatsPath); err != nil {
+	if err := BuildStats(localpath, localStatsPath, localStatsPlotPath); err != nil {
 		logger.Fatal(err)
 	}
 
@@ -99,11 +106,16 @@ func main() {
 		err := storage.PutFile(ctx, bucket, remotepath, localpath, "image/tiff")
 		if err != nil {
 			logger.Fatal(err)
-		} else {
-			msg := fmt.Sprintf("Uploaded to storage: %s/%s\n", bucket, remotepath)
-			fmt.Println(msg)
-			logger.Println(msg)
 		}
+
+		err = storage.PutFile(ctx, bucket, remoteStatsPath, localStatsPath, "application/json")
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		msg := fmt.Sprintf("Uploaded to storage: %s/%s and %s/%s\n", bucket, remotepath, bucket, remoteStatsPath)
+		fmt.Println(msg)
+		logger.Println(msg)
 
 		if err := Cleanup(storage); err != nil {
 			logger.Fatal(err)
