@@ -73,9 +73,9 @@ func main() {
 	// to do anything and are completely done.
 	if storage != nil {
 		_, err := storage.Stat(ctx, bucket, remotepath)
-		hasGeoTiff := err != nil
+		hasGeoTiff := err == nil
 		_, err = storage.Stat(ctx, bucket, remoteStatsPath)
-		hasStats := err != nil
+		hasStats := err == nil
 		if hasGeoTiff && hasStats {
 			msg := fmt.Sprintf("Already in storage: %s/%s and %s/%s", bucket, remotepath, bucket, remoteStatsPath)
 			fmt.Println(msg)
