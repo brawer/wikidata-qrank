@@ -112,6 +112,7 @@ func (ws *Webserver) HandleDownload(w http.ResponseWriter, req *http.Request) {
 	// As per https://tools.ietf.org/html/rfc7232, ETag must have quotes.
 	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, c.ETag))
 	w.Header().Set("Content-Type", c.ContentType)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	http.ServeContent(w, req, "", c.LastModified, c)
 	c.Close()
 }
