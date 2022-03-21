@@ -108,13 +108,30 @@ func (ws *Webserver) HandleDownload(w http.ResponseWriter, req *http.Request) {
 		http.NotFound(w, req)
 		return
 	}
+	defer c.Close()
 
-	// As per https://tools.ietf.org/html/rfc7232, ETag must have quotes.
-	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, c.ETag))
-	w.Header().Set("Content-Type", c.ContentType)
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	http.ServeContent(w, req, "", c.LastModified, c)
-	c.Close()
+	h := w.Header()
+	switch req.Method {
+	case http.MethodGet:
+		// As per https://tools.ietf.org/html/rfc7232, ETag must have quotes.
+		h.Set("ETag", fmt.Sprintf(`"%s"`, c.ETag))
+		h.Set("Content-Type", c.ContentType)
+		h.Set("Access-Control-Allow-Origin", "*")
+		http.ServeContent(w, req, "", c.LastModified, c)
+
+	case http.MethodOptions: // CORS pre-flight
+		h.Set("Allow", "GET, OPTIONS")
+		h.Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		h.Set("Access-Control-Allow-Headers", "ETag, If-Match, If-None-Match, If-Modified-Since, If-Range, Range")
+		h.Set("Access-Control-Allow-Origin", "*")
+		h.Set("Access-Control-Expose-Headers", "ETag")
+		h.Set("Access-Control-Max-Age", "86400") // 1 day
+		w.WriteHeader(http.StatusNoContent)
+
+	default:
+		h.Set("Allow", "GET, OPTIONS")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 // HandleRobotsTxt sends a constant robots.txt file back to the
