@@ -118,7 +118,7 @@ func TestWebserver_DownloadOptions(t *testing.T) {
 		t.Errorf(`want empty body, got "%s"`, string(body))
 	}
 
-	want := "GET, OPTIONS"
+	want := "GET, HEAD, OPTIONS"
 	if got := header.Get("Allow"); got != want {
 		t.Errorf(`expected "Allow: %s", got "%s"`, want, got)
 	}
@@ -177,7 +177,7 @@ func TestWebserver_DownloadMethodNotAllowed(t *testing.T) {
 		t.Errorf(`want empty body, got "%s"`, string(body))
 	}
 
-	want := "GET, OPTIONS"
+	want := "GET, HEAD, OPTIONS"
 	if got := header.Get("Allow"); got != want {
 		t.Errorf(`expected "Allow: %s", got "%s"`, want, got)
 	}
