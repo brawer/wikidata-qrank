@@ -3,7 +3,7 @@
 
 module github.com/brawer/wikidata-qrank/v2
 
-go 1.17
+go 1.20
 
 require (
 	github.com/andybalholm/brotli v1.0.4
