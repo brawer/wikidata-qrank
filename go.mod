@@ -14,7 +14,7 @@ require (
 	github.com/orcaman/writerseeker v0.0.0-20200621085525-1d3f536ff85e
 	github.com/prometheus/client_golang v1.11.1
 	github.com/ulikunitz/xz v0.5.8
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sync v0.1.0
 	golang.org/x/text v0.7.0
 )
 
