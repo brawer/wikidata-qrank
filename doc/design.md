@@ -235,7 +235,7 @@ ranking signal is stale by a couple days.
 ### Signal smearing
 
 Currently, the QRank values are simply aggregated raw view counts; no
-“signal smearing” has been implemented yet. This might be be an area
+“signal smearing” has been implemented yet. This might be an area
 for future improvement, since it would give a rank to entities that
 have no Wikimedia pages themselves. For example, it may be beneficial
 to propagate some fraction of an author's rank to their publications;
