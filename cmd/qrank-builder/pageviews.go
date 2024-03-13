@@ -149,8 +149,6 @@ func combineCounts(ch <-chan string, w io.Writer, ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-
-	return nil
 }
 
 func writeCount(w io.Writer, key string, count int64) error {
