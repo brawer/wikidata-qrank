@@ -4,7 +4,11 @@
 package main
 
 import (
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -303,4 +307,34 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 		}
 	}
 	return b[0:w], true
+}
+
+var isoWeekRegexp = regexp.MustCompile(`(\d{4})-W(\d{2})`)
+
+// ParseISOWeek gives the year and week for an ISO week string like "2018-W34".
+func ParseISOWeek(s string) (year int, week int, err error) {
+	match := isoWeekRegexp.FindStringSubmatch(s)
+	if match == nil || len(match) != 3 {
+		return 0, 0, fmt.Errorf("week not in ISO 8601 format: %s", s)
+	}
+
+	year, _ = strconv.Atoi(match[1])
+	week, _ = strconv.Atoi(match[2])
+	return year, week, nil
+}
+
+// ISOWeekStart returns the first monday of the given ISO week.
+// It is the reverse of Go’s time.ISOWeek() function, which appears
+// to be missing from the standard library.
+func ISOWeekStart(year, week int) time.Time {
+	// Find the first Monday before July 1 of the given year.
+	t := time.Date(year, 7, 1, 0, 0, 0, 0, time.UTC)
+	if wd := t.Weekday(); wd == time.Sunday {
+		t = t.AddDate(0, 0, -6)
+	} else {
+		t = t.AddDate(0, 0, -int(wd)+1)
+	}
+
+	_, w := t.ISOWeek()
+	return t.AddDate(0, 0, (week-w)*7)
 }

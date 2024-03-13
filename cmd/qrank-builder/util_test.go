@@ -125,3 +125,44 @@ func TestUnquote(t *testing.T) {
 		}
 	}
 }
+
+func TestParseISOWeek(t *testing.T) {
+	year, week, err := ParseISOWeek("2023-W07")
+	if err != nil {
+		t.Error(err)
+	} else if year != 2023 || week != 7 {
+		t.Errorf("want (2023, 7), got (%d, %d)", year, week)
+	}
+}
+
+func TestParseISOWeek_BadFormat(t *testing.T) {
+	if _, _, err := ParseISOWeek("2023-12-24"); err == nil {
+		t.Error("want error, got nil")
+	}
+}
+
+func ExampleParseISOWeek() {
+	fmt.Println(ParseISOWeek("2018-W51")) // Output: 2018 51 <nil>
+}
+
+func TestISOWeekStart(t *testing.T) {
+	for _, tc := range []struct {
+		year     int
+		day      int
+		expected string
+	}{
+		{2018, -1, "2017-12-18"},
+		{2018, 0, "2017-12-25"},
+		{2018, 1, "2018-01-01"},
+		{2018, 2, "2018-01-08"},
+		{2019, 1, "2018-12-31"},
+		{2019, 2, "2019-01-07"},
+		{2019, 53, "2019-12-30"},
+		{2019, 54, "2020-01-06"},
+	} {
+		got := ISOWeekStart(tc.year, tc.day).Format("2006-01-02")
+		if tc.expected != got {
+			t.Errorf("want ISOWeekStart(%d, %d) = %s, got %s", tc.year, tc.day, tc.expected, got)
+		}
+	}
+}
