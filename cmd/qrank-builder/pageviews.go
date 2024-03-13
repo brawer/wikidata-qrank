@@ -303,12 +303,27 @@ func emitPageviews(site, title string, count int64, ch chan<- string, ctx contex
 	return nil
 }
 
+// readWeeklyPageviews reads the Wikimedia pageview file of one week,
+// sending output as `Wiki,PageID,Count` to a string channel before
+// closing that channel.
+func readWeeklyPageviews(ctx context.Context, dumps string, year int, week int, out chan<- string) error {
+	defer close(out)
+	group, groupCtx := errgroup.WithContext(ctx)
+	start := ISOWeekStart(year, week)
+	for i := 0; i < 7; i++ {
+		day := start.AddDate(0, 0, i)
+		path := PageviewsPath(dumps, day)
+		group.Go(func() error {
+			return readDailyPageviews(groupCtx, path, out)
+		})
+	}
+	return group.Wait()
+}
+
 // readDailyPageviews reads the Wikimedia pageview file of one single day,
 // sending output as `Wiki,PageID,Count` to a string channel.
 // If `ctx` gets cancelled while reading the file, an error is returned.
 func readDailyPageviews(ctx context.Context, path string, out chan<- string) error {
-	defer close(out)
-
 	file, err := os.Open(path)
 	if err != nil {
 		return err

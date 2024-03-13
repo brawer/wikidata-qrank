@@ -119,11 +119,52 @@ func TestCombineCounts(t *testing.T) {
 	}
 }
 
+func TestReadWeeklyPageviews(t *testing.T) {
+	ch := make(chan string, 10)
+	numLines := 0
+	group, ctx := errgroup.WithContext(context.Background())
+	group.Go(func() error {
+		for _ = range ch {
+			numLines += 1
+		}
+		return nil
+	})
+	group.Go(func() error {
+		dumps := filepath.Join("testdata", "dumps")
+		return readWeeklyPageviews(ctx, dumps, 2023, 12, ch)
+	})
+	if err := group.Wait(); err != nil {
+		t.Error(err)
+	}
+	if numLines != 28 {
+		t.Errorf("got %d, want 28", numLines)
+	}
+}
+
+func TestReadWeeklyPageviews_Canceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ch := make(chan string, 2)
+	dumps := filepath.Join("testdata", "dumps")
+	if err := readWeeklyPageviews(ctx, dumps, 2023, 12, ch); err != context.Canceled {
+		t.Errorf("want context.Canceled, got %v", err)
+	}
+}
+
+func TestReadWeeklyPageviews_MissingFiles(t *testing.T) {
+	ctx := context.Background()
+	ch := make(chan string, 2)
+	if err := readWeeklyPageviews(ctx, "bad-path", 2021, 12, ch); err == nil {
+		t.Error("want error, got nil")
+	}
+}
+
 func TestReadDailyPageviews(t *testing.T) {
 	date, _ := time.Parse(time.DateOnly, "2023-03-20")
 	path := PageviewsPath(filepath.Join("testdata", "dumps"), date)
 	ch := make(chan string, 1)
 	go func() {
+		defer close(ch)
 		ctx := context.Background()
 		if err := readDailyPageviews(ctx, path, ch); err != nil {
 			t.Error(err)
