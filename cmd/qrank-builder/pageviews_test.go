@@ -212,3 +212,38 @@ func TestReadDailyPageviews_FileNotFound(t *testing.T) {
 		t.Error("want error, got nil")
 	}
 }
+
+func TestMergeCounts(t *testing.T) {
+	ch := make(chan string, 2)
+	var buf bytes.Buffer
+
+	group, ctx := errgroup.WithContext(context.Background())
+	group.Go(func() error {
+		return MergeCounts(ctx, ch, &buf)
+	})
+	group.Go(func() error {
+		ch <- "foo,A,77"
+		ch <- "qux,X,33"
+		ch <- "qux,X,1"
+		ch <- "qux,Y,7"
+		close(ch)
+		return nil
+	})
+	if err := group.Wait(); err != nil {
+		t.Error(err)
+	}
+	want := "foo,A,77\nqux,X,34\nqux,Y,7\n"
+	if got := buf.String(); got != want {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestMergeCounts_Canceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ch := make(chan string, 2)
+	var buf bytes.Buffer
+	if err := MergeCounts(ctx, ch, &buf); err != context.Canceled {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}

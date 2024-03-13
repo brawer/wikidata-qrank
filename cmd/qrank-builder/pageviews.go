@@ -135,7 +135,7 @@ func combineCounts(ch <-chan string, w io.Writer, ctx context.Context) error {
 		select {
 		case line, ok := <-ch:
 			if !ok { // channel closed, end of input
-				return writeCount(w, lastKey, lastCount)
+				return writeCount(w, lastKey, ' ', lastCount)
 			}
 			cols := strings.Split(line, " ")
 			if len(cols) != 2 {
@@ -150,7 +150,7 @@ func combineCounts(ch <-chan string, w io.Writer, ctx context.Context) error {
 			if key == lastKey {
 				lastCount += count
 			} else {
-				err := writeCount(w, lastKey, lastCount)
+				err := writeCount(w, lastKey, ' ', lastCount)
 				if err != nil {
 					return err
 				}
@@ -163,7 +163,7 @@ func combineCounts(ch <-chan string, w io.Writer, ctx context.Context) error {
 	}
 }
 
-func writeCount(w io.Writer, key string, count int64) error {
+func writeCount(w io.Writer, key string, sep rune, count int64) error {
 	if count <= 0 {
 		return nil
 	}
@@ -173,7 +173,7 @@ func writeCount(w io.Writer, key string, count int64) error {
 	if _, err := buf.WriteString(key); err != nil {
 		return err
 	}
-	if err := buf.WriteByte(' '); err != nil {
+	if _, err := buf.WriteRune(sep); err != nil {
 		return err
 	}
 	if _, err := buf.WriteString(strconv.FormatInt(count, 10)); err != nil {
@@ -402,5 +402,40 @@ func sendCount(wiki string, pageID int64, count int64, ctx context.Context, out 
 
 	case out <- buf.String():
 		return nil
+	}
+}
+
+// MergeCounts merges sorted counts such as "Foo,3" and "Foo,2" to "Foo,5".
+// Input is consumed from a string channel, output is written to a Writer.
+func MergeCounts(ctx context.Context, ch <-chan string, w io.Writer) error {
+	var lastKey string
+	var lastCount int64
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case line, ok := <-ch:
+			if !ok { // channel closed, end of input
+				return writeCount(w, lastKey, ',', lastCount)
+			}
+			pos := strings.LastIndex(line, ",")
+			if pos < 0 {
+				return fmt.Errorf("no comma in %v", line)
+			}
+			key, countStr := line[0:pos], line[pos+1:len(line)]
+			count, err := strconv.ParseInt(countStr, 10, 64)
+			if err != nil {
+				return err
+			}
+			if key == lastKey {
+				lastCount += count
+				continue
+			}
+			if err := writeCount(w, lastKey, ',', lastCount); err != nil {
+				return err
+			}
+			lastKey, lastCount = key, count
+		}
 	}
 }
