@@ -7,12 +7,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"log"
+	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -116,6 +121,56 @@ func TestCombineCounts(t *testing.T) {
 		if tc.expected != got {
 			t.Errorf("expected %q, got %q", tc.expected, got)
 		}
+	}
+}
+
+func TestBuildWeeklyPageviews(t *testing.T) {
+	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
+	ctx := context.Background()
+	dumps := filepath.Join("testdata", "dumps")
+	path := filepath.Join(t.TempDir(), "pageviews-2023-W12.zst")
+	if err := buildWeeklyPageviews(ctx, dumps, 2023, 12, path); err != nil {
+		t.Error(err)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Error(err)
+	}
+	defer file.Close()
+
+	reader, err := zstd.NewReader(file)
+	if err != nil {
+		t.Error(err)
+	}
+	defer reader.Close()
+
+	var buf bytes.Buffer
+	if _, err = io.Copy(&buf, reader); err != nil {
+		t.Error(err)
+	}
+	got := buf.String()
+
+	want := `
+        commons.wikimedia,2527294,1
+		commons.wikimedia,32538038,1
+		commons.wikimedia,35159029,1
+		de.wikipedia,585473,22
+		de.wikivoyage,23685,7
+		en.wikipedia,63989872,3
+		en.wikipedia,7082401,4
+		es.wikipedia,689814,4
+		fr.wikipedia,268776,3
+		it.wikipedia,110310,1
+		rm.wikipedia,10117,1
+		rm.wikipedia,3824,3
+	`
+	re := regexp.MustCompile(`[^\s]+`)
+	got = strings.Join(re.FindAllString(got, -1), "|")
+	want = strings.Join(re.FindAllString(want, -1), "|")
+
+	if got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

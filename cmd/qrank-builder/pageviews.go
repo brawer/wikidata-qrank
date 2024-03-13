@@ -22,6 +22,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
+	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
 )
 
@@ -300,6 +301,61 @@ func emitPageviews(site, title string, count int64, ch chan<- string, ctx contex
 		case ch <- line:
 		}
 	}
+	return nil
+}
+
+// BuildWeeklyPageviews aggregates Wikimedia pageviews for a week.
+//
+// The output is written to zstd-compressed CSV file with columns `Wiki`,
+// `PageID`, and `Count`. For example, a row `en.wikipedia,3422,7`
+// means the page https://en.wikipedia.org/?curid=3422 has been
+// viewed 7 times during the week. In the output, rows are sorted
+// by increasing UTF-8 string order.
+func buildWeeklyPageviews(ctx context.Context, dumps string, year int, week int, outpath string) error {
+	logger.Printf("building pageviews for week %04d-W%02d", year, week)
+	start := time.Now()
+
+	file, err := os.Create(outpath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedBetterCompression)
+	writer, err := zstd.NewWriter(file, zstdLevel)
+
+	ch := make(chan string, 10000)
+	config := extsort.DefaultConfig()
+	config.ChunkSize = 16 * 1024 * 1024 / 32
+	config.NumWorkers = runtime.NumCPU()
+	sorter, outChan, errChan := extsort.Strings(ch, config)
+	g, subCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return readWeeklyPageviews(subCtx, dumps, year, week, ch)
+	})
+	g.Go(func() error {
+		sorter.Sort(subCtx)
+		return MergeCounts(subCtx, outChan, writer)
+	})
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	if err := <-errChan; err != nil {
+		return err
+	}
+
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	if err := file.Close(); err != nil {
+		return err
+	}
+
+	logger.Printf("built pageviews for week %04d-W%02d in %.1fs",
+		year, week, time.Since(start).Seconds())
 	return nil
 }
 
