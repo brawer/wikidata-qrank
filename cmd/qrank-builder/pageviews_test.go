@@ -7,11 +7,23 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
+
+func TestPageviewsPath(t *testing.T) {
+	want := filepath.Join("foo", "other", "pageview_complete", "2018", "2018-09", "pageviews-20180930-user.bz2")
+	date, _ := time.Parse(time.DateOnly, "2018-09-30")
+	got := PageviewsPath("foo", date)
+	if got != want {
+		t.Errorf("want %v, got %v", want, got)
+	}
+}
 
 func TestReadPageviews(t *testing.T) {
 	tests := []struct{ input, expected string }{
@@ -104,5 +116,58 @@ func TestCombineCounts(t *testing.T) {
 		if tc.expected != got {
 			t.Errorf("expected %q, got %q", tc.expected, got)
 		}
+	}
+}
+
+func TestReadDailyPageviews(t *testing.T) {
+	date, _ := time.Parse(time.DateOnly, "2023-03-20")
+	path := PageviewsPath(filepath.Join("testdata", "dumps"), date)
+	ch := make(chan string, 1)
+	go func() {
+		ctx := context.Background()
+		if err := readDailyPageviews(ctx, path, ch); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	got := make([]string, 0)
+	for line := range ch {
+		got = append(got, line)
+	}
+
+	want := []string{
+		"commons.wikimedia,32538038,1",
+		"de.wikipedia,585473,4",
+		"de.wikivoyage,23685,1",
+		"en.wikipedia,7082401,2",
+		"en.wikipedia,63989872,1",
+		"es.wikipedia,689814,2",
+		"fr.wikipedia,268776,1",
+		"rm.wikipedia,10117,1",
+		"rm.wikipedia,3824,1",
+	}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestReadDailyPageviews_Canceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	date, _ := time.Parse(time.DateOnly, "2023-03-20")
+	path := PageviewsPath(filepath.Join("testdata", "dumps"), date)
+	ch := make(chan string, 100)
+	if err := readDailyPageviews(ctx, path, ch); err != context.Canceled {
+		t.Errorf("want context.Canceled, got %v", err)
+	}
+}
+
+func TestReadDailyPageviews_FileNotFound(t *testing.T) {
+	ctx := context.Background()
+	ch := make(chan string, 2)
+	if err := readDailyPageviews(ctx, "no-such-file.bz2", ch); err == nil {
+		t.Error("want error, got nil")
 	}
 }

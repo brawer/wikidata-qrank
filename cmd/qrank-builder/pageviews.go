@@ -25,6 +25,18 @@ import (
 	"github.com/lanrat/extsort"
 )
 
+// PageviewsPath returns the path to the pageviews file for the given day.
+func PageviewsPath(dumps string, day time.Time) string {
+	y, m, d := day.Year(), day.Month(), day.Day()
+	return filepath.Join(
+		dumps,
+		"other",
+		"pageview_complete",
+		fmt.Sprintf("%04d", y),
+		fmt.Sprintf("%04d-%02d", y, m),
+		fmt.Sprintf("pageviews-%04d%02d%02d-user.bz2", y, m, d))
+}
+
 func processPageviews(testRun bool, dumpsPath string, date time.Time, outDir string, ctx context.Context) ([]string, error) {
 	paths := make([]string, 0, 12)
 	for i := 1; i <= 12; i++ {
@@ -289,4 +301,91 @@ func emitPageviews(site, title string, count int64, ch chan<- string, ctx contex
 		}
 	}
 	return nil
+}
+
+// readDailyPageviews reads the Wikimedia pageview file of one single day,
+// sending output as `Wiki,PageID,Count` to a string channel.
+// If `ctx` gets cancelled while reading the file, an error is returned.
+func readDailyPageviews(ctx context.Context, path string, out chan<- string) error {
+	defer close(out)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	reader, err := bzip2.NewReader(file, &bzip2.ReaderConfig{})
+	if err != err {
+		return err
+	}
+	defer reader.Close()
+
+	scanner := bufio.NewScanner(reader)
+	var lastWiki string
+	var lastID, lastCount int64
+	for scanner.Scan() {
+		// "commons.wikimedia Category:Obergesteln 2527294 desktop 3 B1K1"
+		cols := strings.Split(scanner.Text(), " ")
+		if len(cols) < 5 {
+			continue
+		}
+
+		wiki, pageID, count := cols[0], cols[2], cols[4]
+		id, err := strconv.ParseInt(pageID, 10, 64)
+		if id <= 0 || err != nil {
+			continue
+		}
+
+		c, err := strconv.ParseInt(count, 10, 64)
+		if c <= 0 || err != nil {
+			continue
+		}
+
+		if wiki == lastWiki && id == lastID {
+			lastCount += c
+			continue
+		}
+
+		if err := sendCount(lastWiki, lastID, lastCount, ctx, out); err != nil {
+			return err
+		}
+		lastWiki, lastID, lastCount = wiki, id, c
+	}
+
+	if err := sendCount(lastWiki, lastID, lastCount, ctx, out); err != nil {
+		return err
+	}
+
+	if err := reader.Close(); err != nil {
+		return err
+	}
+
+	if err := file.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SendCount is an internal helper for ReadDailyPageviews.
+func sendCount(wiki string, pageID int64, count int64, ctx context.Context, out chan<- string) error {
+	if count <= 0 {
+		return nil
+	}
+
+	var buf strings.Builder
+	buf.WriteString(wiki)
+	buf.WriteByte(',')
+	buf.WriteString(strconv.FormatInt(pageID, 10))
+	buf.WriteByte(',')
+	buf.WriteString(strconv.FormatInt(count, 10))
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+
+	case out <- buf.String():
+		return nil
+	}
 }
