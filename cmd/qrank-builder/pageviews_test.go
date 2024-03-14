@@ -144,6 +144,48 @@ func TestCombineCounts(t *testing.T) {
 	}
 }
 
+func TestBuildPageviews(t *testing.T) {
+	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
+	ctx := context.Background()
+	dumps := filepath.Join("testdata", "dumps")
+	s3 := NewFakeS3()
+	s3.data["pageviews/pageviews-2011-W51.zst"] = []byte("very old")
+	s3.data["pageviews/pageviews-2023-W09.zst"] = []byte("foo")
+	s3.data["pageviews/pageviews-2023-W10.zst"] = []byte("bar")
+	s3.data["pageviews/pageviews-2023-W11.zst"] = []byte("baz")
+	got, err := buildPageviews(ctx, dumps /*numWeeks*/, 4, s3)
+	if err != nil {
+		t.Error(err)
+	}
+	want := []string{
+		"pageviews/pageviews-2023-W09.zst",
+		"pageviews/pageviews-2023-W10.zst",
+		"pageviews/pageviews-2023-W11.zst",
+		"pageviews/pageviews-2023-W12.zst",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if _, found := s3.data["pageviews/pageviews-2023-W12.zst"]; !found {
+		t.Errorf("buildPageviews() should upload newly computed 2023-W12 file")
+	}
+}
+
+func TestStoredPageviews(t *testing.T) {
+	s3 := NewFakeS3()
+	s3.data["pageviews/pageviews-2011-W51.zst"] = []byte("a")
+	s3.data["pageviews/pageviews-2019-W51.gz"] = []byte("junk")
+	s3.data["pageviews/pageviews-2024-W06.zst"] = []byte("b")
+	got, err := storedPageviews(context.Background(), s3)
+	if err != nil {
+		t.Error(err)
+	}
+	want := []string{"2011-W51", "2024-W06"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestBuildWeeklyPageviews(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()

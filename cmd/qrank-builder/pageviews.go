@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +27,7 @@ import (
 	"github.com/dsnet/compress/bzip2"
 	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
+	"github.com/minio/minio-go/v7"
 )
 
 // LastestPageviewsDump returns the date of the most recent pageviews dump.
@@ -325,6 +328,84 @@ func emitPageviews(site, title string, count int64, ch chan<- string, ctx contex
 		}
 	}
 	return nil
+}
+
+// BuildPageviews builds weekly pageview files and puts them in storage.
+// If a weekly file is already stored, it is not getting re-built.
+// The implementation checks for the latest available pageviews dump,
+// and goes back `numWeeks` weeks.
+func buildPageviews(ctx context.Context, dumps string, numWeeks int, s3 S3) ([]string, error) {
+	result := make([]string, 0, numWeeks)
+	stored, err := storedPageviews(ctx, s3)
+	if err != nil {
+		return nil, err
+	}
+
+	latest, err := LatestPageviewsDump(dumps)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the last Sunday for which a pageviews dump is available.
+	// Other than ISO 8601, the golang time library starts weeks with Sunday.
+	latestSunday := latest.AddDate(0, 0, int(time.Sunday-latest.Weekday()))
+
+	tempDir, err := os.MkdirTemp("", "qrank-pageviews")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tempDir)
+
+	for i := 0; i < numWeeks; i++ {
+		day := latestSunday.AddDate(0, 0, -7*i)
+		year, week := day.ISOWeek()
+		weekString := fmt.Sprintf("%04d-W%02d", year, week)
+		fileName := "pageviews-" + weekString + ".zst"
+		destPath := "pageviews/" + fileName
+		result = append(result, destPath)
+
+		if _, found := slices.BinarySearch(stored, weekString); !found {
+
+			tempFile := filepath.Join(tempDir, fileName)
+			if err := buildWeeklyPageviews(ctx, dumps, year, week, tempFile); err != nil {
+				return nil, err
+			}
+			defer os.Remove(tempFile)
+
+			if err := PutInStorage(ctx, tempFile, s3, "qrank", destPath, "application/zstd"); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	sort.Strings(result)
+	return result, nil
+}
+
+// StoredPageviews returns what pageview files are available in storage.
+func storedPageviews(ctx context.Context, s3 S3) ([]string, error) {
+	re := regexp.MustCompile(`^pageviews/pageviews-(\d{4}-W\d{2}).zst$`)
+	result := make([]string, 0, 60)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		ch := s3.ListObjects(groupCtx, "qrank", minio.ListObjectsOptions{
+			Prefix: "pageviews/",
+		})
+		for obj := range ch {
+			if obj.Err != nil {
+				return obj.Err
+			}
+			if match := re.FindStringSubmatch(obj.Key); match != nil {
+				result = append(result, match[1])
+			}
+		}
+		return nil
+	})
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 // BuildWeeklyPageviews aggregates Wikimedia pageviews for a week.

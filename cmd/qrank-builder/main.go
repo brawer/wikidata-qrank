@@ -82,6 +82,17 @@ func NewStorageClient(keypath string) (*minio.Client, error) {
 
 func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	ctx := context.Background()
+	var s3 S3 = storage
+
+	// Build pageviews files. We're changing how pageviews get aggregated,
+	// and this is the new, vastly more efficient approach. But it is not
+	// fully implemented yet, so we do not yet actually use the output.
+	// The older approach is done by the call to processPageviews below.
+	// https://github.com/brawer/wikidata-qrank/issues/23
+	_, err := buildPageviews(ctx, dumpsPath, 52, s3) // for past 52 weeks
+	if err != nil {
+		return err
+	}
 
 	outDir := "cache"
 	if testRun {
