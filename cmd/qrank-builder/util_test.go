@@ -4,9 +4,43 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"path/filepath"
+	"regexp"
 	"testing"
 )
+
+func TestLatestDump(t *testing.T) {
+	dir := filepath.Join("testdata", "dumps", "other", "pageview_complete")
+	re := regexp.MustCompile(`^pageviews-(\d{8})-user\.bz2$`)
+	got, err := LatestDump(dir, re)
+	if err != nil {
+		t.Error(err)
+	}
+
+	want := filepath.Join(dir, "2023", "2023-03", "pageviews-20230326-user.bz2")
+	if got != want {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestLatestDump_NoMatches(t *testing.T) {
+	dir := filepath.Join("testdata", "dumps", "other", "pageview_complete")
+	re := regexp.MustCompile(`^nosuchdump-(\d{8})\.bz2$`)
+	if _, err := LatestDump(dir, re); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("got %v, want fs.ErrNotExist", err)
+	}
+}
+
+func TestLatestDump_NoSuchDir(t *testing.T) {
+	dir := filepath.Join("testdata", "dumps", "other", "no_such_dir")
+	re := regexp.MustCompile(`^dump-(\d{8})\.bz2$`)
+	if _, err := LatestDump(dir, re); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("got %v, want fs.ErrNotExist", err)
+	}
+}
 
 func TestFormatLine(t *testing.T) {
 	tests := []struct{ lang, site, title, value, expected string }{

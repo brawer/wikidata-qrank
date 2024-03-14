@@ -5,7 +5,11 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +20,59 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
+
+// LatestDump finds the most recent Wikimedia dump file with a matching name.
+func LatestDump(dir string, re *regexp.Regexp) (string, error) {
+	years := make([]string, 0)
+	reYear := regexp.MustCompile(`^\d{4}$`)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if reYear.MatchString(name) {
+			years = append(years, name)
+		}
+	}
+	sort.Slice(years, func(i, j int) bool { return years[i] >= years[j] })
+
+	reMonth := regexp.MustCompile(`^\d{4}-\d{2}$`)
+	for _, year := range years {
+		yearDir := filepath.Join(dir, year)
+		months := make([]string, 0, 12)
+		monthEntries, err := os.ReadDir(yearDir)
+		if err != nil {
+			return "", err
+		}
+		for _, e := range monthEntries {
+			name := e.Name()
+			if reMonth.MatchString(name) {
+				months = append(months, name)
+			}
+		}
+		sort.Slice(months, func(i, j int) bool { return months[i] >= months[j] })
+		files := make([]string, 0, 100)
+		for _, month := range months {
+			monthDir := filepath.Join(yearDir, month)
+			fileEntries, err := os.ReadDir(monthDir)
+			if err != nil {
+				return "", err
+			}
+			for _, e := range fileEntries {
+				if re.MatchString(e.Name()) {
+					files = append(files, e.Name())
+				}
+			}
+			sort.Slice(files, func(i, j int) bool { return files[i] >= files[j] })
+			if len(files) > 0 {
+				return filepath.Join(monthDir, files[0]), nil
+			}
+		}
+	}
+
+	return "todo", fs.ErrNotExist
+}
 
 // Caser is stateless and safe to use concurrently by multiple goroutines.
 // https://pkg.go.dev/golang.org/x/text/cases#Fold

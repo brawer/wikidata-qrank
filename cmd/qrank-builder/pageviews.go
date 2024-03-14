@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -26,6 +27,22 @@ import (
 	"github.com/lanrat/extsort"
 )
 
+// LastestPageviewsDump returns the date of the most recent pageviews dump.
+func LatestPageviewsDump(dumps string) (time.Time, error) {
+	dir := filepath.Join(dumps, "other", "pageview_complete")
+	re := regexp.MustCompile(`^pageviews-(\d{8})-user\.bz2$`)
+	path, err := LatestDump(dir, re)
+	if err != nil {
+		return time.Time{}, err
+	}
+	match := re.FindStringSubmatch(filepath.Base(path))
+	t, err := time.Parse("20060102", match[1])
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t, nil
+}
+
 // PageviewsPath returns the path to the pageviews file for the given day.
 func PageviewsPath(dumps string, day time.Time) string {
 	y, m, d := day.Year(), day.Month(), day.Day()
@@ -39,6 +56,12 @@ func PageviewsPath(dumps string, day time.Time) string {
 }
 
 func processPageviews(testRun bool, dumpsPath string, date time.Time, outDir string, ctx context.Context) ([]string, error) {
+	latest, err := LatestPageviewsDump(dumpsPath)
+	if err != nil {
+		return nil, err
+	}
+	logger.Printf("latest pageviews dump: %s", latest.Format(time.DateOnly))
+
 	paths := make([]string, 0, 12)
 	for i := 1; i <= 12; i++ {
 		m := date.AddDate(0, -i, 0)

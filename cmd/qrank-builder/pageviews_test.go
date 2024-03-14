@@ -6,8 +6,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,6 +22,24 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sync/errgroup"
 )
+
+func TestLatestPageviewsDump(t *testing.T) {
+	day, err := LatestPageviewsDump(filepath.Join("testdata", "dumps"))
+	if err != nil {
+		t.Error(err)
+	}
+	got, want := day.Format(time.DateOnly), "2023-03-26"
+	if got != want {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestLatestPageviewsDump_NoSuchDir(t *testing.T) {
+	_, err := LatestPageviewsDump("no_such_dir")
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("got %v, want fs.ErrNotExist", err)
+	}
+}
 
 func TestPageviewsPath(t *testing.T) {
 	want := filepath.Join("foo", "other", "pageview_complete", "2018", "2018-09", "pageviews-20180930-user.bz2")
