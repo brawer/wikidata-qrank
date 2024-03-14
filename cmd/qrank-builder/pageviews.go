@@ -425,7 +425,7 @@ func buildWeeklyPageviews(ctx context.Context, dumps string, year int, week int,
 	}
 	defer file.Close()
 
-	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedBetterCompression)
+	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedBestCompression)
 	writer, err := zstd.NewWriter(file, zstdLevel)
 
 	ch := make(chan string, 10000)
