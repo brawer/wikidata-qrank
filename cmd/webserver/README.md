@@ -17,7 +17,7 @@ here’s how to manually push a new version of the binary to the server.
 
 ```bash
 GOOS=linux go build ./cmd/webserver
-scp -J sascha@bastion.wmcloud.org ./webserver sascha@172.16.3.68:bin/webserver
+scp -J sascha@bastion.wmcloud.org ./webserver sascha@172.16.0.220:bin/webserver
 ```
 
 On the server, we have the following configuration file
