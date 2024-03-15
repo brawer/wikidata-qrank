@@ -2,6 +2,6 @@ Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Contact: Sascha Brawer <sascha@brawer.ch>
 Source: https://github.com/brawer/wikidata-qrank
 
-Files: cmd/qrank-builder/testdata/dumps/other/pageview_complete/*
+Files: cmd/qrank-builder/testdata/dumps/*
 Copyright: 2024 Sascha Brawer <sascha@brawer.ch>
 License: CC0-1.0
