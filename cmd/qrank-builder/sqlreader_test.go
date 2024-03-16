@@ -4,10 +4,63 @@
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
 	"io"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func TestSQLReader(t *testing.T) {
+	f, err := os.Open(filepath.Join(
+		"testdata", "dumps", "rmwiki", "20240301/rmwiki-20240301-page_props.sql.gz",
+	))
+	if err != nil {
+		t.Error(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Error(err)
+	}
+	defer f.Close()
+	reader, err := NewSQLReader(gz)
+	if err != nil {
+		t.Error(err)
+	}
+
+	gotCol := reader.Columns()
+	wantCol := []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
+	if !slices.Equal(gotCol, wantCol) {
+		t.Errorf("got %v, want %v", gotCol, wantCol)
+	}
+
+	got := make([]string, 0, 10)
+	for {
+		row, err := reader.Read()
+		if row == nil {
+			break
+		}
+		if err != nil {
+			t.Error(err)
+		}
+		got = append(got, strings.Join(row, "|"))
+	}
+	want := []string{
+		"1|wikibase_item|Q5296|",
+		"799|page_image_free|Karte_Gemeinde_Zürich_2007.png|",
+		"799|wikibase_item|Q72|",
+		"3824|page_image_free|Karte_Gemeinde_Obergesteln_2007.png|",
+		"3824|wikibase_item|Q662541|",
+		"14564|unexpectedUnconnectedPage|-10|-10",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
 
 func TestSQLLexer(t *testing.T) {
 	for _, tc := range []struct{ input, want string }{
@@ -38,7 +91,7 @@ func TestSQLLexer(t *testing.T) {
 
 // Lex returns a debug string for the lexed input.
 func lex(s string) string {
-	lexer := newSQLLexer(strings.NewReader(s))
+	lexer := sqlLexer{reader: bufio.NewReader(strings.NewReader(s))}
 	var buf strings.Builder
 	for {
 		token, txt, err := lexer.read()
