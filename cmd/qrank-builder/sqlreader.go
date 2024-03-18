@@ -110,7 +110,6 @@ func (r *SQLReader) parseCreate() error {
 			return err
 		}
 	}
-	return nil
 }
 
 func (r *SQLReader) skipUntil(token sqlToken, tokenText string) error {
