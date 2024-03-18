@@ -32,6 +32,7 @@ func main() {
 	}
 	defer logfile.Close()
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
+	logger.Printf("qrank-builder starting up")
 
 	var storage *minio.Client
 	if *storagekey != "" {
@@ -54,6 +55,8 @@ func main() {
 		log.Fatal(err)
 		return
 	}
+
+	logger.Printf("qrank-builder exiting")
 }
 
 // NewStorageClient sets up a client for accessing S3-compatible object storage.
