@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -26,7 +27,14 @@ func main() {
 	storagekey := flag.String("storage-key", "", "path to key with storage access credentials")
 	flag.Parse()
 
-	logfile, err := os.OpenFile("logs/qrank-builder.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// https://wikitech.wikimedia.org/wiki/Help:Toolforge/Build_Service#Using_NFS_shared_storage
+	toolDir := os.Getenv("TOOL_DATA_DIR")
+	if toolDir == "" {
+		toolDir = "."
+	}
+
+	logPath := filepath.Join(toolDir, "logs", "qrank-builder.log")
+	logfile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,9 +105,15 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
-	outDir := "cache"
+	// https://wikitech.wikimedia.org/wiki/Help:Toolforge/Build_Service#Using_NFS_shared_storage
+	toolDir := os.Getenv("TOOL_DATA_DIR")
+	if toolDir == "" {
+		toolDir = "."
+	}
+
+	outDir := filepath.Join(toolDir, "cache")
 	if testRun {
-		outDir = "cache-testrun"
+		outDir = filepath.Join(toolDir, "cache-testrun")
 	}
 
 	if err := os.MkdirAll(outDir, 0755); err != nil {
