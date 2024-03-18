@@ -18,6 +18,7 @@ toolforge \
     --schedule "@daily" \
     --command "./bin/qrank-builder -storage-key=keys/storage-key-2" \
     --image tool-qrank/tool-qrank:latest \
+    --mount all \
     --cpu 3 \
     --mem 2Gi \
     qrank-builder
