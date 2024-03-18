@@ -25,6 +25,9 @@ func main() {
 
 	if *port == 0 {
 		*port, _ = strconv.Atoi(os.Getenv("PORT"))
+		if *port == 0 {
+			*port = 8000
+		}
 	}
 
 	storage, err := NewStorage(*storagekey, *workdir)
