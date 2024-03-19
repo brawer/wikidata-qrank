@@ -24,16 +24,17 @@ func main() {
 
 	var dumps = flag.String("dumps", "/public/dumps/public", "path to Wikimedia dumps")
 	var testRun = flag.Bool("testRun", false, "if true, we process only a small fraction of the data; used for testing")
-	storagekey := flag.String("storage-key", "", "path to key with storage access credentials")
+	storagekey := flag.String("", "", "path to key with storage access credentials")
 	flag.Parse()
 
 	// https://wikitech.wikimedia.org/wiki/Help:Toolforge/Build_Service#Using_NFS_shared_storage
-	toolDir := os.Getenv("TOOL_DATA_DIR")
-	if toolDir == "" {
-		toolDir = "."
+	if toolDir := os.Getenv("TOOL_DATA_DIR"); toolDir != "" {
+		if err := os.Chdir(toolDir); err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	logPath := filepath.Join(toolDir, "logs", "qrank-builder.log")
+	logPath := filepath.Join("logs", "qrank-builder.log")
 	logfile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
@@ -69,14 +70,20 @@ func main() {
 
 // NewStorageClient sets up a client for accessing S3-compatible object storage.
 func NewStorageClient(keypath string) (*minio.Client, error) {
-	data, err := os.ReadFile(keypath)
-	if err != nil {
-		return nil, err
-	}
-
 	var config struct{ Endpoint, Key, Secret string }
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
+
+	if keypath == "" {
+		config.Endpoint = os.Getenv("S3_ENDPOINT")
+		config.Key = os.Getenv("S3_KEY")
+		config.Secret = os.Getenv("S3_SECRET")
+	} else {
+		data, err := os.ReadFile(keypath)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &config); err != nil {
+			return nil, err
+		}
 	}
 
 	client, err := minio.New(config.Endpoint, &minio.Options{
@@ -105,15 +112,9 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
-	// https://wikitech.wikimedia.org/wiki/Help:Toolforge/Build_Service#Using_NFS_shared_storage
-	toolDir := os.Getenv("TOOL_DATA_DIR")
-	if toolDir == "" {
-		toolDir = "."
-	}
-
-	outDir := filepath.Join(toolDir, "cache")
+	outDir := "cache"
 	if testRun {
-		outDir = filepath.Join(toolDir, "cache-testrun")
+		outDir = "cache-testrun"
 	}
 
 	if err := os.MkdirAll(outDir, 0755); err != nil {

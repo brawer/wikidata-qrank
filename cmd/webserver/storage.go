@@ -48,14 +48,19 @@ func NewStorage(keypath, workdir string) (*Storage, error) {
 		return nil, err
 	}
 
-	data, err := os.ReadFile(keypath)
-	if err != nil {
-		return nil, err
-	}
-
 	var config struct{ Endpoint, Key, Secret string }
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
+	if keypath == "" {
+		config.Endpoint = os.Getenv("S3_ENDPOINT")
+		config.Key = os.Getenv("S3_KEY")
+		config.Secret = os.Getenv("S3_SECRET")
+	} else {
+		data, err := os.ReadFile(keypath)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &config); err != nil {
+			return nil, err
+		}
 	}
 
 	client, err := minio.New(config.Endpoint, &minio.Options{
