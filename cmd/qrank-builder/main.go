@@ -34,7 +34,10 @@ func main() {
 		}
 	}
 
+	workdir, _ := os.Getwd()
 	logPath := filepath.Join("logs", "qrank-builder.log")
+	fmt.Printf("logs written to %s in workdir=%s", logPath, workdir)
+	fmt.Fprintf(os.Stderr, "logs written to %s in workdir=%s", logPath, workdir)
 	logfile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
