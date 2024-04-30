@@ -6,3 +6,4 @@
 
 web: webserver
 qrank-builder: qrank-builder
+hello: hello
