@@ -3,6 +3,8 @@
 
 module github.com/brawer/wikidata-qrank/v2
 
+// TODO: Update golang version. However, Wikimedia Toolforge Build Service
+// is still on golang 1.21.5; https://phabricator.wikimedia.org/T363854
 go 1.21
 
 // Tell the Heroku Go Buildpack (on Wikimedia Toolforge Build Service)
