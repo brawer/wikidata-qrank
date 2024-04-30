@@ -3,9 +3,7 @@
 
 module github.com/brawer/wikidata-qrank/v2
 
-go 1.21
-
-toolchain go1.22.1
+go 1.22.2
 
 // Tell the Heroku Go Buildpack (on Wikimedia Toolforge Build Service)
 // what binaries we want to have installed into the production container.
