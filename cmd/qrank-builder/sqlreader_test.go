@@ -22,11 +22,13 @@ func TestSQLReader(t *testing.T) {
 		t.Error(err)
 	}
 	defer f.Close()
+
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Close()
+	defer gz.Close()
+
 	reader, err := NewSQLReader(gz)
 	if err != nil {
 		t.Error(err)
