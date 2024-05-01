@@ -5,5 +5,6 @@
 # https://wikitech.wikimedia.org/wiki/Help:Toolforge/Build_Service
 
 web: webserver
-qrank-builder: qrank-builder
-hello: hello
+qrank-builder: /layers/heroku_go/go_target/bin/qrank-builder
+hello: /layers/heroku_go/go_target/bin/hello
+
