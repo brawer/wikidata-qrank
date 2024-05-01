@@ -11,7 +11,7 @@ go 1.21
 // what binaries we want to have installed into the production container.
 //
 // https://github.com/heroku/heroku-buildpack-go?tab=readme-ov-file#go-module-specifics
-// +heroku install ./cmd/hello ./cmd/qrank-builder ./cmd/webserver
+// +heroku install ./cmd/qrank-builder ./cmd/webserver
 
 require (
 	github.com/andybalholm/brotli v1.1.0
