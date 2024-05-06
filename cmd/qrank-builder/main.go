@@ -46,6 +46,18 @@ func main() {
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 	logger.Printf("qrank-builder starting up")
 
+	sites, err := ReadWikiSites(*dumps)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	logger.Printf("Found %d sites", len(*sites))
+	for _, site := range *sites {
+		logger.Printf("  %v", site)
+	}
+	logger.Printf("End of sites dump")
+	return
+
 	var storage *minio.Client
 	if *storagekey != "" {
 		storage, err = NewStorageClient(*storagekey)
