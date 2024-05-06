@@ -46,18 +46,6 @@ func main() {
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 	logger.Printf("qrank-builder starting up")
 
-	sites, err := ReadWikiSites(*dumps)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	logger.Printf("Found %d sites", len(*sites))
-	for _, site := range *sites {
-		logger.Printf("  %v", site)
-	}
-	logger.Printf("End of sites dump")
-	return
-
 	var storage *minio.Client
 	if *storagekey != "" {
 		storage, err = NewStorageClient(*storagekey)
@@ -126,6 +114,18 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	if err != nil {
 		return err
 	}
+
+	sites, err := ReadWikiSites(dumpsPath)
+	if err != nil {
+		return err
+	}
+	logger.Printf("found wikimedia dumps for %d sites", len(*sites))
+	if err := buildPageEntities(ctx, dumpsPath, sites, s3); err != nil {
+		return err
+	}
+
+	// TODO: Old code starts here, remove after new implementation is done.
+	return nil
 
 	outDir := "cache"
 	if testRun {
