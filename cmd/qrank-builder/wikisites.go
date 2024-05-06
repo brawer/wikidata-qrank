@@ -85,7 +85,9 @@ func ReadWikiSites(dumps string) (*map[string]WikiSite, error) {
 			}
 		}
 
-		sites[site.Key] = site
+		if !site.LastDumped.IsZero() {
+			sites[site.Key] = site
+		}
 	}
 
 	return &sites, nil

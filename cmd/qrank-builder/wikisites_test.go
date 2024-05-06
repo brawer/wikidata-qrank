@@ -17,7 +17,6 @@ func TestReadWikiSites(t *testing.T) {
 	}
 
 	tests := []struct{ key, domain, lastDumped string }{
-		{"metawiki", "meta.wikimedia.org", ""},
 		{"rmwiki", "rm.wikipedia.org", "2024-03-01"},
 	}
 	for _, tc := range tests {
@@ -26,9 +25,6 @@ func TestReadWikiSites(t *testing.T) {
 			t.Errorf(`got "%s", want "%s", for sites["%s"].Domain`, site.Domain, tc.domain, tc.key)
 		}
 		lastDumped := site.LastDumped.Format(time.DateOnly)
-		if site.LastDumped.IsZero() {
-			lastDumped = ""
-		}
 		if lastDumped != tc.lastDumped {
 			t.Errorf(`got %s, want %s, for sites["%s"].LastDumped`, lastDumped, tc.lastDumped, tc.key)
 		}
