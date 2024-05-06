@@ -46,20 +46,17 @@ func main() {
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 	logger.Printf("qrank-builder starting up")
 
-	var storage *minio.Client
-	if *storagekey != "" {
-		storage, err = NewStorageClient(*storagekey)
-		if err != nil {
-			logger.Fatal(err)
-		}
+	storage, err := NewStorageClient(*storagekey)
+	if err != nil {
+		logger.Fatal(err)
+	}
 
-		bucketExists, err := storage.BucketExists(ctx, "qrank")
-		if err != nil {
-			logger.Fatal(err)
-		}
-		if !bucketExists {
-			logger.Fatal("storage bucket \"qrank\" does not exist")
-		}
+	bucketExists, err := storage.BucketExists(ctx, "qrank")
+	if err != nil {
+		logger.Fatal(err)
+	}
+	if !bucketExists {
+		logger.Fatal("storage bucket \"qrank\" does not exist")
 	}
 
 	if err := computeQRank(*dumps, *testRun, storage); err != nil {
