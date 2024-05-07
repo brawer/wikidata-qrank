@@ -14,6 +14,8 @@ import (
 	"testing"
 )
 
+var pagePropsColumns = []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
+
 func readSQL(path string) ([]string, []string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -21,13 +23,17 @@ func readSQL(path string) ([]string, []string, error) {
 	}
 	defer f.Close()
 
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return nil, nil, err
+	var reader *SQLReader
+	if strings.HasSuffix(path, ".gz") {
+		gz, err := gzip.NewReader(f)
+		if err != nil {
+			return nil, nil, err
+		}
+		defer gz.Close()
+		reader, err = NewSQLReader(gz)
+	} else {
+		reader, err = NewSQLReader(f)
 	}
-	defer gz.Close()
-
-	reader, err := NewSQLReader(gz)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,9 +61,8 @@ func TestSQLReader(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantColumns := []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
-	if !slices.Equal(columns, wantColumns) {
-		t.Errorf("got %v, want %v", columns, wantColumns)
+	if !slices.Equal(columns, pagePropsColumns) {
+		t.Errorf("got %v, want %v", columns, pagePropsColumns)
 	}
 
 	wantTable := []string{
@@ -84,13 +89,38 @@ func TestSQLReader_EmptyTable(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantColumns := []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
-	if !slices.Equal(columns, wantColumns) {
-		t.Errorf("got %v, want %v", columns, wantColumns)
+	if !slices.Equal(columns, pagePropsColumns) {
+		t.Errorf("got %v, want %v", columns, pagePropsColumns)
 	}
 
 	if len(table) != 0 {
 		t.Errorf("got %v, want empty table", table)
+	}
+}
+
+// TestSQLReader_MultipleInserts makes sure we can handle Wikimedia dumps
+// with multiple INSERT statements.
+// https://github.com/brawer/wikidata-qrank/issues/30
+func TestSQLReader_MultipleInserts(t *testing.T) {
+	columns, table, err := readSQL(filepath.Join(
+		"testdata", "multiple-inserts.sql",
+	))
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !slices.Equal(columns, pagePropsColumns) {
+		t.Errorf("got %v, want %v", columns, pagePropsColumns)
+	}
+
+	wantTable := []string{
+		"1|wikibase_item|Q1|",
+		"2|wikibase_item|Q2|",
+		"3|wikibase_item|Q3|",
+		"4|wikibase_item|Q4|",
+	}
+	if !slices.Equal(table, wantTable) {
+		t.Errorf("got %v, want %v", table, wantTable)
 	}
 }
 
