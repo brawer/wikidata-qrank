@@ -81,6 +81,8 @@ func TestSQLLexer(t *testing.T) {
 		{"- 42", "Minus Number[42]"},
 		{"int(10)", "Word[int] LeftParen Number[10] RightParen"},
 		{"'foo'", "Text[foo]"},
+		{`'fo\'o'`, "Text[fo'o]"},
+		{`'ba\327r'`, `Text[ba\327r]`}, // see comment in implementation
 		{"/", "Slash"},
 		{"2/3", "Number[2] Slash Number[3]"},
 		{"/* foo */", "Comment[foo]"},
