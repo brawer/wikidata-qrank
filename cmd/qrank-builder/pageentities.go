@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 
@@ -202,4 +204,131 @@ func storedPageEntities(ctx context.Context, s3 S3) (map[string][]string, error)
 		sort.Strings(val)
 	}
 	return result, nil
+}
+
+type pageEntitiesScanner struct {
+	err       error
+	paths     []string
+	domains   []string
+	curDomain int
+	scanner   *bufio.Scanner
+	storage   S3
+	tempFile  *os.File
+	reader    *zstd.Decoder
+}
+
+// NewPageEntitiesScanner returns an object similar to bufio.Scanner
+// that sequentially scans pageid-to-qid mapping files for all WikiSites.
+// Lines are returned in the exact same order and format as pageviews files.
+func NewPageEntitiesScanner(sites *map[string]WikiSite, s3 S3) *pageEntitiesScanner {
+	sorted := make([]WikiSite, 0, len(*sites))
+	for _, site := range *sites {
+		sorted = append(sorted, site)
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		a := strings.TrimSuffix(sorted[i].Domain, ".org")
+		b := strings.TrimSuffix(sorted[j].Domain, ".org")
+		return a < b
+	})
+	paths := make([]string, 0, len(sorted))
+	domains := make([]string, 0, len(sorted))
+	for _, site := range sorted {
+		ymd := site.LastDumped.Format("20060102")
+		path := fmt.Sprintf("page_entities/%s-%s-page_entities.zst", site.Key, ymd)
+		paths = append(paths, path)
+		domains = append(domains, strings.TrimSuffix(site.Domain, ".org"))
+	}
+
+	return &pageEntitiesScanner{
+		err:       nil,
+		paths:     paths,
+		domains:   domains,
+		curDomain: -1,
+		scanner:   nil,
+		storage:   s3,
+		tempFile:  nil,
+		reader:    nil,
+	}
+}
+
+func (s *pageEntitiesScanner) Scan() bool {
+	if s.err != nil {
+		return false
+	}
+	if s.tempFile == nil {
+		tempFile, err := os.CreateTemp("", "page_entities-*")
+		if err != nil {
+			s.err = err
+			return false
+		}
+		s.tempFile = tempFile
+	}
+	for s.curDomain < len(s.domains) {
+		if s.scanner != nil {
+			if s.scanner.Scan() {
+				return true
+			}
+			s.err = s.scanner.Err()
+			if s.err != nil {
+				break
+			}
+		}
+		s.curDomain += 1
+		if s.curDomain == len(s.domains) {
+			break
+		}
+		s.err = s.tempFile.Close()
+		if s.err != nil {
+			break
+		}
+		opts := minio.GetObjectOptions{}
+		s.err = s.storage.FGetObject(context.Background(), "qrank", s.paths[s.curDomain], s.tempFile.Name(), opts)
+		if s.err != nil {
+			break
+		}
+		s.tempFile, s.err = os.Open(s.tempFile.Name())
+		if s.err != nil {
+			break
+		}
+		if s.reader == nil {
+			s.reader, s.err = zstd.NewReader(nil)
+			if s.err != nil {
+				break
+			}
+		}
+		s.err = s.reader.Reset(s.tempFile)
+		if s.err != nil {
+			break
+		}
+		s.scanner = bufio.NewScanner(s.reader)
+	}
+
+	if s.reader != nil {
+		s.reader.Close()
+		s.reader = nil
+	}
+
+	if s.tempFile != nil {
+		s.tempFile.Close()
+		os.Remove(s.tempFile.Name())
+		s.tempFile = nil
+	}
+
+	s.scanner = nil
+	return false
+}
+
+func (s *pageEntitiesScanner) Text() string {
+	if s.scanner == nil || s.err != nil {
+		return ""
+	}
+	var buf strings.Builder
+	buf.WriteString(s.domains[s.curDomain])
+	buf.WriteByte(',')
+	buf.WriteString(s.scanner.Text())
+	return buf.String()
+}
+
+func (s *pageEntitiesScanner) Err() error {
+	return s.err
 }
