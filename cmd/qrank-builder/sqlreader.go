@@ -15,16 +15,23 @@ import (
 type SQLReader struct {
 	lexer   sqlLexer
 	columns []string // The names of database table columns, such as ["pp_page", "pp_propname"]
-	empty   bool     // If true, return empty data
+	state   parseState
 }
 
 var parseError = errors.New("sql parse error")
+
+type parseState int
+
+const (
+	base parseState = iota
+	insertValue
+)
 
 func NewSQLReader(r io.Reader) (*SQLReader, error) {
 	rd := &SQLReader{
 		lexer:   sqlLexer{bufio.NewReader(r)},
 		columns: make([]string, 0, 8),
-		empty:   false,
+		state:   base,
 	}
 
 	if err := rd.skipUntil(word, "CREATE"); err != nil {
@@ -33,17 +40,6 @@ func NewSQLReader(r io.Reader) (*SQLReader, error) {
 	if err := rd.parseCreate(); err != nil {
 		return nil, err
 	}
-
-	if err := rd.skipUntil(word, "INSERT"); err == io.EOF {
-		rd.empty = true
-		return rd, nil
-	} else if err != nil {
-		return nil, err
-	}
-	if err := rd.skipUntil(word, "VALUES"); err != nil {
-		return nil, err
-	}
-
 	return rd, nil
 }
 
@@ -52,29 +48,48 @@ func (r *SQLReader) Columns() []string {
 }
 
 func (r *SQLReader) Read() ([]string, error) {
-	// Some Wikimedia table dumps, such as loginwiki-page_props, contain
-	// a table definition but no INSERT statements.
-	// https://github.com/brawer/wikidata-qrank/issues/28
-	if r.empty {
-		return nil, nil
+	for {
+		switch r.state {
+		case insertValue:
+			return r.parseInsertValue()
+		case base:
+			if err := r.skipUntil(word, "INSERT"); err == io.EOF {
+				return nil, nil
+			} else if err != nil {
+				return nil, err
+			}
+			if err := r.skipUntil(word, "VALUES"); err != nil {
+				return nil, err
+			}
+		}
+		r.state = insertValue
+		continue
 	}
+}
 
-	token, _, err := r.readToken()
-	if err != nil {
-		return nil, err
+func (r *SQLReader) parseCreate() error {
+	if err := r.skipUntil(leftParen, ""); err != nil {
+		return err
 	}
-	if token == semicolon {
-		return nil, nil
-	}
-
-	if token == comma {
-		token, _, err = r.readToken()
+	for {
+		token, tokenText, err := r.readToken()
 		if err != nil {
-			return nil, err
+			return err
+		}
+		if token != name {
+			return r.skipUntil(semicolon, "")
+		}
+		r.columns = append(r.columns, tokenText)
+		if err := r.skipUntilEither(comma, rightParen); err != nil {
+			return err
 		}
 	}
+}
 
-	if token != leftParen {
+func (r *SQLReader) parseInsertValue() ([]string, error) {
+	if token, _, err := r.readToken(); err != nil {
+		return nil, err
+	} else if token != leftParen {
 		return nil, parseError
 	}
 
@@ -102,25 +117,19 @@ func (r *SQLReader) Read() ([]string, error) {
 		}
 	}
 
-	return row, nil
-}
-
-func (r *SQLReader) parseCreate() error {
-	if err := r.skipUntil(leftParen, ""); err != nil {
-		return err
+	token, _, err := r.readToken()
+	if err != nil {
+		return nil, err
 	}
-	for {
-		token, tokenText, err := r.readToken()
-		if err != nil {
-			return err
-		}
-		if token != name {
-			return r.skipUntil(semicolon, "")
-		}
-		r.columns = append(r.columns, tokenText)
-		if err := r.skipUntilEither(comma, rightParen); err != nil {
-			return err
-		}
+	switch token {
+	case comma:
+		r.state = insertValue
+		return row, nil
+	case semicolon:
+		r.state = base
+		return row, nil
+	default:
+		return nil, parseError
 	}
 }
 
