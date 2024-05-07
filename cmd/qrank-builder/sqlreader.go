@@ -15,6 +15,7 @@ import (
 type SQLReader struct {
 	lexer   sqlLexer
 	columns []string // The names of database table columns, such as ["pp_page", "pp_propname"]
+	empty   bool     // If true, return empty data
 }
 
 var parseError = errors.New("sql parse error")
@@ -23,6 +24,7 @@ func NewSQLReader(r io.Reader) (*SQLReader, error) {
 	rd := &SQLReader{
 		lexer:   sqlLexer{bufio.NewReader(r)},
 		columns: make([]string, 0, 8),
+		empty:   false,
 	}
 
 	if err := rd.skipUntil(word, "CREATE"); err != nil {
@@ -32,7 +34,10 @@ func NewSQLReader(r io.Reader) (*SQLReader, error) {
 		return nil, err
 	}
 
-	if err := rd.skipUntil(word, "INSERT"); err != nil {
+	if err := rd.skipUntil(word, "INSERT"); err == io.EOF {
+		rd.empty = true
+		return rd, nil
+	} else if err != nil {
 		return nil, err
 	}
 	if err := rd.skipUntil(word, "VALUES"); err != nil {
@@ -47,6 +52,13 @@ func (r *SQLReader) Columns() []string {
 }
 
 func (r *SQLReader) Read() ([]string, error) {
+	// Some Wikimedia table dumps, such as loginwiki-page_props, contain
+	// a table definition but no INSERT statements.
+	// https://github.com/brawer/wikidata-qrank/issues/28
+	if r.empty {
+		return nil, nil
+	}
+
 	token, _, err := r.readToken()
 	if err != nil {
 		return nil, err

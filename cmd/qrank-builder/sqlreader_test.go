@@ -14,44 +14,53 @@ import (
 	"testing"
 )
 
-func TestSQLReader(t *testing.T) {
-	f, err := os.Open(filepath.Join(
-		"testdata", "dumps", "rmwiki", "20240301/rmwiki-20240301-page_props.sql.gz",
-	))
+func readSQL(path string) ([]string, []string, error) {
+	f, err := os.Open(path)
 	if err != nil {
-		t.Error(err)
+		return nil, nil, err
 	}
 	defer f.Close()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		t.Error(err)
+		return nil, nil, err
 	}
 	defer gz.Close()
 
 	reader, err := NewSQLReader(gz)
 	if err != nil {
-		t.Error(err)
+		return nil, nil, err
 	}
 
-	gotCol := reader.Columns()
-	wantCol := []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
-	if !slices.Equal(gotCol, wantCol) {
-		t.Errorf("got %v, want %v", gotCol, wantCol)
-	}
-
-	got := make([]string, 0, 10)
+	cols := reader.Columns()
+	data := make([]string, 0, 10)
 	for {
 		row, err := reader.Read()
+		if err != nil {
+			return nil, nil, err
+		}
 		if row == nil {
 			break
 		}
-		if err != nil {
-			t.Error(err)
-		}
-		got = append(got, strings.Join(row, "|"))
+		data = append(data, strings.Join(row, "|"))
 	}
-	want := []string{
+	return cols, data, nil
+}
+
+func TestSQLReader(t *testing.T) {
+	columns, table, err := readSQL(filepath.Join(
+		"testdata", "dumps", "rmwiki", "20240301/rmwiki-20240301-page_props.sql.gz",
+	))
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantColumns := []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
+	if !slices.Equal(columns, wantColumns) {
+		t.Errorf("got %v, want %v", columns, wantColumns)
+	}
+
+	wantTable := []string{
 		"1|wikibase_item|Q5296|",
 		"799|page_image_free|Karte_Gemeinde_Zürich_2007.png|",
 		"799|wikibase_item|Q72|",
@@ -59,8 +68,29 @@ func TestSQLReader(t *testing.T) {
 		"3824|wikibase_item|Q662541|",
 		"14564|unexpectedUnconnectedPage|-10|-10",
 	}
-	if !slices.Equal(got, want) {
-		t.Errorf("got %v, want %v", got, want)
+	if !slices.Equal(table, wantTable) {
+		t.Errorf("got %v, want %v", table, wantTable)
+	}
+}
+
+// Make sure we can process Wikimedia dump loginwiki-20240501-page_props.sql.gz,
+// which creates a SQL table but does not insert any data into it.
+// https://github.com/brawer/wikidata-qrank/issues/28
+func TestSQLReader_EmptyTable(t *testing.T) {
+	columns, table, err := readSQL(filepath.Join(
+		"testdata", "dumps", "loginwiki", "20240501/loginwiki-20240501-page_props.sql.gz",
+	))
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantColumns := []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
+	if !slices.Equal(columns, wantColumns) {
+		t.Errorf("got %v, want %v", columns, wantColumns)
+	}
+
+	if len(table) != 0 {
+		t.Errorf("got %v, want empty table", table)
 	}
 }
 
