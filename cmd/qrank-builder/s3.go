@@ -17,7 +17,7 @@ import (
 // A fake implementation for tests is in FakeS3, implemented in s3_test.go.
 type S3 interface {
 	ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo
-	// FGetObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.GetObjectOptions) error
+	FGetObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.GetObjectOptions) error
 	FPutObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (minio.UploadInfo, error)
 }
 

@@ -35,6 +35,33 @@ func (s3 *FakeS3) ListObjects(ctx context.Context, bucketName string, opts minio
 	return ch
 }
 
+func (s3 *FakeS3) FGetObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.GetObjectOptions) error {
+	if bucketName != "qrank" {
+		return fmt.Errorf(`unexpected bucket "%s"`, bucketName)
+	}
+	data, ok := s3.data[objectName]
+	if !ok {
+		return fmt.Errorf("object not found: %s", objectName)
+	}
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		os.Remove(filePath)
+		return err
+	}
+
+	if err := file.Close(); err != nil {
+		os.Remove(filePath)
+		return err
+	}
+
+	return nil
+}
+
 func (s3 *FakeS3) FPutObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
 	info := minio.UploadInfo{}
 	if bucketName != "qrank" {
