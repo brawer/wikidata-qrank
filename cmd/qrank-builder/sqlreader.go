@@ -218,8 +218,7 @@ func (lex *sqlLexer) read() (sqlToken, string, error) {
 		}
 		return minus, "", nil
 	case '\'':
-		// TODO: Handle escapes? Check what we actually see in Wikimedia dumps.
-		t, err := lex.readUntil('\'')
+		t, err := lex.readString()
 		if err != nil {
 			return unexpected, "", err
 		}
@@ -277,6 +276,41 @@ func (lex *sqlLexer) readWord(start rune) (sqlToken, string, error) {
 	}
 	text := buf.String()
 	return word, text, nil
+}
+
+func (lex *sqlLexer) readString() (string, error) {
+	var buf strings.Builder
+	for {
+		c, _, err := lex.reader.ReadRune()
+		if c == '\'' || err == io.EOF {
+			break
+		} else if err != nil {
+			return "", err
+		}
+
+		// Handle escape sequences.
+		if c == '\\' {
+			next, _, err := lex.reader.ReadRune()
+			if err != nil {
+				return "", err
+			}
+			if next == '\'' {
+				buf.WriteRune(next)
+				continue
+			}
+			// TODO: There sometimes are numeric escape sequences such as \327,
+			// for example in hewikiquote-page_props.sql.gz. Not sure about how
+			// to process them; is this UTF-8 encoding plus octal escaping?
+			// For now, we don’t actually need to decode these strings in any
+			// application code, so we just keep them escaped.
+			buf.WriteRune(c)
+			buf.WriteRune(next)
+			continue
+		}
+
+		buf.WriteRune(c)
+	}
+	return buf.String(), nil
 }
 
 func (lex *sqlLexer) readNumber(start rune) (sqlToken, string, error) {
