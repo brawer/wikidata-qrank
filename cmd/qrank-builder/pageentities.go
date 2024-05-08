@@ -33,7 +33,7 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 	if err != nil {
 		return err
 	}
-	tasks := make(chan WikiSite, 1000)
+	tasks := make(chan WikiSite, len(*sites))
 	group, groupCtx := errgroup.WithContext(ctx)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		group.Go(func() error {
@@ -54,10 +54,12 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 		})
 	}
 
+	built := make(map[string]string, len(*sites))
 	for _, site := range *sites {
 		ymd := site.LastDumped.Format("20060102")
 		if arr, ok := stored[site.Key]; !ok || !slices.Contains(arr, ymd) {
 			tasks <- site
+			built[site.Key] = ymd
 		}
 	}
 	close(tasks)
@@ -65,6 +67,21 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 	if err := group.Wait(); err != nil {
 		return err
 	}
+
+	// Clean up old files. We only touch those wikis for which we built a new file.
+	for site, ymd := range built {
+		versions := append(stored[site], ymd)
+		sort.Strings(versions)
+		pos := slices.Index(versions, ymd)
+		for i := 0; i < pos-2; i += 1 {
+			path := fmt.Sprintf("page_entities/%s-%s-page_entities.zst", site, versions[i])
+			opts := minio.RemoveObjectOptions{}
+			if err := s3.RemoveObject(ctx, "qrank", path, opts); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
