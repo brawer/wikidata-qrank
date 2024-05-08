@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +25,11 @@ func TestBuildPageEntities(t *testing.T) {
 	dumps := filepath.Join("testdata", "dumps")
 	s3 := NewFakeS3()
 	s3.data["page_entities/loginwiki-20240501-page_entities.zst"] = []byte("old-loginwiki")
-	s3.data["page_entities/rmwiki-20010203-page_entities.zst"] = []byte("old-rmwiki")
+	s3.data["page_entities/rmwiki-20010203-page_entities.zst"] = []byte("old-2001")
+	s3.data["page_entities/rmwiki-20020203-page_entities.zst"] = []byte("old-2002")
+	s3.data["page_entities/rmwiki-20030203-page_entities.zst"] = []byte("old-2003")
+	s3.data["page_entities/rmwiki-20040203-page_entities.zst"] = []byte("old-2004")
+	s3.data["page_entities/rmwiki-20050203-page_entities.zst"] = []byte("old-2005")
 	sites, err := ReadWikiSites(dumps)
 	if err != nil {
 		t.Fatal(err)
@@ -41,13 +46,14 @@ func TestBuildPageEntities(t *testing.T) {
 		t.Errorf("should not re-compute previously stored page_entities")
 	}
 
+	// For rmwiki-2024, new data should have been computed and put in storage.
+	// Make sure that data looks as expected.
 	path := "page_entities/rmwiki-20240301-page_entities.zst"
 	reader, err := zstd.NewReader(bytes.NewReader(s3.data[path]))
 	if err != nil {
 		t.Error(err)
 	}
 	defer reader.Close()
-
 	var buf bytes.Buffer
 	if _, err = io.Copy(&buf, reader); err != nil {
 		t.Error(err)
@@ -56,6 +62,17 @@ func TestBuildPageEntities(t *testing.T) {
 	want = "1,Q5296\n3824,Q662541\n799,Q72\n"
 	if got != want {
 		t.Errorf("got %v, want %v", got, want)
+	}
+
+	// Verify that obsolete files have been cleaned up.
+	stored, err := storedPageEntities(context.Background(), s3)
+	if err != nil {
+		t.Error(err)
+	}
+	got = strings.Join(stored["rmwiki"], " ")
+	want = "20040203 20050203 20240301"
+	if got != want {
+		t.Errorf(`should clean up old page_entities; got "%s", want "%s"`, got, want)
 	}
 }
 
