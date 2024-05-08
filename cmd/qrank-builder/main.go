@@ -129,7 +129,7 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	scanner := NewPageEntitiesScanner(sites, s3)
 	for scanner.Scan() {
 		numEntities += 1
-		if numEntities < 5 || numEntities%10000 == 0 {
+		if numEntities < 5 || numEntities%1000000 == 0 {
 			logger.Printf("  %d: %s\n", numEntities, scanner.Text())
 		}
 	}

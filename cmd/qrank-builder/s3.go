@@ -56,15 +56,12 @@ func (r *tempFileReader) Close() error {
 func NewS3Reader(ctx context.Context, bucket string, path string, s3 S3) (io.ReadCloser, error) {
 	opts := minio.GetObjectOptions{}
 	if client, ok := s3.(*minio.Client); ok {
-		logger.Println("Storage is an instance of minio.Client")
 		obj, err := client.GetObject(ctx, bucket, path, opts)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	}
-
-	logger.Println("Storage is _not_ an instance of minio.Client")
 
 	// The non-minio implementation is very ugly and quite inefficient,
 	// but only used in our unit tests. We fetch the content to a temp file,
