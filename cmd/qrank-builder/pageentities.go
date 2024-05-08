@@ -33,12 +33,6 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 	if err != nil {
 		return err
 	}
-	logger.Printf("found previously computed page_entities for %d wikis", len(stored))
-
-	// TODO: Make the logs less spammy again once bug #33 has been fixed.
-	// https://github.com/brawer/wikidata-qrank/issues/33
-	logger.Printf("stored=%v", stored)
-
 	tasks := make(chan WikiSite, 1000)
 	group, groupCtx := errgroup.WithContext(ctx)
 	for i := 0; i < runtime.NumCPU(); i++ {
@@ -63,9 +57,6 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 	for _, site := range *sites {
 		ymd := site.LastDumped.Format("20060102")
 		if arr, ok := stored[site.Key]; !ok || !slices.Contains(arr, ymd) {
-			// TODO: Make the logs less spammy again once bug #33 has been fixed.
-			// https://github.com/brawer/wikidata-qrank/issues/33
-			logger.Printf(`cache miss; site.Key="%s" arr=%v ymd="%s"`, site.Key, arr, ymd)
 			tasks <- site
 		}
 	}
