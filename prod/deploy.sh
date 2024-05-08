@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2024 Sascha Brawer <sascha@brawer.ch>
 # SPDX-License-Identifier: MIT
 #
-# To deploy fresh binaries, ssh to bastion.toolforge.org and run this script.
+# To deploy fresh binaries, ssh to bastion.toolforge.org, become qrank,
+# and run this script.
 #
 # TODO: We should completely automate our release process. Unfortunately,
 # Wikimedia Toolforge does not support this yet.
@@ -16,9 +17,9 @@ toolforge jobs delete qrank-builder
 toolforge \
     jobs run \
     --schedule "@daily" \
-    --command "./bin/qrank-builder -storage-key=keys/storage-key-2" \
+    --command qrank-builder \
     --image tool-qrank/tool-qrank:latest \
     --mount all \
     --cpu 3 \
-    --mem 2Gi \
+    --mem 3Gi \
     qrank-builder
