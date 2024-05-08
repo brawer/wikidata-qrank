@@ -197,7 +197,7 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 func storedPageEntities(ctx context.Context, s3 S3) (map[string][]string, error) {
 	re := regexp.MustCompile(`^page_entities/([a-z0-9_\-]+)-(\d{8})-page_entities.zst$`)
 	result := make(map[string][]string, 1000)
-	opts := minio.ListObjectsOptions{Prefix: "pageviews/"}
+	opts := minio.ListObjectsOptions{Prefix: "page_entities/"}
 	for obj := range s3.ListObjects(ctx, "qrank", opts) {
 		if obj.Err != nil {
 			return nil, obj.Err

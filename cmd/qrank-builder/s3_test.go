@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/minio/minio-go/v7"
 )
@@ -26,9 +27,12 @@ func (s3 *FakeS3) ListObjects(ctx context.Context, bucketName string, opts minio
 	ch := make(chan minio.ObjectInfo, 2)
 	go func() {
 		defer close(ch)
+		prefix := opts.Prefix
 		if bucketName == "qrank" {
 			for key, _ := range s3.data {
-				ch <- minio.ObjectInfo{Key: key}
+				if strings.HasPrefix(key, prefix) {
+					ch <- minio.ObjectInfo{Key: key}
+				}
 			}
 		}
 	}()
