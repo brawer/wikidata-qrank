@@ -5,6 +5,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"container/heap"
 	"io"
 )
@@ -22,7 +23,6 @@ func NewLineMerger(r []io.Reader) *LineMerger {
 	for _, rr := range r {
 		item := &mergee{scanner: bufio.NewScanner(rr)}
 		if item.scanner.Scan() {
-			item.line = item.scanner.Text()
 			m.heap = append(m.heap, item)
 		}
 		if err := item.scanner.Err(); err != nil {
@@ -47,7 +47,6 @@ func (m *LineMerger) Advance() bool {
 	}
 	item := m.heap[0]
 	if item.scanner.Scan() {
-		item.line = item.scanner.Text()
 		heap.Fix(&m.heap, 0)
 	} else {
 		heap.Remove(&m.heap, 0)
@@ -66,14 +65,13 @@ func (m *LineMerger) Err() error {
 func (m *LineMerger) Line() string {
 	n := len(m.heap)
 	if n > 0 {
-		return m.heap[0].line
+		return m.heap[0].scanner.Text()
 	} else {
 		return ""
 	}
 }
 
 type mergee struct {
-	line    string
 	scanner *bufio.Scanner
 	index   int
 }
@@ -83,7 +81,7 @@ type lineMergerHeap []*mergee
 func (h lineMergerHeap) Len() int { return len(h) }
 
 func (h lineMergerHeap) Less(i, j int) bool {
-	return h[i].line < h[j].line
+	return bytes.Compare(h[i].scanner.Bytes(), h[j].scanner.Bytes()) < 0
 }
 
 func (h lineMergerHeap) Swap(i, j int) {
