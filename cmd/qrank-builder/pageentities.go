@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -207,14 +208,15 @@ func storedPageEntities(ctx context.Context, s3 S3) (map[string][]string, error)
 }
 
 type pageEntitiesScanner struct {
-	err       error
-	paths     []string
-	domains   []string
-	curDomain int
-	scanner   *bufio.Scanner
-	storage   S3
-	tempFile  *os.File
-	reader    *zstd.Decoder
+	err          error
+	paths        []string
+	domains      []string
+	curDomain    int
+	storage      S3
+	reader       io.ReadCloser
+	decompressor *zstd.Decoder
+	scanner      *bufio.Scanner
+	curLine      bytes.Buffer
 }
 
 // NewPageEntitiesScanner returns an object similar to bufio.Scanner
@@ -240,32 +242,28 @@ func NewPageEntitiesScanner(sites *map[string]WikiSite, s3 S3) *pageEntitiesScan
 	}
 
 	return &pageEntitiesScanner{
-		err:       nil,
-		paths:     paths,
-		domains:   domains,
-		curDomain: -1,
-		scanner:   nil,
-		storage:   s3,
-		tempFile:  nil,
-		reader:    nil,
+		err:          nil,
+		paths:        paths,
+		domains:      domains,
+		curDomain:    -1,
+		storage:      s3,
+		reader:       nil,
+		decompressor: nil,
+		scanner:      nil,
 	}
 }
 
 func (s *pageEntitiesScanner) Scan() bool {
+	s.curLine.Truncate(0)
 	if s.err != nil {
 		return false
-	}
-	if s.tempFile == nil {
-		tempFile, err := os.CreateTemp("", "page_entities-*")
-		if err != nil {
-			s.err = err
-			return false
-		}
-		s.tempFile = tempFile
 	}
 	for s.curDomain < len(s.domains) {
 		if s.scanner != nil {
 			if s.scanner.Scan() {
+				s.curLine.WriteString(s.domains[s.curDomain])
+				s.curLine.WriteByte(',')
+				s.curLine.Write(s.scanner.Bytes())
 				return true
 			}
 			s.err = s.scanner.Err()
@@ -277,30 +275,28 @@ func (s *pageEntitiesScanner) Scan() bool {
 		if s.curDomain == len(s.domains) {
 			break
 		}
-		s.err = s.tempFile.Close()
+
+		s.reader, s.err = NewS3Reader(context.Background(), "qrank", s.paths[s.curDomain], s.storage)
 		if s.err != nil {
 			break
 		}
-		opts := minio.GetObjectOptions{}
-		s.err = s.storage.FGetObject(context.Background(), "qrank", s.paths[s.curDomain], s.tempFile.Name(), opts)
-		if s.err != nil {
-			break
-		}
-		s.tempFile, s.err = os.Open(s.tempFile.Name())
-		if s.err != nil {
-			break
-		}
-		if s.reader == nil {
-			s.reader, s.err = zstd.NewReader(nil)
+
+		if s.decompressor == nil {
+			s.decompressor, s.err = zstd.NewReader(nil)
 			if s.err != nil {
 				break
 			}
 		}
-		s.err = s.reader.Reset(s.tempFile)
+		s.err = s.decompressor.Reset(s.reader)
 		if s.err != nil {
 			break
 		}
-		s.scanner = bufio.NewScanner(s.reader)
+		s.scanner = bufio.NewScanner(s.decompressor)
+	}
+
+	if s.decompressor != nil {
+		s.decompressor.Close()
+		s.decompressor = nil
 	}
 
 	if s.reader != nil {
@@ -308,25 +304,16 @@ func (s *pageEntitiesScanner) Scan() bool {
 		s.reader = nil
 	}
 
-	if s.tempFile != nil {
-		s.tempFile.Close()
-		os.Remove(s.tempFile.Name())
-		s.tempFile = nil
-	}
-
 	s.scanner = nil
 	return false
 }
 
+func (s *pageEntitiesScanner) Bytes() []byte {
+	return s.curLine.Bytes()
+}
+
 func (s *pageEntitiesScanner) Text() string {
-	if s.scanner == nil || s.err != nil {
-		return ""
-	}
-	var buf strings.Builder
-	buf.WriteString(s.domains[s.curDomain])
-	buf.WriteByte(',')
-	buf.WriteString(s.scanner.Text())
-	return buf.String()
+	return s.curLine.String()
 }
 
 func (s *pageEntitiesScanner) Err() error {

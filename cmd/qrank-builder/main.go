@@ -121,6 +121,23 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
+	// TOOD: The following is just a benchmark to see how long it takes
+	// to read all page_entities within the Wikimedia datacenter.
+	// Once we know it's reasonable to do this, we can remove this code.
+	logger.Printf("start reading page_entities")
+	numEntities := 0
+	scanner := NewPageEntitiesScanner(sites, s3)
+	for scanner.Scan() {
+		numEntities += 1
+		if numEntities < 5 || numEntities%10000 == 0 {
+			logger.Printf("  %d: %s\n", numEntities, scanner.Text())
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	logger.Printf("finished reading %d page_entities", numEntities)
+
 	// TODO: Old code starts here, remove after new implementation is done.
 	return nil
 
