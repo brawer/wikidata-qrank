@@ -38,7 +38,7 @@ func TestBuildPageEntities(t *testing.T) {
 	got := string(s3.data["page_entities/loginwiki-20240501-page_entities.zst"])
 	want := "old-loginwiki"
 	if got != want {
-		t.Errorf("previously stored page_entities should not re-computed")
+		t.Errorf("should not re-compute previously stored page_entities")
 	}
 
 	path := "page_entities/rmwiki-20240301-page_entities.zst"
