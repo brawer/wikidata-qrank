@@ -56,7 +56,7 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 
 	for _, site := range *sites {
 		ymd := site.LastDumped.Format("20060102")
-		if arr, ok := stored[ymd]; !ok || !slices.Contains(arr, ymd) {
+		if arr, ok := stored[site.Key]; !ok || !slices.Contains(arr, ymd) {
 			tasks <- site
 		}
 	}

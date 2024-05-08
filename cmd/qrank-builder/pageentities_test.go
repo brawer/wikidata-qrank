@@ -23,13 +23,22 @@ func TestBuildPageEntities(t *testing.T) {
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
 	s3 := NewFakeS3()
-	s3.data["page_entities/rmwiki-20010203-page_entities.zst"] = []byte("old")
+	s3.data["page_entities/loginwiki-20240501-page_entities.zst"] = []byte("old-loginwiki")
+	s3.data["page_entities/rmwiki-20010203-page_entities.zst"] = []byte("old-rmwiki")
 	sites, err := ReadWikiSites(dumps)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := buildPageEntities(ctx, dumps, sites, s3); err != nil {
 		t.Fatal(err)
+	}
+
+	// page_entities should be cached across pipeline runs
+	// https://github.com/brawer/wikidata-qrank/issues/33
+	got := string(s3.data["page_entities/loginwiki-20240501-page_entities.zst"])
+	want := "old-loginwiki"
+	if got != want {
+		t.Errorf("previously stored page_entities should not re-computed")
 	}
 
 	path := "page_entities/rmwiki-20240301-page_entities.zst"
@@ -43,8 +52,8 @@ func TestBuildPageEntities(t *testing.T) {
 	if _, err = io.Copy(&buf, reader); err != nil {
 		t.Error(err)
 	}
-	got := buf.String()
-	want := "1,Q5296\n3824,Q662541\n799,Q72\n"
+	got = buf.String()
+	want = "1,Q5296\n3824,Q662541\n799,Q72\n"
 	if got != want {
 		t.Errorf("got %v, want %v", got, want)
 	}
