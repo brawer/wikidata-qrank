@@ -4,12 +4,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -23,6 +25,35 @@ func NewFakeS3() *FakeS3 {
 		data: make(map[string][]byte, 10),
 	}
 	return fake
+}
+
+func (s3 *FakeS3) ReadLines(path string) ([]string, error) {
+	s3.mutex.RLock()
+	defer s3.mutex.RUnlock()
+
+	data, ok := s3.data[path]
+	if !ok {
+		return nil, fmt.Errorf("file not found: %s", path)
+	}
+
+	var buf bytes.Buffer
+	if strings.HasSuffix(path, ".zst") {
+		decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+		if err != nil {
+			return nil, err
+		}
+		defer decoder.Close()
+		data, err = decoder.DecodeAll(data, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, err := buf.Write(data); err != nil {
+		return nil, err
+	}
+
+	s := strings.TrimSuffix(string(data), "\n")
+	return strings.Split(s, "\n"), nil
 }
 
 func (s3 *FakeS3) ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {

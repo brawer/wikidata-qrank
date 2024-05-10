@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"path/filepath"
 	"reflect"
@@ -48,18 +47,23 @@ func TestBuildPageEntities(t *testing.T) {
 
 	// For rmwiki-2024, new data should have been computed and put in storage.
 	// Make sure that data looks as expected.
-	path := "page_entities/rmwiki-20240301-page_entities.zst"
-	reader, err := zstd.NewReader(bytes.NewReader(s3.data[path]))
-	if err != nil {
-		t.Error(err)
+	gotLines, err := s3.ReadLines("page_entities/rmwiki-20240301-page_entities.zst")
+	if err != err {
+		t.Fatal(err)
 	}
-	defer reader.Close()
-	var buf bytes.Buffer
-	if _, err = io.Copy(&buf, reader); err != nil {
-		t.Error(err)
+	got = strings.Join(gotLines, " | ")
+	want = "1,Q5296 | 3824,Q662541 | 799,Q72"
+	if got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
-	got = buf.String()
-	want = "1,Q5296\n3824,Q662541\n799,Q72\n"
+
+	// TODO: Fix https://github.com/brawer/wikidata-qrank/issues/35.
+	gotLines, err = s3.ReadLines("page_entities/wikidatawiki-20240401-page_entities.zst")
+	if err != err {
+		t.Fatal(err)
+	}
+	got = strings.Join(gotLines, " | ")
+	want = "1,Q107661323 | 19441465,Q5296"
 	if got != want {
 		t.Errorf("got %v, want %v", got, want)
 	}
