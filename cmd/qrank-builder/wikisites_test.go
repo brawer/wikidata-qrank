@@ -17,7 +17,9 @@ func TestReadWikiSites(t *testing.T) {
 	}
 
 	tests := []struct{ key, domain, lastDumped string }{
+		{"loginwiki", "login.wikimedia.org", "2024-05-01"},
 		{"rmwiki", "rm.wikipedia.org", "2024-03-01"},
+		{"wikidatawiki", "www.wikidata.org", "2024-04-01"},
 	}
 	for _, tc := range tests {
 		site := (*sites)[tc.key]
