@@ -90,30 +90,6 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 	destPath := fmt.Sprintf("page_entities/%s-%s-page_entities.zst", site.Key, ymd)
 	logger.Printf("building %s", destPath)
 
-	propsFileName := fmt.Sprintf("%s-%s-page_props.sql.gz", site.Key, ymd)
-	propsPath := filepath.Join(dumps, site.Key, ymd, propsFileName)
-	propsFile, err := os.Open(propsPath)
-	if err != nil {
-		return err
-	}
-	defer propsFile.Close()
-
-	gz, err := gzip.NewReader(propsFile)
-	if err != nil {
-		return err
-	}
-	defer gz.Close()
-
-	reader, err := NewSQLReader(gz)
-	if err != nil {
-		return err
-	}
-
-	columns := reader.Columns()
-	pageCol := slices.Index(columns, "pp_page")
-	nameCol := slices.Index(columns, "pp_propname")
-	valueCol := slices.Index(columns, "pp_value")
-
 	outFile, err := os.CreateTemp("", "*-page_entities.zst")
 	if err != nil {
 		return err
@@ -133,24 +109,10 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		defer close(linesChan)
-		for {
-			select {
-			case <-groupCtx.Done():
-				return groupCtx.Err()
-			default:
-			}
-
-			row, err := reader.Read()
-			if err != nil {
-				return err
-			}
-			if row == nil {
-				return nil
-			}
-			if row[nameCol] == "wikibase_item" {
-				linesChan <- fmt.Sprintf("%s,%s", row[pageCol], row[valueCol])
-			}
+		if err := processPageProps(groupCtx, dumps, &site, linesChan); err != nil {
+			return err
 		}
+		return nil
 	})
 	group.Go(func() error {
 		sorter.Sort(groupCtx)
@@ -199,6 +161,54 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 	}
 
 	return nil
+}
+
+// ProcessPageProps processes a dump of the `page_props` table for a Wikimedia site.
+// Helper for buildSitePageEntities().
+func processPageProps(ctx context.Context, dumps string, site *WikiSite, out chan<- string) error {
+	ymd := site.LastDumped.Format("20060102")
+	propsFileName := fmt.Sprintf("%s-%s-page_props.sql.gz", site.Key, ymd)
+	propsPath := filepath.Join(dumps, site.Key, ymd, propsFileName)
+	propsFile, err := os.Open(propsPath)
+	if err != nil {
+		return err
+	}
+	defer propsFile.Close()
+
+	gz, err := gzip.NewReader(propsFile)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	reader, err := NewSQLReader(gz)
+	if err != nil {
+		return err
+	}
+
+	columns := reader.Columns()
+	pageCol := slices.Index(columns, "pp_page")
+	nameCol := slices.Index(columns, "pp_propname")
+	valueCol := slices.Index(columns, "pp_value")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		row, err := reader.Read()
+		if err != nil {
+			return err
+		}
+		if row == nil {
+			return nil
+		}
+		if row[nameCol] == "wikibase_item" {
+			out <- fmt.Sprintf("%s,%s", row[pageCol], row[valueCol])
+		}
+	}
 }
 
 // StoredPageEntitites returns what entity files are available in storage.
