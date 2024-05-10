@@ -70,7 +70,7 @@ func ReadWikiSites(dumps string) (*map[string]WikiSite, error) {
 			continue
 		}
 
-		for _, f := range []string{"page_props.sql.gz"} {
+		for _, f := range []string{"page.sql.gz", "page_props.sql.gz"} {
 			latestFile := fmt.Sprintf("%s-latest-%s", site.Key, f)
 			latestPath := filepath.Join(dumps, site.Key, "latest", latestFile)
 			if latest, err := filepath.EvalSymlinks(latestPath); err == nil {
