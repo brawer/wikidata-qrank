@@ -200,8 +200,18 @@ func processPagePropsTable(ctx context.Context, dumps string, site *WikiSite, ou
 		if row == nil {
 			return nil
 		}
-		if row[nameCol] == "wikibase_item" {
-			out <- fmt.Sprintf("%s,%s", row[pageCol], row[valueCol])
+
+		page := row[pageCol]
+		value := row[valueCol]
+		switch row[nameCol] {
+		case "wikibase_item":
+			out <- fmt.Sprintf("%s,%s", page, value)
+		case "wb-claims":
+			out <- fmt.Sprintf("%s,c=%s", page, value)
+		case "wb-identifiers":
+			out <- fmt.Sprintf("%s,i=%s", page, value)
+		case "wb-sitelinks":
+			out <- fmt.Sprintf("%s,l=%s", page, value)
 		}
 	}
 }
@@ -417,10 +427,13 @@ func (s *pageEntitiesScanner) Err() error {
 // PageSignalMerger aggregates per-page signals from different sources
 // into a single output line. Input and output is keyed by page id.
 type pageSignalMerger struct {
-	writer   io.WriteCloser
-	page     string
-	entity   string
-	pageSize int64
+	writer         io.WriteCloser
+	page           string
+	entity         string
+	pageSize       int64
+	numClaims      int64
+	numIdentifiers int64
+	numSiteLinks   int64
 }
 
 func NewPageSignalMerger(w io.WriteCloser) *pageSignalMerger {
@@ -431,8 +444,11 @@ func NewPageSignalMerger(w io.WriteCloser) *pageSignalMerger {
 // Input must be grouped by page (such as by sorting lines).
 // Recognized line formats:
 //
-//	"200,Q72": wikipage #200 is for Wikidata entity Q72
-//	"200,s=830167": wikipage #200 is 830167 bytes in size
+//		"200,Q72": wikipage 200 is for Wikidata entity Q72
+//	 "200,c=8": wikipage 200 has 8 claims in wikidatawiki
+//	 "200,i=17": wikipage 200 has 17 identifiers in wikidatawiki
+//	 "200,l=23": wikipage 200 has 23 sitelinks in wikidatawiki
+//		"200,s=830167": wikipage 200 has 830167 bytes in wikitext format
 func (m *pageSignalMerger) Process(line string) error {
 	pos := strings.IndexByte(line, ',')
 	page := line[0:pos]
@@ -443,15 +459,26 @@ func (m *pageSignalMerger) Process(line string) error {
 		m.page = page
 	}
 
+	var value int64 = 0
+	if line[pos+2] == '=' {
+		n, err := strconv.ParseInt(line[pos+3:len(line)], 10, 64)
+		if err != nil {
+			return err
+		}
+		value = n
+	}
+
 	switch line[pos+1] {
 	case 'Q':
 		m.entity = line[pos+1 : len(line)]
+	case 'c':
+		m.numClaims += value
+	case 'i':
+		m.numIdentifiers += value
+	case 'l':
+		m.numSiteLinks += value
 	case 's':
-		if line[pos+2] == '=' {
-			if n, err := strconv.ParseInt(line[pos+3:len(line)], 10, 64); err == nil {
-				m.pageSize += n
-			}
-		}
+		m.pageSize += value
 	}
 
 	return nil
@@ -477,13 +504,32 @@ func (m *pageSignalMerger) write() error {
 		buf.WriteByte(',')
 		buf.WriteString(m.entity)
 		buf.WriteByte(',')
-		buf.WriteString(strconv.FormatInt(m.pageSize, 10))
+		if m.pageSize > 0 {
+			buf.WriteString(strconv.FormatInt(m.pageSize, 10))
+		}
+		if m.numClaims > 0 || m.numIdentifiers > 0 || m.numSiteLinks > 0 {
+			buf.WriteByte(',')
+			if m.numClaims > 0 {
+				buf.WriteString(strconv.FormatInt(m.numClaims, 10))
+			}
+			buf.WriteByte(',')
+			if m.numIdentifiers > 0 {
+				buf.WriteString(strconv.FormatInt(m.numIdentifiers, 10))
+			}
+			buf.WriteByte(',')
+			if m.numSiteLinks > 0 {
+				buf.WriteString(strconv.FormatInt(m.numSiteLinks, 10))
+			}
+		}
 		buf.WriteByte('\n')
 		_, err = m.writer.Write(buf.Bytes())
 	}
 
 	m.page = ""
 	m.entity = ""
+	m.numClaims = 0
+	m.numIdentifiers = 0
+	m.numSiteLinks = 0
 	m.pageSize = 0
 
 	return err

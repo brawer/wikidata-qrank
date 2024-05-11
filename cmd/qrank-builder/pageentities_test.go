@@ -74,9 +74,9 @@ func TestBuildPageEntities(t *testing.T) {
 	wantLines = []string{
 		"1,Q107661323,3470",
 		"19441465,Q5296,372",
-		"200,Q72,0",
-		"5411171,Q5649951,0",
-		"623646,Q662541,0",
+		"200,Q72,,550,85,186",
+		"5411171,Q5649951,,1,,20",
+		"623646,Q662541,,32,9,15",
 	}
 	if !slices.Equal(gotLines, wantLines) {
 		t.Errorf("got %v, want %v", gotLines, wantLines)
@@ -185,7 +185,7 @@ func TestPageSignalMerger(t *testing.T) {
 	got := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
 	want := []string{
 		"22,Q72,830167",
-		"333,Q3,0",
+		"333,Q3,",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
