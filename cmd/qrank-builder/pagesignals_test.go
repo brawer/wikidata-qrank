@@ -19,36 +19,36 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-func TestBuildPageEntities(t *testing.T) {
+func TestBuildPageSignals(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
 	s3 := NewFakeS3()
-	s3.data["page_entities/loginwiki-20240501-page_entities.zst"] = []byte("old-loginwiki")
-	s3.data["page_entities/rmwiki-20010203-page_entities.zst"] = []byte("old-2001")
-	s3.data["page_entities/rmwiki-20020203-page_entities.zst"] = []byte("old-2002")
-	s3.data["page_entities/rmwiki-20030203-page_entities.zst"] = []byte("old-2003")
-	s3.data["page_entities/rmwiki-20040203-page_entities.zst"] = []byte("old-2004")
-	s3.data["page_entities/rmwiki-20050203-page_entities.zst"] = []byte("old-2005")
+	s3.data["page_signals/loginwiki-20240501-page_signals.zst"] = []byte("old-loginwiki")
+	s3.data["page_signals/rmwiki-20010203-page_signals.zst"] = []byte("old-2001")
+	s3.data["page_signals/rmwiki-20020203-page_signals.zst"] = []byte("old-2002")
+	s3.data["page_signals/rmwiki-20030203-page_signals.zst"] = []byte("old-2003")
+	s3.data["page_signals/rmwiki-20040203-page_signals.zst"] = []byte("old-2004")
+	s3.data["page_signals/rmwiki-20050203-page_signals.zst"] = []byte("old-2005")
 	sites, err := ReadWikiSites(dumps)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := buildPageEntities(ctx, dumps, sites, s3); err != nil {
+	if err := buildPageSignals(ctx, dumps, sites, s3); err != nil {
 		t.Fatal(err)
 	}
 
-	// page_entities should be cached across pipeline runs
+	// page_signals should be cached across pipeline runs
 	// https://github.com/brawer/wikidata-qrank/issues/33
-	got := string(s3.data["page_entities/loginwiki-20240501-page_entities.zst"])
+	got := string(s3.data["page_signals/loginwiki-20240501-page_signals.zst"])
 	want := "old-loginwiki"
 	if got != want {
-		t.Errorf("should not re-compute previously stored page_entities")
+		t.Errorf("should not re-compute previously stored page_signals")
 	}
 
 	// For rmwiki-2024, new data should have been computed and put in storage.
 	// Make sure that data looks as expected.
-	gotLines, err := s3.ReadLines("page_entities/rmwiki-20240301-page_entities.zst")
+	gotLines, err := s3.ReadLines("page_signals/rmwiki-20240301-page_signals.zst")
 	if err != err {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestBuildPageEntities(t *testing.T) {
 	// and similar internal pages. To find the wikidata-ids of pages
 	// in wikidatawiki, we also need to process the SQL dumps of table `page`.
 	// See https://github.com/brawer/wikidata-qrank/issues/35 for background.
-	gotLines, err = s3.ReadLines("page_entities/wikidatawiki-20240401-page_entities.zst")
+	gotLines, err = s3.ReadLines("page_signals/wikidatawiki-20240401-page_signals.zst")
 	if err != err {
 		t.Fatal(err)
 	}
@@ -83,28 +83,28 @@ func TestBuildPageEntities(t *testing.T) {
 	}
 
 	// Verify that obsolete files have been cleaned up.
-	stored, err := storedPageEntities(context.Background(), s3)
+	stored, err := storedPageSignals(context.Background(), s3)
 	if err != nil {
 		t.Error(err)
 	}
 	got = strings.Join(stored["rmwiki"], " ")
 	want = "20040203 20050203 20240301"
 	if got != want {
-		t.Errorf(`should clean up old page_entities; got "%s", want "%s"`, got, want)
+		t.Errorf(`should clean up old page_signals; got "%s", want "%s"`, got, want)
 	}
 }
 
-func TestStoredPageEntitites(t *testing.T) {
+func TestStoredPageSignals(t *testing.T) {
 	s3 := NewFakeS3()
 	for _, path := range []string{
-		"page_entities/alswikibooks-20010203-page_entities.zst",
-		"page_entities/alswikibooks-20050607-page_entities.zst",
-		"page_entities/rmwiki-20241122-page_entities.zst",
-		"page_entities/junk.txt",
+		"page_signals/alswikibooks-20010203-page_signals.zst",
+		"page_signals/alswikibooks-20050607-page_signals.zst",
+		"page_signals/rmwiki-20241122-page_signals.zst",
+		"page_signals/junk.txt",
 	} {
 		s3.data[path] = []byte("content")
 	}
-	got, err := storedPageEntities(context.Background(), s3)
+	got, err := storedPageSignals(context.Background(), s3)
 	if err != nil {
 		t.Error(err)
 	}
@@ -117,11 +117,11 @@ func TestStoredPageEntitites(t *testing.T) {
 	}
 }
 
-func TestPageEntitiesScanner(t *testing.T) {
+func TestPageSignalsScanner(t *testing.T) {
 	s3 := NewFakeS3()
-	storeFakePageEntities("enwiki-20111231", "1,Q111\n7,Q777\n", s3, t)
-	storeFakePageEntities("rmwiki-20110203", "1,Q11\n2,Q22\n3,Q33\n", s3, t)
-	storeFakePageEntities("rmwiki-20111111", "1,Q11\n3,Q33\n", s3, t)
+	storeFakePageSignals("enwiki-20111231", "1,Q111\n7,Q777\n", s3, t)
+	storeFakePageSignals("rmwiki-20110203", "1,Q11\n2,Q22\n3,Q33\n", s3, t)
+	storeFakePageSignals("rmwiki-20111111", "1,Q11\n3,Q33\n", s3, t)
 	enDumped, _ := time.Parse(time.DateOnly, "2011-12-31")
 	rmDumped, _ := time.Parse(time.DateOnly, "2011-11-11")
 	sites := map[string]WikiSite{
@@ -130,7 +130,7 @@ func TestPageEntitiesScanner(t *testing.T) {
 	}
 
 	got := make([]string, 0, 10)
-	scanner := NewPageEntitiesScanner(&sites, s3)
+	scanner := NewPageSignalsScanner(&sites, s3)
 	for scanner.Scan() {
 		got = append(got, scanner.Text())
 	}
@@ -148,8 +148,8 @@ func TestPageEntitiesScanner(t *testing.T) {
 	}
 }
 
-// StoreFakePageEntities is a helper for TestPageEntitiesScanner().
-func storeFakePageEntities(id string, content string, s3 *FakeS3, t *testing.T) {
+// StoreFakePageSignals is a helper for TestPageSignalsScanner().
+func storeFakePageSignals(id string, content string, s3 *FakeS3, t *testing.T) {
 	var buf bytes.Buffer
 	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedFastest)
 	writer, err := zstd.NewWriter(&buf, zstdLevel)
@@ -162,7 +162,7 @@ func storeFakePageEntities(id string, content string, s3 *FakeS3, t *testing.T) 
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	path := fmt.Sprintf("page_entities/%s-page_entities.zst", id)
+	path := fmt.Sprintf("page_signals/%s-page_signals.zst", id)
 	s3.data[path] = buf.Bytes()
 }
 

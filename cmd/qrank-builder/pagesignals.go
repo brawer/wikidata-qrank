@@ -26,11 +26,11 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-// BuildPageEntities builds pageid-to-qid mappings and puts them in storage.
-// If a mapping file is already stored for the last dumped version of a site,
+// BuildPageSignals builds per-page signals and puts them in storage.
+// If a page_signals file is already stored for the last dumped version of a site,
 // it is not getting re-built.
-func buildPageEntities(ctx context.Context, dumps string, sites *map[string]WikiSite, s3 S3) error {
-	stored, err := storedPageEntities(ctx, s3)
+func buildPageSignals(ctx context.Context, dumps string, sites *map[string]WikiSite, s3 S3) error {
+	stored, err := storedPageSignals(ctx, s3)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 					if !more {
 						return nil
 					}
-					if err := buildSitePageEntities(t, ctx, dumps, s3); err != nil {
+					if err := buildSitePageSignals(t, ctx, dumps, s3); err != nil {
 						return err
 					}
 				}
@@ -75,7 +75,7 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 		sort.Strings(versions)
 		pos := slices.Index(versions, ymd)
 		for i := 0; i < pos-2; i += 1 {
-			path := fmt.Sprintf("page_entities/%s-%s-page_entities.zst", site, versions[i])
+			path := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site, versions[i])
 			opts := minio.RemoveObjectOptions{}
 			if err := s3.RemoveObject(ctx, "qrank", path, opts); err != nil {
 				return err
@@ -86,13 +86,13 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 	return nil
 }
 
-// BuildSitePageEntities builds the page_entities file for one WikiSite.
-func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
+// BuildSitePageSignals builds the page_signals file for one WikiSite.
+func buildSitePageSignals(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
 	ymd := site.LastDumped.Format("20060102")
-	destPath := fmt.Sprintf("page_entities/%s-%s-page_entities.zst", site.Key, ymd)
+	destPath := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site.Key, ymd)
 	logger.Printf("building %s", destPath)
 
-	outFile, err := os.CreateTemp("", "*-page_entities.zst")
+	outFile, err := os.CreateTemp("", "*-page_signals.zst")
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 }
 
 // ProcessPagePropsTable processes a dump of the `page_props` table for a Wikimedia site.
-// Called by function buildSitePageEntities().
+// Called by function buildSitePageSignals().
 func processPagePropsTable(ctx context.Context, dumps string, site *WikiSite, out chan<- string) error {
 	ymd := site.LastDumped.Format("20060102")
 	propsFileName := fmt.Sprintf("%s-%s-page_props.sql.gz", site.Key, ymd)
@@ -223,7 +223,7 @@ func processPagePropsTable(ctx context.Context, dumps string, site *WikiSite, ou
 var wikidataTitleRe = regexp.MustCompile(`^Q\d+$`)
 
 // ProcessPageTable processes a dump of the `page` table for a Wikimedia site.
-// Called by function buildSitePageEntities().
+// Called by function buildSitePageSignals().
 func processPageTable(ctx context.Context, dumps string, site *WikiSite, out chan<- string) error {
 	isWikidata := site.Key == "wikidatawiki"
 	ymd := site.LastDumped.Format("20060102")
@@ -288,11 +288,11 @@ func processPageTable(ctx context.Context, dumps string, site *WikiSite, out cha
 	}
 }
 
-// StoredPageEntitites returns what entity files are available in storage.
-func storedPageEntities(ctx context.Context, s3 S3) (map[string][]string, error) {
-	re := regexp.MustCompile(`^page_entities/([a-z0-9_\-]+)-(\d{8})-page_entities.zst$`)
+// StoredPageSignals returns what entity files are available in storage.
+func storedPageSignals(ctx context.Context, s3 S3) (map[string][]string, error) {
+	re := regexp.MustCompile(`^page_signals/([a-z0-9_\-]+)-(\d{8})-page_signals.zst$`)
 	result := make(map[string][]string, 1000)
-	opts := minio.ListObjectsOptions{Prefix: "page_entities/"}
+	opts := minio.ListObjectsOptions{Prefix: "page_signals/"}
 	for obj := range s3.ListObjects(ctx, "qrank", opts) {
 		if obj.Err != nil {
 			return nil, obj.Err
@@ -311,7 +311,7 @@ func storedPageEntities(ctx context.Context, s3 S3) (map[string][]string, error)
 	return result, nil
 }
 
-type pageEntitiesScanner struct {
+type pageSignalsScanner struct {
 	err          error
 	paths        []string
 	domains      []string
@@ -323,10 +323,10 @@ type pageEntitiesScanner struct {
 	curLine      bytes.Buffer
 }
 
-// NewPageEntitiesScanner returns an object similar to bufio.Scanner
+// NewPageSignalsScanner returns an object similar to bufio.Scanner
 // that sequentially scans pageid-to-qid mapping files for all WikiSites.
 // Lines are returned in the exact same order and format as pageviews files.
-func NewPageEntitiesScanner(sites *map[string]WikiSite, s3 S3) *pageEntitiesScanner {
+func NewPageSignalsScanner(sites *map[string]WikiSite, s3 S3) *pageSignalsScanner {
 	sorted := make([]WikiSite, 0, len(*sites))
 	for _, site := range *sites {
 		sorted = append(sorted, site)
@@ -340,12 +340,12 @@ func NewPageEntitiesScanner(sites *map[string]WikiSite, s3 S3) *pageEntitiesScan
 	domains := make([]string, 0, len(sorted))
 	for _, site := range sorted {
 		ymd := site.LastDumped.Format("20060102")
-		path := fmt.Sprintf("page_entities/%s-%s-page_entities.zst", site.Key, ymd)
+		path := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site.Key, ymd)
 		paths = append(paths, path)
 		domains = append(domains, strings.TrimSuffix(site.Domain, ".org"))
 	}
 
-	return &pageEntitiesScanner{
+	return &pageSignalsScanner{
 		err:          nil,
 		paths:        paths,
 		domains:      domains,
@@ -357,7 +357,7 @@ func NewPageEntitiesScanner(sites *map[string]WikiSite, s3 S3) *pageEntitiesScan
 	}
 }
 
-func (s *pageEntitiesScanner) Scan() bool {
+func (s *pageSignalsScanner) Scan() bool {
 	s.curLine.Truncate(0)
 	if s.err != nil {
 		return false
@@ -412,15 +412,15 @@ func (s *pageEntitiesScanner) Scan() bool {
 	return false
 }
 
-func (s *pageEntitiesScanner) Bytes() []byte {
+func (s *pageSignalsScanner) Bytes() []byte {
 	return s.curLine.Bytes()
 }
 
-func (s *pageEntitiesScanner) Text() string {
+func (s *pageSignalsScanner) Text() string {
 	return s.curLine.String()
 }
 
-func (s *pageEntitiesScanner) Err() error {
+func (s *pageSignalsScanner) Err() error {
 	return s.err
 }
 
