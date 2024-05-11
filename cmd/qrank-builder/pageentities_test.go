@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"path/filepath"
 	"reflect"
@@ -51,9 +52,12 @@ func TestBuildPageEntities(t *testing.T) {
 	if err != err {
 		t.Fatal(err)
 	}
-	got = strings.Join(gotLines, " | ")
-	want = "1,Q5296 | 3824,Q662541 | 799,Q72"
-	if got != want {
+	wantLines := []string{
+		"1,Q5296,2500",
+		"3824,Q662541,4973",
+		"799,Q72,3142",
+	}
+	if !slices.Equal(gotLines, wantLines) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
@@ -67,10 +71,15 @@ func TestBuildPageEntities(t *testing.T) {
 	if err != err {
 		t.Fatal(err)
 	}
-	got = strings.Join(gotLines, " | ")
-	want = "1,Q107661323 | 19441465,Q5296 | 200,Q72 | 5411171,Q5649951 | 623646,Q662541"
-	if got != want {
-		t.Errorf("got %v, want %v", got, want)
+	wantLines = []string{
+		"1,Q107661323,3470",
+		"19441465,Q5296,372",
+		"200,Q72,0",
+		"5411171,Q5649951,0",
+		"623646,Q662541,0",
+	}
+	if !slices.Equal(gotLines, wantLines) {
+		t.Errorf("got %v, want %v", gotLines, wantLines)
 	}
 
 	// Verify that obsolete files have been cleaned up.
@@ -155,4 +164,48 @@ func storeFakePageEntities(id string, content string, s3 *FakeS3, t *testing.T) 
 	}
 	path := fmt.Sprintf("page_entities/%s-page_entities.zst", id)
 	s3.data[path] = buf.Bytes()
+}
+
+func TestPageSignalMerger(t *testing.T) {
+	var buf strings.Builder
+	m := NewPageSignalMerger(NopWriteCloser(&buf))
+	for _, line := range []string{
+		"11,s=1111111",
+		"22,Q72",
+		"22,s=830167",
+		"333,Q3",
+	} {
+		if err := m.Process(line); err != nil {
+			t.Error(err)
+		}
+	}
+	if err := m.Close(); err != nil {
+		t.Error(err)
+	}
+	got := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	want := []string{
+		"22,Q72,830167",
+		"333,Q3,0",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// NopWriteCloser returns a WriteCloser with a no-op Close method wrapping the
+// provided Writer w. Like io.ReadCloser but for writing.
+func NopWriteCloser(w io.Writer) io.WriteCloser {
+	return &nopWriteCloser{w}
+}
+
+type nopWriteCloser struct {
+	writer io.Writer
+}
+
+func (n *nopWriteCloser) Close() error {
+	return nil
+}
+
+func (n *nopWriteCloser) Write(p []byte) (int, error) {
+	return n.writer.Write(p)
 }

@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sync/errgroup"
@@ -120,22 +121,17 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 	})
 	group.Go(func() error {
 		sorter.Sort(groupCtx)
+		merger := NewPageSignalMerger(writer)
 		for {
 			select {
 			case <-groupCtx.Done():
 				return groupCtx.Err()
 			case line, more := <-outChan:
 				if !more {
-					return nil
+					return merger.Close()
 				}
-				var buf bytes.Buffer
-				if _, err := buf.WriteString(line); err != nil {
-					return err
-				}
-				if err := buf.WriteByte('\n'); err != nil {
-					return err
-				}
-				if _, err := buf.WriteTo(writer); err != nil {
+				err := merger.Process(line)
+				if err != nil {
 					return err
 				}
 			}
@@ -147,11 +143,6 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 	if err := <-errChan; err != nil {
 		return err
 	}
-
-	if err := writer.Close(); err != nil {
-		return err
-	}
-
 	if err := outFile.Close(); err != nil {
 		return err
 	}
@@ -224,14 +215,7 @@ var wikidataTitleRe = regexp.MustCompile(`^Q\d+$`)
 // ProcessPageTable processes a dump of the `page` table for a Wikimedia site.
 // Called by function buildSitePageEntities().
 func processPageTable(ctx context.Context, dumps string, site *WikiSite, out chan<- string) error {
-	// For now, we only need to process the page table of wikidatawiki.
-	// This whis will change once we collect page sizes.
-	// https://github.com/brawer/wikidata-qrank/issues/38
 	isWikidata := site.Key == "wikidatawiki"
-	if !isWikidata {
-		return nil
-	}
-
 	ymd := site.LastDumped.Format("20060102")
 	propsFileName := fmt.Sprintf("%s-%s-page.sql.gz", site.Key, ymd)
 	propsPath := filepath.Join(dumps, site.Key, ymd, propsFileName)
@@ -256,7 +240,8 @@ func processPageTable(ctx context.Context, dumps string, site *WikiSite, out cha
 	pageCol := slices.Index(columns, "page_id")
 	namespaceCol := slices.Index(columns, "page_namespace")
 	titleCol := slices.Index(columns, "page_title")
-	// lenCol := slices.Index(columns, "page_len")
+	contentModelCol := slices.Index(columns, "page_content_model")
+	lenCol := slices.Index(columns, "page_len")
 
 	for {
 		select {
@@ -285,9 +270,11 @@ func processPageTable(ctx context.Context, dumps string, site *WikiSite, out cha
 			}
 		}
 
-		// TODO: Collect page sizes.
+		// Collect page sizes.
 		// https://github.com/brawer/wikidata-qrank/issues/38
-		// out <- fmt.Sprintf("%s,M:%s", row[pageCol], row[lenCol])
+		if row[contentModelCol] == "wikitext" {
+			out <- fmt.Sprintf("%s,s=%s", row[pageCol], row[lenCol])
+		}
 	}
 }
 
@@ -425,4 +412,79 @@ func (s *pageEntitiesScanner) Text() string {
 
 func (s *pageEntitiesScanner) Err() error {
 	return s.err
+}
+
+// PageSignalMerger aggregates per-page signals from different sources
+// into a single output line. Input and output is keyed by page id.
+type pageSignalMerger struct {
+	writer   io.WriteCloser
+	page     string
+	entity   string
+	pageSize int64
+}
+
+func NewPageSignalMerger(w io.WriteCloser) *pageSignalMerger {
+	return &pageSignalMerger{writer: w}
+}
+
+// Process handles one line of input.
+// Input must be grouped by page (such as by sorting lines).
+// Recognized line formats:
+//
+//	"200,Q72": wikipage #200 is for Wikidata entity Q72
+//	"200,s=830167": wikipage #200 is 830167 bytes in size
+func (m *pageSignalMerger) Process(line string) error {
+	pos := strings.IndexByte(line, ',')
+	page := line[0:pos]
+	if page != m.page {
+		if err := m.write(); err != nil {
+			return err
+		}
+		m.page = page
+	}
+
+	switch line[pos+1] {
+	case 'Q':
+		m.entity = line[pos+1 : len(line)]
+	case 's':
+		if line[pos+2] == '=' {
+			if n, err := strconv.ParseInt(line[pos+3:len(line)], 10, 64); err == nil {
+				m.pageSize += n
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *pageSignalMerger) Close() error {
+	if err := m.write(); err != nil {
+		return err
+	}
+
+	if err := m.writer.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *pageSignalMerger) write() error {
+	var err error
+	if m.page != "" && m.entity != "" {
+		var buf bytes.Buffer
+		buf.WriteString(m.page)
+		buf.WriteByte(',')
+		buf.WriteString(m.entity)
+		buf.WriteByte(',')
+		buf.WriteString(strconv.FormatInt(m.pageSize, 10))
+		buf.WriteByte('\n')
+		_, err = m.writer.Write(buf.Bytes())
+	}
+
+	m.page = ""
+	m.entity = ""
+	m.pageSize = 0
+
+	return err
 }
