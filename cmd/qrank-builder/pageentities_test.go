@@ -57,13 +57,18 @@ func TestBuildPageEntities(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
-	// TODO: Fix https://github.com/brawer/wikidata-qrank/issues/35.
+	// For Wikidata, the mapping from page-id to wikidata-id needs to
+	// be taken from two sources. As with other wikis, table `page_props`
+	// has some mappings, but for Wikidata that only contains a few templates
+	// and similar internal pages. To find the wikidata-ids of pages
+	// in wikidatawiki, we also need to process the SQL dumps of table `page`.
+	// See https://github.com/brawer/wikidata-qrank/issues/35 for background.
 	gotLines, err = s3.ReadLines("page_entities/wikidatawiki-20240401-page_entities.zst")
 	if err != err {
 		t.Fatal(err)
 	}
 	got = strings.Join(gotLines, " | ")
-	want = "1,Q107661323 | 19441465,Q5296"
+	want = "1,Q107661323 | 19441465,Q5296 | 200,Q72 | 5411171,Q5649951 | 623646,Q662541"
 	if got != want {
 		t.Errorf("got %v, want %v", got, want)
 	}

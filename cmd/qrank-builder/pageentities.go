@@ -85,6 +85,7 @@ func buildPageEntities(ctx context.Context, dumps string, sites *map[string]Wiki
 	return nil
 }
 
+// BuildSitePageEntities builds the page_entities file for one WikiSite.
 func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
 	ymd := site.LastDumped.Format("20060102")
 	destPath := fmt.Sprintf("page_entities/%s-%s-page_entities.zst", site.Key, ymd)
@@ -109,7 +110,10 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		defer close(linesChan)
-		if err := processPageProps(groupCtx, dumps, &site, linesChan); err != nil {
+		if err := processPagePropsTable(groupCtx, dumps, &site, linesChan); err != nil {
+			return err
+		}
+		if err := processPageTable(groupCtx, dumps, &site, linesChan); err != nil {
 			return err
 		}
 		return nil
@@ -163,9 +167,9 @@ func buildSitePageEntities(site WikiSite, ctx context.Context, dumps string, s3 
 	return nil
 }
 
-// ProcessPageProps processes a dump of the `page_props` table for a Wikimedia site.
-// Helper for buildSitePageEntities().
-func processPageProps(ctx context.Context, dumps string, site *WikiSite, out chan<- string) error {
+// ProcessPagePropsTable processes a dump of the `page_props` table for a Wikimedia site.
+// Called by function buildSitePageEntities().
+func processPagePropsTable(ctx context.Context, dumps string, site *WikiSite, out chan<- string) error {
 	ymd := site.LastDumped.Format("20060102")
 	propsFileName := fmt.Sprintf("%s-%s-page_props.sql.gz", site.Key, ymd)
 	propsPath := filepath.Join(dumps, site.Key, ymd, propsFileName)
@@ -208,6 +212,82 @@ func processPageProps(ctx context.Context, dumps string, site *WikiSite, out cha
 		if row[nameCol] == "wikibase_item" {
 			out <- fmt.Sprintf("%s,%s", row[pageCol], row[valueCol])
 		}
+	}
+}
+
+// This regexp does not match the page titles of Wikidata lexemes.
+// For now this is intentional, but at some later time we might want
+// to support lexemes, too.
+// https://github.com/brawer/wikidata-qrank/issues/37
+var wikidataTitleRe = regexp.MustCompile(`^Q\d+$`)
+
+// ProcessPageTable processes a dump of the `page` table for a Wikimedia site.
+// Called by function buildSitePageEntities().
+func processPageTable(ctx context.Context, dumps string, site *WikiSite, out chan<- string) error {
+	// For now, we only need to process the page table of wikidatawiki.
+	// This whis will change once we collect page sizes.
+	// https://github.com/brawer/wikidata-qrank/issues/38
+	isWikidata := site.Key == "wikidatawiki"
+	if !isWikidata {
+		return nil
+	}
+
+	ymd := site.LastDumped.Format("20060102")
+	propsFileName := fmt.Sprintf("%s-%s-page.sql.gz", site.Key, ymd)
+	propsPath := filepath.Join(dumps, site.Key, ymd, propsFileName)
+	propsFile, err := os.Open(propsPath)
+	if err != nil {
+		return err
+	}
+	defer propsFile.Close()
+
+	gz, err := gzip.NewReader(propsFile)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	reader, err := NewSQLReader(gz)
+	if err != nil {
+		return err
+	}
+
+	columns := reader.Columns()
+	pageCol := slices.Index(columns, "page_id")
+	namespaceCol := slices.Index(columns, "page_namespace")
+	titleCol := slices.Index(columns, "page_title")
+	// lenCol := slices.Index(columns, "page_len")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		row, err := reader.Read()
+		if err != nil {
+			return err
+		}
+		if row == nil {
+			return nil
+		}
+
+		// Other than other wiki projects, wikidatawiki.page_props only contains
+		// Wikidata IDs for internal maintenance pages such as templates. To find
+		// the mapping from page-id to wikidata-id for the actually interesting
+		// entities, we need to look at page titles.
+		// https://github.com/brawer/wikidata-qrank/issues/35
+		if isWikidata && row[namespaceCol] == "0" {
+			title := row[titleCol]
+			if wikidataTitleRe.MatchString(title) {
+				out <- fmt.Sprintf("%s,%s", row[pageCol], title)
+			}
+		}
+
+		// TODO: Collect page sizes.
+		// https://github.com/brawer/wikidata-qrank/issues/38
+		// out <- fmt.Sprintf("%s,M:%s", row[pageCol], row[lenCol])
 	}
 }
 
