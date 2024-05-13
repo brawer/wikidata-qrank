@@ -27,8 +27,8 @@ import (
 )
 
 // BuildPageSignals builds per-page signals and puts them in storage.
-// If a page_signals file is already stored for the last dumped version of a site,
-// it is not getting re-built.
+// If a page_signals file is already stored for the last dumped version
+// of a site, it is not getting re-built.
 func buildPageSignals(ctx context.Context, dumps string, sites *map[string]WikiSite, s3 S3) error {
 	stored, err := storedPageSignals(ctx, s3)
 	if err != nil {
