@@ -107,7 +107,8 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	// fully implemented yet, so we do not yet actually use the output.
 	// The older approach is done by the call to processPageviews below.
 	// https://github.com/brawer/wikidata-qrank/issues/23
-	_, err := buildPageviews(ctx, dumpsPath, 52, s3) // for past 52 weeks
+	numWeeks := 52
+	pageviews, err := buildPageviews(ctx, dumpsPath, numWeeks, s3)
 	if err != nil {
 		return err
 	}
@@ -118,6 +119,11 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	}
 	logger.Printf("found wikimedia dumps for %d sites", len(*sites))
 	if err := buildPageSignals(ctx, dumpsPath, sites, s3); err != nil {
+		return err
+	}
+
+	_, err = buildItemSignals(ctx, pageviews, sites, s3)
+	if err != nil {
 		return err
 	}
 
@@ -156,7 +162,7 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
-	pageviews, err := processPageviews(testRun, dumpsPath, edate, outDir, ctx)
+	pageviews, err = processPageviews(testRun, dumpsPath, edate, outDir, ctx)
 	if err != nil {
 		return err
 	}
