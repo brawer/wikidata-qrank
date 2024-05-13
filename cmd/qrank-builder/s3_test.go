@@ -7,9 +7,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
+	"testing"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio-go/v7"
@@ -54,6 +57,40 @@ func (s3 *FakeS3) ReadLines(path string) ([]string, error) {
 
 	s := strings.TrimSuffix(string(data), "\n")
 	return strings.Split(s, "\n"), nil
+}
+
+func (s3 *FakeS3) WriteLines(lines []string, path string) error {
+	s3.mutex.Lock()
+	defer s3.mutex.Unlock()
+
+	var buf bytes.Buffer
+	var writer io.WriteCloser
+	var err error
+	if strings.HasSuffix(path, ".zst") {
+		zstdLevel := zstd.WithEncoderLevel(zstd.SpeedFastest)
+		writer, err = zstd.NewWriter(&buf, zstdLevel)
+		if err != nil {
+			return err
+		}
+	} else {
+		writer = NopWriteCloser(&buf)
+	}
+
+	for _, line := range lines {
+		if _, err := writer.Write([]byte(line)); err != nil {
+			return err
+		}
+		if _, err := writer.Write([]byte("\n")); err != nil {
+			return err
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	s3.data[path] = buf.Bytes()
+	return nil
 }
 
 func (s3 *FakeS3) ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
@@ -135,4 +172,39 @@ func (s3 *FakeS3) FPutObject(ctx context.Context, bucketName, objectName, filePa
 
 	s3.data[objectName] = file
 	return info, nil
+}
+
+// NopWriteCloser returns a WriteCloser with a no-op Close method wrapping the
+// provided Writer w. Like io.ReadCloser but for writing.
+func NopWriteCloser(w io.Writer) io.WriteCloser {
+	return &nopWriteCloser{w}
+}
+
+type nopWriteCloser struct {
+	writer io.Writer
+}
+
+func (n *nopWriteCloser) Close() error {
+	return nil
+}
+
+func (n *nopWriteCloser) Write(p []byte) (int, error) {
+	return n.writer.Write(p)
+}
+
+func TestReadWriteLinest(t *testing.T) {
+	s3 := NewFakeS3()
+	lines := []string{"foo", "bar"}
+	for _, path := range []string{"f", "f.zst"} {
+		if err := s3.WriteLines([]string{"foo", "bar"}, path); err != nil {
+			t.Error(err)
+		}
+		got, err := s3.ReadLines(path)
+		if err != nil {
+			t.Error(err)
+		}
+		if !slices.Equal(got, lines) {
+			t.Errorf("got %v, want %v", got, lines)
+		}
+	}
 }

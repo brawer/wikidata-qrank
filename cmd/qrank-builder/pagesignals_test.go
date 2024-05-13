@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"path/filepath"
 	"reflect"
@@ -15,8 +14,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/klauspost/compress/zstd"
 )
 
 func TestBuildPageSignals(t *testing.T) {
@@ -119,9 +116,9 @@ func TestStoredPageSignals(t *testing.T) {
 
 func TestPageSignalsScanner(t *testing.T) {
 	s3 := NewFakeS3()
-	storeFakePageSignals("enwiki-20111231", "1,Q111\n7,Q777\n", s3, t)
-	storeFakePageSignals("rmwiki-20110203", "1,Q11\n2,Q22\n3,Q33\n", s3, t)
-	storeFakePageSignals("rmwiki-20111111", "1,Q11\n3,Q33\n", s3, t)
+	storeFakePageSignals("enwiki-20111231", "1,Q111|7,Q777", s3, t)
+	storeFakePageSignals("rmwiki-20110203", "1,Q11|2,Q22|3,Q33", s3, t)
+	storeFakePageSignals("rmwiki-20111111", "1,Q11|3,Q33", s3, t)
 	enDumped, _ := time.Parse(time.DateOnly, "2011-12-31")
 	rmDumped, _ := time.Parse(time.DateOnly, "2011-11-11")
 	sites := map[string]WikiSite{
@@ -150,20 +147,11 @@ func TestPageSignalsScanner(t *testing.T) {
 
 // StoreFakePageSignals is a helper for TestPageSignalsScanner().
 func storeFakePageSignals(id string, content string, s3 *FakeS3, t *testing.T) {
-	var buf bytes.Buffer
-	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedFastest)
-	writer, err := zstd.NewWriter(&buf, zstdLevel)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := writer.Write([]byte(content)); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
+	lines := strings.Split(content, "|")
 	path := fmt.Sprintf("page_signals/%s-page_signals.zst", id)
-	s3.data[path] = buf.Bytes()
+	if err := s3.WriteLines(lines, path); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestPageSignalMerger(t *testing.T) {
@@ -190,22 +178,4 @@ func TestPageSignalMerger(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
-}
-
-// NopWriteCloser returns a WriteCloser with a no-op Close method wrapping the
-// provided Writer w. Like io.ReadCloser but for writing.
-func NopWriteCloser(w io.Writer) io.WriteCloser {
-	return &nopWriteCloser{w}
-}
-
-type nopWriteCloser struct {
-	writer io.Writer
-}
-
-func (n *nopWriteCloser) Close() error {
-	return nil
-}
-
-func (n *nopWriteCloser) Write(p []byte) (int, error) {
-	return n.writer.Write(p)
 }
