@@ -7,10 +7,67 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
 )
+
+func TestItemSignalsToBytes(t *testing.T) {
+	// Serialize and then de-serialize an ItemSignals struct.
+	a := ItemSignals{1, 2, 3, 4, 5, 6}
+	got := ItemSignalsFromBytes(a.ToBytes()).(ItemSignals)
+	if !reflect.DeepEqual(got, a) {
+		t.Errorf("got %v, want %v", got, a)
+	}
+}
+
+func TestItemSignalsLess(t *testing.T) {
+	for _, tc := range []struct {
+		a    string
+		b    string
+		want bool
+	}{
+		{"123456", "123456", false},
+		{"923456", "123456", false},
+		{"123456", "923456", true},
+
+		{"------", "------", false},
+		{"7-----", "------", false},
+		{"-7----", "------", false},
+		{"--7---", "------", false},
+		{"---7--", "------", false},
+		{"----7-", "------", false},
+		{"-----7", "------", false},
+		{"------", "7-----", true},
+		{"------", "-7----", true},
+		{"------", "--7---", true},
+		{"------", "---7--", true},
+		{"------", "----7-", true},
+		{"------", "-----7", true},
+	} {
+		a := ItemSignals{
+			item:          int64(tc.a[0]),
+			pageviews:     int64(tc.a[1]),
+			wikitextBytes: int64(tc.a[2]),
+			claims:        int64(tc.a[3]),
+			identifiers:   int64(tc.a[4]),
+			sitelinks:     int64(tc.a[5]),
+		}
+		b := ItemSignals{
+			item:          int64(tc.b[0]),
+			pageviews:     int64(tc.b[1]),
+			wikitextBytes: int64(tc.b[2]),
+			claims:        int64(tc.b[3]),
+			identifiers:   int64(tc.b[4]),
+			sitelinks:     int64(tc.b[5]),
+		}
+		got := ItemSignalsLess(a, b)
+		if got != tc.want {
+			t.Errorf("got %v, want %v, for ItemSignalsLess(%#v, %#v)", got, tc.want, a, b)
+		}
+	}
+}
 
 func TestBuildItemSignals(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)

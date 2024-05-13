@@ -6,14 +6,107 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"regexp"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/lanrat/extsort"
 	"github.com/minio/minio-go/v7"
 )
+
+// ItemSignals contains ranking signals for Wikidata items.
+type ItemSignals struct {
+	item          int64 // eg 72 for Q72
+	pageviews     int64
+	wikitextBytes int64
+	claims        int64
+	identifiers   int64
+	sitelinks     int64
+}
+
+// If we ever want to rank signals for Wikidata lexemes, it would
+// probably make sense to use a separate struct (written to a different
+// output file) because it's likely not the same set of signals.
+// For example, lexemes don't have pageviews, pagerank or wikitextBytes.
+// https://github.com/brawer/wikidata-qrank/issues/37
+// type LexemeSignals struct {}
+
+func (s ItemSignals) ToBytes() []byte {
+	buf := make([]byte, binary.MaxVarintLen64*6)
+	p := binary.PutVarint(buf, s.item)
+	p += binary.PutVarint(buf[p:], s.pageviews)
+	p += binary.PutVarint(buf[p:], s.wikitextBytes)
+	p += binary.PutVarint(buf[p:], s.claims)
+	p += binary.PutVarint(buf[p:], s.identifiers)
+	p += binary.PutVarint(buf[p:], s.sitelinks)
+	return buf[0:p]
+}
+
+func ItemSignalsFromBytes(b []byte) extsort.SortType {
+	item, pos := binary.Varint(b)
+	pageviews, n := binary.Varint(b[pos:])
+	pos += n
+	wikitextBytes, n := binary.Varint(b[pos:])
+	pos += n
+	claims, n := binary.Varint(b[pos:])
+	pos += n
+	identifiers, n := binary.Varint(b[pos:])
+	pos += n
+	sitelinks, n := binary.Varint(b[pos:])
+	return ItemSignals{
+		item:          item,
+		pageviews:     pageviews,
+		wikitextBytes: wikitextBytes,
+		claims:        claims,
+		identifiers:   identifiers,
+		sitelinks:     sitelinks,
+	}
+}
+
+func ItemSignalsLess(a, b extsort.SortType) bool {
+	aa, bb := a.(ItemSignals), b.(ItemSignals)
+
+	if aa.item < bb.item {
+		return true
+	} else if aa.item > bb.item {
+		return false
+	}
+
+	if aa.pageviews < bb.pageviews {
+		return true
+	} else if aa.pageviews > bb.pageviews {
+		return false
+	}
+
+	if aa.wikitextBytes < bb.wikitextBytes {
+		return true
+	} else if aa.wikitextBytes > bb.wikitextBytes {
+		return false
+	}
+
+	if aa.claims < bb.claims {
+		return true
+	} else if aa.claims > bb.claims {
+		return false
+	}
+
+	if aa.identifiers < bb.identifiers {
+		return true
+	} else if aa.identifiers > bb.identifiers {
+		return false
+	}
+
+	if aa.sitelinks < bb.sitelinks {
+		return true
+	} else if aa.sitelinks > bb.sitelinks {
+		return false
+	}
+
+	return false
+}
 
 // BuildItemSignals builds per-item signals and puts them in storage.
 // If the signals file is already in storage, it does not get re-built.
