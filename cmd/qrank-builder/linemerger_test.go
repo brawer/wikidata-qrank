@@ -4,19 +4,19 @@
 package main
 
 import (
+	"bufio"
 	"errors"
-	"io"
 	"strings"
 	"testing"
 )
 
 func TestLineMerger(t *testing.T) {
-	m := NewLineMerger([]io.Reader{
-		strings.NewReader("C1\nD1"),
-		strings.NewReader("B2\nE2"),
-		strings.NewReader("A3\nB3"),
-		strings.NewReader(""),
-		strings.NewReader("B5"),
+	m := NewLineMerger([]LineScanner{
+		bufio.NewScanner(strings.NewReader("C1\nD1")),
+		bufio.NewScanner(strings.NewReader("B2\nE2")),
+		bufio.NewScanner(strings.NewReader("A3\nB3")),
+		bufio.NewScanner(strings.NewReader("")),
+		bufio.NewScanner(strings.NewReader("B5")),
 	})
 	result := make([]string, 0, 5)
 	for m.Advance() {
@@ -42,7 +42,8 @@ func (e *errReader) Read(p []byte) (n int, err error) {
 }
 
 func TestLineMergerError(t *testing.T) {
-	m := NewLineMerger([]io.Reader{&errReader{}})
+	reader := &errReader{}
+	m := NewLineMerger([]LineScanner{bufio.NewScanner(reader)})
 	if m.Advance() {
 		t.Error("expected m.Advance()=false, got true")
 		return

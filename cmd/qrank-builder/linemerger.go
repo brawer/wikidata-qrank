@@ -4,10 +4,8 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"container/heap"
-	"io"
 )
 
 // Merges the lines of a multiple io.Readers whose content is in sorted order.
@@ -17,11 +15,19 @@ type LineMerger struct {
 	inited bool
 }
 
-func NewLineMerger(r []io.Reader) *LineMerger {
+// LineScanner is implemented by bufio.Scanner and our own pageSignalsScanner.
+type LineScanner interface {
+	Scan() bool
+	Err() error
+	Bytes() []byte
+	Text() string
+}
+
+func NewLineMerger(r []LineScanner) *LineMerger {
 	m := &LineMerger{}
 	m.heap = make(lineMergerHeap, 0, len(r))
 	for _, rr := range r {
-		item := &mergee{scanner: bufio.NewScanner(rr)}
+		item := &mergee{scanner: rr}
 		if item.scanner.Scan() {
 			m.heap = append(m.heap, item)
 		}
@@ -72,7 +78,7 @@ func (m *LineMerger) Line() string {
 }
 
 type mergee struct {
-	scanner *bufio.Scanner
+	scanner LineScanner
 	index   int
 }
 

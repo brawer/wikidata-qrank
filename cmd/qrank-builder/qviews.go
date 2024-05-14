@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -158,7 +159,11 @@ func writeQViewCount(w io.Writer, entity int64, count int64) error {
 
 func readQViewInputs(testRun bool, inputs []io.Reader, ch chan<- extsort.SortType, ctx context.Context) error {
 	defer close(ch)
-	merger := NewLineMerger(inputs)
+	scanners := make([]LineScanner, 0, len(inputs))
+	for _, input := range inputs {
+		scanners = append(scanners, bufio.NewScanner(input))
+	}
+	merger := NewLineMerger(scanners)
 	var lastKey string
 	var entity, numViews, numLinesRead int64
 	for merger.Advance() {
