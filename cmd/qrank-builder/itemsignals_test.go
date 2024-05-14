@@ -90,6 +90,9 @@ func TestItemSignalsLess(t *testing.T) {
 }
 
 func TestBuildItemSignals(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	s3 := NewFakeS3()

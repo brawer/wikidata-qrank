@@ -17,6 +17,9 @@ import (
 )
 
 func TestBuildPageSignals(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
