@@ -4,13 +4,19 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
@@ -145,52 +151,85 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	}
 
 	newestYMD := newest.Format("20060102")
-	destPath := fmt.Sprintf("public/signals-%s.csv.zst", newestYMD)
+	destPath := fmt.Sprintf("public/item_signals-%s.csv.zst", newestYMD)
 	logger.Printf("building %s", destPath)
 	outFile, err := os.CreateTemp("", "*-item_signals.csv.zst")
 	if err != nil {
 		return time.Time{}, err
 	}
+	defer outFile.Close()
+	defer os.Remove(outFile.Name())
+
 	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedBestCompression)
-	writer, err := zstd.NewWriter(outFile, zstdLevel)
+	compressor, err := zstd.NewWriter(outFile, zstdLevel)
 	if err != nil {
 		return time.Time{}, err
 	}
+	defer compressor.Close()
 
-	// Write column titles.
-	columns := []string{
-		"item",
-		"pageviews",
-		"wikitext_bytes",
-		"claims",
-		"identifiers",
-		"sitelinks",
+	writer := NewItemSignalsWriter(compressor)
+	scanners := make([]LineScanner, 0, len(pageviews)+1)
+	scanners = append(scanners, NewPageSignalsScanner(sites, s3))
+	for _, pv := range pageviews {
+		reader, err := NewS3Reader(ctx, "qrank", pv, s3)
+		if err != nil {
+			return time.Time{}, err
+		}
+		decompressor, err := zstd.NewReader(reader)
+		if err != nil {
+			return time.Time{}, err
+		}
+		scanners = append(scanners, bufio.NewScanner(decompressor))
 	}
-	var buf bytes.Buffer
-	for i, col := range columns {
-		if i != 0 {
-			if _, err := buf.WriteString(","); err != nil {
+
+	// Produce a stream of ItemSignals, sorted by Wikidata item ID.
+	sigChan := make(chan extsort.SortType, 10000)
+	config := extsort.DefaultConfig()
+	config.ChunkSize = 8 * 1024 * 1024 / 64 // 8 MiB, 64 Bytes/line avg
+	config.NumWorkers = runtime.NumCPU()
+	sorter, outChan, errChan := extsort.New(sigChan, ItemSignalsFromBytes, ItemSignalsLess, config)
+	merger := NewLineMerger(scanners)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		joiner := itemSignalsJoiner{out: sigChan}
+		for merger.Advance() {
+			if err := joiner.Process(merger.Line()); err != nil {
+				joiner.Close()
+				return err
+			}
+		}
+		joiner.Close()
+		return merger.Err()
+	})
+	group.Go(func() error {
+		sorter.Sort(groupCtx)
+		for {
+			select {
+			case <-groupCtx.Done():
+				return groupCtx.Err()
+			case s, more := <-outChan:
+				if !more {
+					return writer.Close()
+				}
+				if err := writer.Write(s.(ItemSignals)); err != nil {
+					return err
+				}
+			}
+		}
+	})
+	if err := group.Wait(); err != nil {
+		return time.Time{}, err
+	}
+	if err := <-errChan; err != nil {
+		return time.Time{}, err
+	}
+
+	for _, s := range scanners {
+		if closer, ok := s.(io.Closer); ok {
+			if err := closer.Close(); err != nil {
 				return time.Time{}, err
 			}
 		}
-		if _, err := buf.WriteString(col); err != nil {
-			return time.Time{}, err
-		}
-	}
-	if _, err := buf.WriteString("\n"); err != nil {
-		return time.Time{}, err
-	}
-	if _, err := writer.Write(buf.Bytes()); err != nil {
-		return time.Time{}, err
-	}
-
-	// TODO: Actually build and write the signals. Not yet implemented.
-
-	if err := writer.Close(); err != nil {
-		return time.Time{}, err
-	}
-	if err := outFile.Close(); err != nil {
-		return time.Time{}, err
 	}
 
 	if err := PutInStorage(ctx, outFile.Name(), s3, "qrank", destPath, "application/zstd"); err != nil {
@@ -202,6 +241,107 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	}
 
 	return newest, nil
+}
+
+type itemSignalsJoiner struct {
+	out                                                                  chan<- extsort.SortType
+	domain                                                               string
+	page, item, pageviews, wikitextBytes, claims, identifiers, sitelinks int64
+}
+
+func (j *itemSignalsJoiner) Process(line string) error {
+	//  fmt.Println("*** GIRAFFE", line)
+	cols := strings.Split(line, ",")
+	if len(cols) < 3 {
+		return fmt.Errorf(`bad line: "%s"`, line)
+	}
+	page, err := strconv.ParseInt(cols[1], 10, 64)
+	if err != nil {
+		return fmt.Errorf(`bad page: "%s"`, line)
+	}
+	if cols[0] != j.domain || page != j.page {
+		j.flush()
+		j.domain, j.page = cols[0], page
+	}
+
+	c := cols[2]
+	if c[0] != 'Q' {
+		if n, err := strconv.ParseInt(c, 10, 64); err == nil {
+			j.pageviews += n
+		} else {
+			return err
+		}
+		if len(cols) != 3 {
+			return fmt.Errorf(`expected domain,page,pageviews: "%s"`, line)
+		}
+		return nil
+	}
+
+	item, err := strconv.ParseInt(c[1:len(c)], 10, 64)
+	if err != nil {
+		return fmt.Errorf(`expected domain,page,item,...: "%s"`, line)
+	}
+	j.item = item
+
+	if len(cols) > 3 && len(cols[3]) > 0 {
+		n, err := strconv.ParseInt(cols[3], 10, 64)
+		if err != nil {
+			return fmt.Errorf(`cannot parse wikitextBytes: "%s"`, line)
+		}
+		j.wikitextBytes += n
+	}
+
+	if len(cols) > 4 && len(cols[4]) > 0 {
+		n, err := strconv.ParseInt(cols[4], 10, 64)
+		if err != nil {
+			return fmt.Errorf(`cannot parse claims: "%s"`, line)
+		}
+		j.claims += n
+	}
+
+	if len(cols) > 5 && len(cols[5]) > 0 {
+		n, err := strconv.ParseInt(cols[5], 10, 64)
+		if err != nil {
+			return fmt.Errorf(`cannot parse identifiers: "%s"`, line)
+		}
+		j.identifiers += n
+	}
+
+	if len(cols) > 6 && len(cols[6]) > 0 {
+		n, err := strconv.ParseInt(cols[6], 10, 64)
+		if err != nil {
+			return fmt.Errorf(`cannot parse sitelinks: "%s"`, line)
+		}
+		j.sitelinks += n
+	}
+
+	return nil
+}
+
+func (j *itemSignalsJoiner) Close() {
+	j.flush()
+	close(j.out)
+}
+
+func (j *itemSignalsJoiner) flush() {
+	if j.item != 0 {
+		j.out <- ItemSignals{
+			item:          j.item,
+			pageviews:     j.pageviews,
+			wikitextBytes: j.wikitextBytes,
+			claims:        j.claims,
+			identifiers:   j.identifiers,
+			sitelinks:     j.sitelinks,
+		}
+	}
+	j.domain = ""
+	j.page = 0
+	j.item = 0
+	j.pageviews = 0
+	j.wikitextBytes = 0
+	j.claims = 0
+	j.identifiers = 0
+	j.sitelinks = 0
 }
 
 func ItemSignalsVersion(pageviews []string, sites *map[string]WikiSite) time.Time {
@@ -231,7 +371,7 @@ func ItemSignalsVersion(pageviews []string, sites *map[string]WikiSite) time.Tim
 // StoredItemSignalsVersion returns the version of the signals file in storage.
 // If there is no such file, the result is the zero time.Time without error.
 func StoredItemSignalsVersion(ctx context.Context, s3 S3) (time.Time, error) {
-	re := regexp.MustCompile(`^public/signals-(\d{8})-page_signals.zst$`)
+	re := regexp.MustCompile(`^public/item_signals-(\d{8}).csv.zst$`)
 	var result time.Time
 	opts := minio.ListObjectsOptions{Prefix: "public/"}
 	for obj := range s3.ListObjects(ctx, "qrank", opts) {
