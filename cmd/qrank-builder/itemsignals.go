@@ -195,6 +195,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		for merger.Advance() {
 			if err := joiner.Process(merger.Line()); err != nil {
 				joiner.Close()
+				logger.Printf("ItemSignalsJoiner.Process() failed: %v", err)
 				return err
 			}
 		}
@@ -209,9 +210,14 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 				return groupCtx.Err()
 			case s, more := <-outChan:
 				if !more {
-					return writer.Close()
+					err := writer.Close()
+					if err != nil {
+						logger.Printf("ItemSignalsWriter.Close() failed: %v", err)
+					}
+					return err
 				}
 				if err := writer.Write(s.(ItemSignals)); err != nil {
+					logger.Printf("ItemSignalsWriter.Write() failed: %v", err)
 					return err
 				}
 			}
