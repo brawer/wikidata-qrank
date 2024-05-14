@@ -145,6 +145,10 @@ func TestCombineCounts(t *testing.T) {
 }
 
 func TestBuildPageviews(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
@@ -187,6 +191,10 @@ func TestStoredPageviews(t *testing.T) {
 }
 
 func TestBuildWeeklyPageviews(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
