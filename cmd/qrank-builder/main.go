@@ -99,37 +99,11 @@ func NewStorageClient(keypath string) (*minio.Client, error) {
 }
 
 func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
-	ctx := context.Background()
-	var s3 S3 = storage
-
-	// Build pageviews files. We're changing how pageviews get aggregated,
-	// and this is the new, vastly more efficient approach. But it is not
-	// fully implemented yet, so we do not yet actually use the output.
-	// The older approach is done by the call to processPageviews below.
-	// https://github.com/brawer/wikidata-qrank/issues/23
-	numWeeks := 52
-	pageviews, err := buildPageviews(ctx, dumpsPath, numWeeks, s3)
-	if err != nil {
-		return err
-	}
-
-	sites, err := ReadWikiSites(dumpsPath)
-	if err != nil {
-		return err
-	}
-	logger.Printf("found wikimedia dumps for %d sites", len(*sites))
-	if err := buildPageSignals(ctx, dumpsPath, sites, s3); err != nil {
-		return err
-	}
-
-	_, err = buildItemSignals(ctx, pageviews, sites, s3)
-	if err != nil {
-		return err
-	}
+	return Build(dumpsPath /*numWeeks*/, 52, storage)
 
 	// TODO: Old code starts here, remove after new implementation is done.
-	return nil
 
+	ctx := context.Background()
 	outDir := "cache"
 	if testRun {
 		outDir = "cache-testrun"
@@ -148,7 +122,7 @@ func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 		return err
 	}
 
-	pageviews, err = processPageviews(testRun, dumpsPath, edate, outDir, ctx)
+	pageviews, err := processPageviews(testRun, dumpsPath, edate, outDir, ctx)
 	if err != nil {
 		return err
 	}
