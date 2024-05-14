@@ -34,6 +34,26 @@ type ItemSignals struct {
 // https://github.com/brawer/wikidata-qrank/issues/37
 // type LexemeSignals struct {}
 
+func (sig *ItemSignals) Clear() {
+	sig.item = 0
+	sig.pageviews = 0
+	sig.wikitextBytes = 0
+	sig.claims = 0
+	sig.identifiers = 0
+	sig.sitelinks = 0
+}
+
+func (sig *ItemSignals) Add(other ItemSignals) {
+	if sig.item != 0 && sig.item != other.item {
+		panic(fmt.Sprintf("cannot add signals for %v and %v", *sig, other))
+	}
+	sig.pageviews += other.pageviews
+	sig.wikitextBytes += other.wikitextBytes
+	sig.claims += other.claims
+	sig.identifiers += other.identifiers
+	sig.sitelinks += other.sitelinks
+}
+
 func (s ItemSignals) ToBytes() []byte {
 	buf := make([]byte, binary.MaxVarintLen64*6)
 	p := binary.PutVarint(buf, s.item)

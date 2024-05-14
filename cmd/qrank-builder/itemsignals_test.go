@@ -13,6 +13,24 @@ import (
 	"time"
 )
 
+func TestItemSignalsAdd(t *testing.T) {
+	s := ItemSignals{72, 1, 2, 3, 4, 5}
+	s.Add(ItemSignals{72, 2, 2, 2, 2, 2})
+	want := ItemSignals{72, 3, 4, 5, 6, 7}
+	if !reflect.DeepEqual(s, want) {
+		t.Errorf("got %v, want %v", s, want)
+	}
+}
+
+func TestItemSignalsClear(t *testing.T) {
+	s := ItemSignals{1, 2, 3, 4, 5, 6}
+	s.Clear()
+	want := ItemSignals{}
+	if !reflect.DeepEqual(s, want) {
+		t.Errorf("got %v, want %v", s, want)
+	}
+}
+
 func TestItemSignalsToBytes(t *testing.T) {
 	// Serialize and then de-serialize an ItemSignals struct.
 	a := ItemSignals{1, 2, 3, 4, 5, 6}
