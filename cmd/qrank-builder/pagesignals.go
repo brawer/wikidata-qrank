@@ -434,6 +434,10 @@ type pageSignalMerger struct {
 	numClaims      int64
 	numIdentifiers int64
 	numSiteLinks   int64
+
+	// Stats for logging.
+	inputRecords  int64
+	outputRecords int64
 }
 
 func NewPageSignalMerger(w io.WriteCloser) *pageSignalMerger {
@@ -444,12 +448,13 @@ func NewPageSignalMerger(w io.WriteCloser) *pageSignalMerger {
 // Input must be grouped by page (such as by sorting lines).
 // Recognized line formats:
 //
-//		"200,Q72": wikipage 200 is for Wikidata entity Q72
-//	 "200,c=8": wikipage 200 has 8 claims in wikidatawiki
-//	 "200,i=17": wikipage 200 has 17 identifiers in wikidatawiki
-//	 "200,l=23": wikipage 200 has 23 sitelinks in wikidatawiki
-//		"200,s=830167": wikipage 200 has 830167 bytes in wikitext format
+//	  "200,Q72": wikipage 200 is for Wikidata entity Q72
+//		 "200,c=8": wikipage 200 has 8 claims in wikidatawiki
+//		 "200,i=17": wikipage 200 has 17 identifiers in wikidatawiki
+//		 "200,l=23": wikipage 200 has 23 sitelinks in wikidatawiki
+//	  "200,s=830167": wikipage 200 has 830167 bytes in wikitext format
 func (m *pageSignalMerger) Process(line string) error {
+	m.inputRecords += 1
 	pos := strings.IndexByte(line, ',')
 	page := line[0:pos]
 	if page != m.page {
@@ -493,6 +498,7 @@ func (m *pageSignalMerger) Close() error {
 		return err
 	}
 
+	logger.Printf("PageSignalMerger: processed %d → %d records", m.inputRecords, m.outputRecords)
 	return nil
 }
 
@@ -523,6 +529,7 @@ func (m *pageSignalMerger) write() error {
 		}
 		buf.WriteByte('\n')
 		_, err = m.writer.Write(buf.Bytes())
+		m.outputRecords += 1
 	}
 
 	m.page = ""

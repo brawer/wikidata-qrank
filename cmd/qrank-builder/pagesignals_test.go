@@ -158,6 +158,7 @@ func storeFakePageSignals(id string, content string, s3 *FakeS3, t *testing.T) {
 }
 
 func TestPageSignalMerger(t *testing.T) {
+	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	var buf strings.Builder
 	m := NewPageSignalMerger(NopWriteCloser(&buf))
 	for _, line := range []string{
