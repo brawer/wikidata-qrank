@@ -192,15 +192,17 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		joiner := itemSignalsJoiner{out: sigChan}
+		var linesMerged int64
 		for merger.Advance() {
 			if err := joiner.Process(merger.Line()); err != nil {
 				joiner.Close()
 				logger.Printf("ItemSignalsJoiner.Process() failed: %v", err)
 				return err
 			}
+			linesMerged += 1
 		}
 		joiner.Close()
-		logger.Printf("ItemSignalsJoiner: finished")
+		logger.Printf("ItemSignalsJoiner: read %d lines", linesMerged)
 		if err := merger.Err(); err != nil {
 			logger.Printf("LineMerger failed: %v", err)
 			return err
