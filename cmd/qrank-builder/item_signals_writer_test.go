@@ -12,7 +12,8 @@ import (
 
 func TestItemSignalsWriter(t *testing.T) {
 	var buf bytes.Buffer
-	w := NewItemSignalsWriter(NopWriteCloser(&buf))
+	writer := TestingWriteCloser(&buf)
+	w := NewItemSignalsWriter(writer)
 	for _, s := range []ItemSignals{
 		ItemSignals{72, 1, 2, 3, 4, 5},
 		ItemSignals{72, 3, 3, 3, 3, 3},
@@ -22,9 +23,16 @@ func TestItemSignalsWriter(t *testing.T) {
 			t.Error(err)
 		}
 	}
+	if writer.closed {
+		t.Error("ItemSignalsWriter has prematurely closed its output writer")
+	}
 	if err := w.Close(); err != nil {
 		t.Error(err)
 	}
+	if !writer.closed {
+		t.Error("ItemSignalsWriter.Close() should close its output writer")
+	}
+
 	got := strings.Split(strings.TrimSuffix(string(buf.Bytes()), "\n"), "\n")
 	want := []string{
 		"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks",

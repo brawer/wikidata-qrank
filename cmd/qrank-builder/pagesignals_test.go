@@ -160,7 +160,8 @@ func storeFakePageSignals(id string, content string, s3 *FakeS3, t *testing.T) {
 func TestPageSignalMerger(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	var buf strings.Builder
-	m := NewPageSignalMerger(NopWriteCloser(&buf))
+	writer := TestingWriteCloser(&buf)
+	m := NewPageSignalMerger(writer)
 	for _, line := range []string{
 		"11,s=1111111",
 		"22,Q72",
@@ -171,8 +172,14 @@ func TestPageSignalMerger(t *testing.T) {
 			t.Error(err)
 		}
 	}
+	if writer.closed {
+		t.Errorf("PageSignalMerger.Close() closed output writer prematurely")
+	}
 	if err := m.Close(); err != nil {
 		t.Error(err)
+	}
+	if !writer.closed {
+		t.Errorf("PageSignalMerger.Close() should close output writer")
 	}
 	got := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
 	want := []string{

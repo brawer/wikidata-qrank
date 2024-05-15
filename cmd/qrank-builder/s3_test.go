@@ -174,6 +174,27 @@ func (s3 *FakeS3) FPutObject(ctx context.Context, bucketName, objectName, filePa
 	return info, nil
 }
 
+type testingWriteCloser struct {
+	writer io.Writer
+	closed bool
+}
+
+func TestingWriteCloser(w io.Writer) *testingWriteCloser {
+	return &testingWriteCloser{writer: w}
+}
+
+func (t *testingWriteCloser) Write(p []byte) (int, error) {
+	if t.closed {
+		return 0, fmt.Errorf("already closed")
+	}
+	return t.writer.Write(p)
+}
+
+func (t *testingWriteCloser) Close() error {
+	t.closed = true
+	return nil
+}
+
 // NopWriteCloser returns a WriteCloser with a no-op Close method wrapping the
 // provided Writer w. Like io.ReadCloser but for writing.
 func NopWriteCloser(w io.Writer) io.WriteCloser {
