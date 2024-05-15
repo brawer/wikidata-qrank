@@ -200,10 +200,16 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 			}
 		}
 		joiner.Close()
-		return merger.Err()
+		logger.Printf("ItemSignalsJoiner: finished")
+		if err := merger.Err(); err != nil {
+			logger.Printf("LineMerger failed: %v", err)
+			return err
+		}
+		return nil
 	})
 	group.Go(func() error {
 		sorter.Sort(groupCtx)
+		logger.Printf("BuildItemSignals(): start sorting")
 		for {
 			select {
 			case <-groupCtx.Done():
@@ -227,9 +233,10 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		return time.Time{}, err
 	}
 	if err := <-errChan; err != nil {
+		logger.Printf("BuildItemSignals: sorting failed, err=%v", err)
 		return time.Time{}, err
 	}
-
+	logger.Printf("BuildItemSignals(): finished sorting")
 	for _, s := range scanners {
 		if closer, ok := s.(io.Closer); ok {
 			if err := closer.Close(); err != nil {
