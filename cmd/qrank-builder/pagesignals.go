@@ -372,14 +372,17 @@ func (s *pageSignalsScanner) Scan() bool {
 			}
 			s.err = s.scanner.Err()
 			if s.err != nil {
+				logger.Printf("PageSignalsScanner.Scan(): failed, domain=%s, err=%v", s.domains[s.curDomain], s.err)
 				break
 			}
 		}
 		s.curDomain += 1
 		if s.curDomain == len(s.domains) {
+			logger.Println("PageSignalsScanner.Scan(): finished last domain")
 			break
 		}
 
+		logger.Printf("PageSignalsScanner.Scan(): opening %s", s.paths[s.curDomain])
 		s.reader, s.err = NewS3Reader(context.Background(), "qrank", s.paths[s.curDomain], s.storage)
 		if s.err != nil {
 			break

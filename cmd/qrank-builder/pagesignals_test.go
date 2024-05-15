@@ -118,6 +118,7 @@ func TestStoredPageSignals(t *testing.T) {
 }
 
 func TestPageSignalsScanner(t *testing.T) {
+	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	s3 := NewFakeS3()
 	storeFakePageSignals("enwiki-20111231", "1,Q111|7,Q777", s3, t)
 	storeFakePageSignals("rmwiki-20110203", "1,Q11|2,Q22|3,Q33", s3, t)

@@ -189,6 +189,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.New(sigChan, ItemSignalsFromBytes, ItemSignalsLess, config)
 	merger := NewLineMerger(scanners)
+	logger.Printf("BuildItemSignals(): merging signals from %d files; #0=PageSignalsScanner; rest=pageviews", len(scanners))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		joiner := itemSignalsJoiner{out: sigChan}

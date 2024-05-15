@@ -32,6 +32,9 @@ func NewLineMerger(r []LineScanner) *LineMerger {
 			m.heap = append(m.heap, item)
 		}
 		if err := item.scanner.Err(); err != nil {
+			if logger != nil {
+				logger.Printf("LineMerger: scanner #%d failed to scan first line, err=%v", item.index, err)
+			}
 			m.err = err
 			return m
 		}
@@ -59,6 +62,9 @@ func (m *LineMerger) Advance() bool {
 	}
 	if err := item.scanner.Err(); err != nil {
 		m.err = err
+		if logger != nil {
+			logger.Printf("LineMerger: scanner #%d failed, err=%v", item.index, err)
+		}
 		return false
 	}
 	return len(m.heap) > 0
