@@ -198,9 +198,10 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		joiner := itemSignalsJoiner{out: sigChan}
 		var linesMerged int64
 		for merger.Advance() {
-			if err := joiner.Process(merger.Line()); err != nil {
+			line := merger.Line()
+			if err := joiner.Process(line); err != nil {
 				joiner.Close()
-				logger.Printf("ItemSignalsJoiner.Process() failed: %v", err)
+				logger.Printf(`ItemSignalsJoiner.Process("%s") failed: %v`, line, err)
 				return err
 			}
 			linesMerged += 1
@@ -219,7 +220,10 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		for {
 			select {
 			case <-groupCtx.Done():
-				return groupCtx.Err()
+				err := groupCtx.Err()
+				logger.Printf("BuildItemSignals(): sorting canceled, groupCtx.Err()=%v", err)
+				return err
+
 			case s, more := <-outChan:
 				if !more {
 					err := writer.Close()
@@ -236,6 +240,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		}
 	})
 	if err := group.Wait(); err != nil {
+		logger.Printf("BuildItemSignals(): group.Wait() failed, err==%v", err)
 		return time.Time{}, err
 	}
 	if err := <-errChan; err != nil {

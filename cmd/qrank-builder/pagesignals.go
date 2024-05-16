@@ -41,6 +41,7 @@ func buildPageSignals(ctx context.Context, dumps string, sites *map[string]WikiS
 			for {
 				select {
 				case <-groupCtx.Done():
+					logger.Printf("BuildPageSignals(): canceled, groupCtx.Err()=%v", groupCtx.Err())
 					return groupCtx.Err()
 
 				case t, more := <-tasks:
@@ -125,19 +126,23 @@ func buildSitePageSignals(site WikiSite, ctx context.Context, dumps string, s3 S
 		for {
 			select {
 			case <-groupCtx.Done():
+				logger.Printf("BuildSitePageSignals(): canceled, groupCtx.Err()=%v", groupCtx.Err())
 				return groupCtx.Err()
+
 			case line, more := <-outChan:
 				if !more {
 					return merger.Close()
 				}
 				err := merger.Process(line)
 				if err != nil {
+					logger.Printf(`BuildSitePageSignals(): merger.Process("%s") failed, err=%v`, line, err)
 					return err
 				}
 			}
 		}
 	})
 	if err := group.Wait(); err != nil {
+		logger.Printf(`BuildSitePageSignals(): group.Wait() failed, err=%v`, err)
 		return err
 	}
 	if err := <-errChan; err != nil {
@@ -360,6 +365,7 @@ func NewPageSignalsScanner(sites *map[string]WikiSite, s3 S3) *pageSignalsScanne
 func (s *pageSignalsScanner) Scan() bool {
 	s.curLine.Truncate(0)
 	if s.err != nil {
+		logger.Printf("PageSignalsScanner.Scan(): early exit due to err=%v", s.err)
 		return false
 	}
 	for s.curDomain < len(s.domains) {
@@ -401,6 +407,7 @@ func (s *pageSignalsScanner) Scan() bool {
 		s.scanner = bufio.NewScanner(s.decompressor)
 	}
 
+	logger.Printf("PageSignalsScanner.Scan(): cleaning up")
 	if s.decompressor != nil {
 		s.decompressor.Close()
 		s.decompressor = nil
