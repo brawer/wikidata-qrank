@@ -350,6 +350,13 @@ func NewPageSignalsScanner(sites *map[string]WikiSite, s3 S3) *pageSignalsScanne
 		domains = append(domains, strings.TrimSuffix(site.Domain, ".org"))
 	}
 
+	// TODO: Remove this when https://github.com/brawer/wikidata-qrank/issues/40 is fixed.
+	for i := 0; i < len(paths); i += 1 {
+		if i < 4 || i > len(paths)-10 {
+			logger.Printf(`NewPageSignalsScanner: paths[%d]="%s", domains[%d]="%s"`, i, paths[i], i, domains[i])
+		}
+	}
+
 	return &pageSignalsScanner{
 		err:          nil,
 		paths:        paths,
@@ -388,26 +395,33 @@ func (s *pageSignalsScanner) Scan() bool {
 			break
 		}
 
-		logger.Printf("PageSignalsScanner.Scan(): opening %s", s.paths[s.curDomain])
-		s.reader, s.err = NewS3Reader(context.Background(), "qrank", s.paths[s.curDomain], s.storage)
+		// TODO: Remove this when https://github.com/brawer/wikidata-qrank/issues/40 is fixed.
+		path := s.paths[s.curDomain]
+		logger.Printf(`PageSignalsScanner.Scan(): opening %s, curDomain=%d, domain="%s"`, path, s.curDomain, s.domains[s.curDomain])
+
+		s.reader, s.err = NewS3Reader(context.Background(), "qrank", path, s.storage)
 		if s.err != nil {
+			logger.Printf(`PageSignalsScanner.Scan(): cannot open s3://qrank/%s, err=%v`, path, s.err)
 			break
 		}
 
 		if s.decompressor == nil {
 			s.decompressor, s.err = zstd.NewReader(nil)
 			if s.err != nil {
+				logger.Printf(`failed to create zstd decompressor, err=%v`, s.err)
 				break
 			}
 		}
 		s.err = s.decompressor.Reset(s.reader)
 		if s.err != nil {
+			logger.Printf(`failed to reset zstd decompressor, err=%v`, s.err)
 			break
 		}
 		s.scanner = bufio.NewScanner(s.decompressor)
 	}
 
 	logger.Printf("PageSignalsScanner.Scan(): cleaning up")
+
 	if s.decompressor != nil {
 		s.decompressor.Close()
 		s.decompressor = nil
