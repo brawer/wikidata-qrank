@@ -169,7 +169,9 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 
 	writer := NewItemSignalsWriter(compressor)
 	scanners := make([]LineScanner, 0, len(pageviews)+1)
+	scannerNames := make([]string, 0, len(pageviews)+1)
 	scanners = append(scanners, NewPageSignalsScanner(sites, s3))
+	scannerNames = append(scannerNames, "page_signals")
 	for _, pv := range pageviews {
 		reader, err := NewS3Reader(ctx, "qrank", pv, s3)
 		if err != nil {
@@ -180,6 +182,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 			return time.Time{}, err
 		}
 		scanners = append(scanners, bufio.NewScanner(decompressor))
+		scannerNames = append(scannerNames, pv)
 	}
 
 	// Produce a stream of ItemSignals, sorted by Wikidata item ID.
@@ -188,7 +191,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	config.ChunkSize = 8 * 1024 * 1024 / 64 // 8 MiB, 64 Bytes/line avg
 	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.New(sigChan, ItemSignalsFromBytes, ItemSignalsLess, config)
-	merger := NewLineMerger(scanners)
+	merger := NewLineMerger(scanners, scannerNames)
 	logger.Printf("BuildItemSignals(): merging signals from %d files; #0=PageSignalsScanner; rest=pageviews", len(scanners))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
@@ -266,7 +269,6 @@ type itemSignalsJoiner struct {
 }
 
 func (j *itemSignalsJoiner) Process(line string) error {
-	//  fmt.Println("*** GIRAFFE", line)
 	cols := strings.Split(line, ",")
 	if len(cols) < 3 {
 		return fmt.Errorf(`bad line: "%s"`, line)

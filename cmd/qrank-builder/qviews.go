@@ -78,7 +78,9 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 	defer sitelinksFile.Close()
 
 	qfiles := make([]io.Reader, 1, len(pageviews)+1)
+	qfilenames := make([]string, 1, len(pageviews)+1)
 	qfiles[0] = brotli.NewReader(sitelinksFile)
+	qfilenames[0] = sitelinks
 	for _, pv := range pageviews {
 		pvFile, err := os.Open(pv)
 		if err != nil {
@@ -86,6 +88,7 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 		}
 		defer pvFile.Close()
 		qfiles = append(qfiles, brotli.NewReader(pvFile))
+		qfilenames = append(qfilenames, pv)
 	}
 
 	ch := make(chan extsort.SortType, 10000)
@@ -94,7 +97,7 @@ func buildQViews(testRun bool, date time.Time, sitelinks string, pageviews []str
 	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.New(ch, QViewCountFromBytes, QViewCountLess, config)
 	g.Go(func() error {
-		return readQViewInputs(testRun, qfiles, ch, subCtx)
+		return readQViewInputs(testRun, qfiles, qfilenames, ch, subCtx)
 	})
 	g.Go(func() error {
 		sorter.Sort(ctx) // not subCtx, as per extsort docs
@@ -157,13 +160,13 @@ func writeQViewCount(w io.Writer, entity int64, count int64) error {
 	return err
 }
 
-func readQViewInputs(testRun bool, inputs []io.Reader, ch chan<- extsort.SortType, ctx context.Context) error {
+func readQViewInputs(testRun bool, inputs []io.Reader, inputNames []string, ch chan<- extsort.SortType, ctx context.Context) error {
 	defer close(ch)
 	scanners := make([]LineScanner, 0, len(inputs))
 	for _, input := range inputs {
 		scanners = append(scanners, bufio.NewScanner(input))
 	}
-	merger := NewLineMerger(scanners)
+	merger := NewLineMerger(scanners, inputNames)
 	var lastKey string
 	var entity, numViews, numLinesRead int64
 	for merger.Advance() {

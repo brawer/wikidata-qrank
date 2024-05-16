@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"container/heap"
+	"fmt"
 )
 
 // Merges the lines of a multiple io.Readers whose content is in sorted order.
@@ -23,18 +24,25 @@ type LineScanner interface {
 	Text() string
 }
 
-func NewLineMerger(r []LineScanner) *LineMerger {
+// NewLineMerger creates an iterator that merges multiple sorted files,
+// returning their lines in sort order. The passed names identify the
+// scanners, and are part of the error message in case of failures.
+// Being able to identify the failing input is useful for debugging.
+// https://github.com/brawer/wikidata-qrank/issues/40
+func NewLineMerger(r []LineScanner, names []string) *LineMerger {
+	if len(r) != len(names) {
+		panic(fmt.Sprintf("len(r) must be len(names), got %d vs %d", len(r), len(names)))
+	}
+
 	m := &LineMerger{}
 	m.heap = make(lineMergerHeap, 0, len(r))
-	for _, rr := range r {
-		item := &mergee{scanner: rr}
+	for i, rr := range r {
+		item := &mergee{scanner: rr, name: names[i]}
 		if item.scanner.Scan() {
 			m.heap = append(m.heap, item)
 		}
 		if err := item.scanner.Err(); err != nil {
-			if logger != nil {
-				logger.Printf("LineMerger: scanner #%d failed to scan first line, err=%v", item.index, err)
-			}
+			logger.Printf(`LineMerger: scanner "%s" failed to scan first line, err=%v`, item.name, err)
 			m.err = err
 			return m
 		}
@@ -62,9 +70,7 @@ func (m *LineMerger) Advance() bool {
 	}
 	if err := item.scanner.Err(); err != nil {
 		m.err = err
-		if logger != nil {
-			logger.Printf("LineMerger: scanner #%d failed, err=%v", item.index, err)
-		}
+		logger.Printf(`LineMerger: scanner "%s" failed, err=%v`, item.name, err)
 		return false
 	}
 	return len(m.heap) > 0
@@ -86,6 +92,7 @@ func (m *LineMerger) Line() string {
 type mergee struct {
 	scanner LineScanner
 	index   int
+	name    string
 }
 
 type lineMergerHeap []*mergee
