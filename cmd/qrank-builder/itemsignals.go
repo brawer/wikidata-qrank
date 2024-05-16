@@ -172,7 +172,14 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	scannerNames := make([]string, 0, len(pageviews)+1)
 	scanners = append(scanners, NewPageSignalsScanner(sites, s3))
 	scannerNames = append(scannerNames, "page_signals")
-	for _, pv := range pageviews {
+
+	for i, pv := range pageviews {
+		// Temporarily restrict to the very last pageiews file.
+		// TODO: This is just hack to investigate a bug. Remove it.
+		// https://github.com/brawer/wikidata-qrank/issues/40
+		if i != len(pageviews)-1 {
+			continue
+		}
 		reader, err := NewS3Reader(ctx, "qrank", pv, s3)
 		if err != nil {
 			return time.Time{}, err
