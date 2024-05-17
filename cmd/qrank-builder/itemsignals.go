@@ -192,6 +192,33 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		scannerNames = append(scannerNames, pv)
 	}
 
+	// TODO: This is just hack to investigate a bug. Remove it.
+	// https://github.com/brawer/wikidata-qrank/issues/40
+	if true {
+		merg := NewLineMerger(scanners, scannerNames)
+		logger.Printf("BuildItemSignals(): start testing LineMerger")
+		var lastLine string
+		var numOrderErrors int64
+		var numLines int64
+		for merg.Advance() {
+			numLines += 1
+			line := merg.Line()
+			if lastLine >= line {
+				numOrderErrors += 1
+				if numOrderErrors < 10 {
+					logger.Printf(`LineMerger broken: "%s" after "%s"`, line, lastLine)
+				}
+			}
+			lastLine = line
+		}
+		if err := merg.Err(); err != nil {
+			logger.Printf("LineMerger failed: %v", err)
+			return time.Time{}, err
+		}
+		logger.Printf("BuildItemSignals(): finished testing LineMerger, returned %d lines, %d of which were mis-ordered", numLines, numOrderErrors)
+		return time.Time{}, nil
+	}
+
 	// Produce a stream of ItemSignals, sorted by Wikidata item ID.
 	sigChan := make(chan extsort.SortType, 10000)
 	config := extsort.DefaultConfig()
