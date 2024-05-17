@@ -194,6 +194,10 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		var numOrderErrors int64
 		var numLines int64
 		for merg.Advance() {
+			if err := merg.Err(); err != nil {
+				logger.Printf("LineMerger.Err() is non-nil but LineMerger.Advance() was true; err=%v", err)
+				break
+			}
 			numLines += 1
 			line := merg.Line()
 			if lastLine >= line {
