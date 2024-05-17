@@ -167,6 +167,16 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	}
 	defer compressor.Close()
 
+	// Temporarily restrict the set of sites to zh.wikipedia.org
+	// and zh.wikiquote.org.
+	// TODO: This is just hack to investigate a bug. Remove it.
+	// https://github.com/brawer/wikidata-qrank/issues/40
+	for key, _ := range *sites {
+	    if key != "zhwiki" && key != "zhwikiquote" {
+		   delete(*sites, key)
+		}
+	}
+
 	writer := NewItemSignalsWriter(compressor)
 	scanners := make([]LineScanner, 0, len(pageviews)+1)
 	scannerNames := make([]string, 0, len(pageviews)+1)
