@@ -200,7 +200,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 			}
 			numLines += 1
 			line := merg.Line()
-			if lastLine >= line {
+			if lastLine > line {
 				numOrderErrors += 1
 				if numOrderErrors < 10 {
 					logger.Printf(`LineMerger broken: "%s" after "%s"`, line, lastLine)
