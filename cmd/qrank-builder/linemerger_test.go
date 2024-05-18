@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"testing"
@@ -14,25 +15,42 @@ import (
 
 func TestLineMerger(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
-	m := NewLineMerger([]LineScanner{
-		bufio.NewScanner(strings.NewReader("C1\nD1")),
-		bufio.NewScanner(strings.NewReader("B2\nE2")),
-		bufio.NewScanner(strings.NewReader("A3\nB3")),
-		bufio.NewScanner(strings.NewReader("")),
-		bufio.NewScanner(strings.NewReader("B5")),
-	}, []string{"S1", "S2", "S3", "S4", "S5"})
-	result := make([]string, 0, 5)
-	for m.Advance() {
-		result = append(result, m.Line())
-	}
-	if err := m.Err(); err != nil {
-		t.Error(err)
-		return
-	}
-	got := strings.Join(result, "|")
-	expected := "A3|B2|B3|B5|C1|D1|E2"
-	if expected != got {
-		t.Errorf("expected %q, got %q", expected, got)
+	for tcIndex, tc := range []struct {
+		inputs string
+		want   string
+	}{
+		{"C1|D1 - B2|E2 A3|B3 B5", "A3|B2|B3|B5|C1|D1|E2"},
+
+		// TODO: Add more test cases.
+		//
+		// In particular, add a test case that triggers a call
+		// to LineMerger.Advance() where the current top of heap
+		// is reaching the end of its stream.
+		// https://github.com/brawer/wikidata-qrank/issues/40
+	} {
+		scanners := make([]LineScanner, 0, 10)
+		names := make([]string, 0, 10)
+		for i, input := range strings.Split(tc.inputs, " ") {
+			lines := strings.Join(strings.Split(input, "|"), "\n") + "\n"
+			if input == "-" {
+				lines = ""
+			}
+			scanner := bufio.NewScanner(strings.NewReader(lines))
+			scanners = append(scanners, scanner)
+			names = append(names, fmt.Sprintf("S%d", i))
+		}
+		merger := NewLineMerger(scanners, names)
+		result := make([]string, 0, 5)
+		for merger.Advance() {
+			result = append(result, merger.Line())
+		}
+		if err := merger.Err(); err != nil {
+			t.Errorf("test case %d failed; err=%v", tcIndex, err)
+		}
+		got := strings.Join(result, "|")
+		if got != tc.want {
+			t.Errorf("test case %d: got %q, want %q", tcIndex, got, tc.want)
+		}
 	}
 }
 
