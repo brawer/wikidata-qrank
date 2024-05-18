@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"container/heap"
 	"fmt"
+	"strings"
 )
 
 // Merges the lines of a multiple io.Readers whose content is in sorted order.
@@ -99,7 +100,25 @@ type lineMergerHeap []*mergee
 func (h lineMergerHeap) Len() int { return len(h) }
 
 func (h lineMergerHeap) Less(i, j int) bool {
-	return bytes.Compare(h[i].scanner.Bytes(), h[j].scanner.Bytes()) < 0
+	if c := bytes.Compare(h[i].scanner.Bytes(), h[j].scanner.Bytes()); c < 0 {
+		return true
+	} else if c > 0 {
+		return false
+	}
+
+	// Make the processing order deterministic by imposing a total order.
+	// https://github.com/brawer/wikidata-qrank/issues/40#issuecomment-2118675361
+	if c := strings.Compare(h[i].name, h[j].name); c < 0 {
+		return true
+	} else if c > 0 {
+		return false
+	}
+
+	// This should not happen in production.
+	msg := fmt.Sprintf("LineMergerHeap.Less() called on equivalent items; i=%d, h[i]=%v, j=%d, h[j]=%v", i, h[i], j, h[j])
+	logger.Println(msg)
+	panic(msg)
+	return false
 }
 
 func (h lineMergerHeap) Swap(i, j int) {
