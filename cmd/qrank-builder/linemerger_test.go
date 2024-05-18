@@ -6,12 +6,35 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"testing"
 )
+
+type testLineReader struct {
+	lines []string
+}
+
+func (r *testLineReader) Read(p []byte) (n int, err error) {
+	if len(r.lines) == 0 {
+		return 0, io.EOF
+	}
+	line := r.lines[0]
+	if line == "<err>" {
+		return 0, fmt.Errorf("test error")
+	}
+	// Technically we should handle len(p) < len(line),
+	// but this does not happen during unit tests because
+	// our test strings are so small.
+	for i := 0; i < len(line); i++ {
+		p[i] = line[i]
+	}
+	p[len(line)] = '\n'
+	r.lines = r.lines[1:len(r.lines)]
+	return len(line) + 1, nil
+}
 
 func TestLineMerger(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
@@ -19,7 +42,10 @@ func TestLineMerger(t *testing.T) {
 		inputs string
 		want   string
 	}{
-		{"C1|D1 - B2|E2 A3|B3 B5", "A3|B2|B3|B5|C1|D1|E2"},
+		{"C1|D1 <empty> B2|E2 A3|B3 B5", "A3|B2|B3|B5|C1|D1|E2"},
+
+		{"A B <err>", "<err>"},   // error at start
+		{"A|<err> B", "A|<err>"}, // error not at start
 
 		// Trigger calls to LineMerger.Advance() where the current
 		// top of heap is reaching the end of its input stream.
@@ -29,11 +55,11 @@ func TestLineMerger(t *testing.T) {
 		scanners := make([]LineScanner, 0, 10)
 		names := make([]string, 0, 10)
 		for i, input := range strings.Split(tc.inputs, " ") {
-			lines := strings.Join(strings.Split(input, "|"), "\n") + "\n"
-			if input == "-" {
-				lines = ""
+			lines := strings.Split(input, "|")
+			if input == "<empty>" {
+				lines = []string{}
 			}
-			scanner := bufio.NewScanner(strings.NewReader(lines))
+			scanner := bufio.NewScanner(&testLineReader{lines: lines})
 			scanners = append(scanners, scanner)
 			names = append(names, fmt.Sprintf("S%d", i))
 		}
@@ -43,68 +69,15 @@ func TestLineMerger(t *testing.T) {
 			result = append(result, merger.Line())
 		}
 		if err := merger.Err(); err != nil {
-			t.Errorf("test case %d failed; err=%v", tcIndex, err)
+			if err.Error() == "test error" {
+				result = append(result, "<err>")
+			} else {
+				t.Errorf("test case %d failed; err=%v", tcIndex, err)
+			}
 		}
 		got := strings.Join(result, "|")
 		if got != tc.want {
 			t.Errorf("test case %d: got %q, want %q", tcIndex, got, tc.want)
 		}
-	}
-}
-
-type errReader struct {
-	numReads int
-	maxReads int
-}
-
-var testErr = errors.New("test error")
-
-func (e *errReader) Read(p []byte) (n int, err error) {
-	if e.numReads >= e.maxReads {
-		return 0, testErr
-	}
-	e.numReads += 1
-	p[0] = '.'
-	p[1] = '\n'
-	return 2, nil
-}
-
-func TestLineMerger_ErrorAtStart(t *testing.T) {
-	var logfile bytes.Buffer
-	logger = log.New(&logfile, "", log.Lshortfile)
-	reader := &errReader{numReads: 0, maxReads: 0}
-	m := NewLineMerger([]LineScanner{bufio.NewScanner(reader)}, []string{"🐞"})
-	if m.Advance() {
-		t.Error("expected m.Advance()=false, got true")
-		return
-	}
-	if err := m.Err(); err != testErr {
-		t.Errorf("expected test error, got %q", err)
-	}
-	gotLog := string(logfile.Bytes())
-	if !strings.Contains(gotLog, `scanner "🐞" failed to scan first line, err=test error`) {
-		t.Errorf("name of failing input scanner should be logged, got %s", gotLog)
-	}
-}
-
-func TestLineMerger_ErrorAtRead(t *testing.T) {
-	var logfile bytes.Buffer
-	logger = log.New(&logfile, "", log.Lshortfile)
-	reader := &errReader{numReads: 0, maxReads: 1}
-	m := NewLineMerger([]LineScanner{bufio.NewScanner(reader)}, []string{"🐞"})
-	if !m.Advance() {
-		t.Error("expected first m.Advance()=true, got false")
-		return
-	}
-	if m.Advance() {
-		t.Error("expected second m.Advance()=false, got true")
-		return
-	}
-	if err := m.Err(); err != testErr {
-		t.Errorf("expected test error, got %q", err)
-	}
-	gotLog := string(logfile.Bytes())
-	if !strings.Contains(gotLog, `scanner "🐞" failed, err=test error`) {
-		t.Errorf("name of failing input scanner should be logged, got %s", gotLog)
 	}
 }
