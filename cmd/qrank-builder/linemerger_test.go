@@ -21,12 +21,10 @@ func TestLineMerger(t *testing.T) {
 	}{
 		{"C1|D1 - B2|E2 A3|B3 B5", "A3|B2|B3|B5|C1|D1|E2"},
 
-		// TODO: Add more test cases.
-		//
-		// In particular, add a test case that triggers a call
-		// to LineMerger.Advance() where the current top of heap
-		// is reaching the end of its stream.
-		// https://github.com/brawer/wikidata-qrank/issues/40
+		// Trigger calls to LineMerger.Advance() where the current
+		// top of heap is reaching the end of its input stream.
+		{"A A|A", "A|A|A"},
+		{"C1|C2|C3 B1|B2|B3 A1|A2", "A1|A2|B1|B2|B3|C1|C2|C3"},
 	} {
 		scanners := make([]LineScanner, 0, 10)
 		names := make([]string, 0, 10)
