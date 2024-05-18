@@ -91,7 +91,6 @@ func (m *LineMerger) Line() string {
 
 type mergee struct {
 	scanner LineScanner
-	index   int
 	name    string
 }
 
@@ -105,15 +104,10 @@ func (h lineMergerHeap) Less(i, j int) bool {
 
 func (h lineMergerHeap) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
-	h[i].index = i
-	h[j].index = j
 }
 
 func (h *lineMergerHeap) Push(x interface{}) {
-	n := len(*h)
-	item := x.(*mergee)
-	item.index = n
-	*h = append(*h, item)
+	*h = append(*h, x.(*mergee))
 }
 
 func (h *lineMergerHeap) Pop() interface{} {
@@ -121,7 +115,6 @@ func (h *lineMergerHeap) Pop() interface{} {
 	n := len(old)
 	item := old[n-1]
 	old[n-1] = nil // avoid memory leak
-	item.index = -1
 	*h = old[0 : n-1]
 	return item
 }
