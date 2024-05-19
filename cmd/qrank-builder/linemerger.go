@@ -64,6 +64,11 @@ func (m *LineMerger) Advance() bool {
 		return true
 	}
 	item := m.heap[0]
+
+	// TODO: This is just hack to investigate a bug. Remove it.
+	// https://github.com/brawer/wikidata-qrank/issues/40
+	lastLine := item.scanner.Text()
+
 	if item.scanner.Scan() {
 		heap.Fix(&m.heap, 0)
 	} else {
@@ -71,7 +76,14 @@ func (m *LineMerger) Advance() bool {
 	}
 	if err := item.scanner.Err(); err != nil {
 		m.err = err
-		logger.Printf(`LineMerger: scanner "%s" failed, err=%v`, item.name, err)
+
+		// TODO: Make logging less verbose again once this bug is resolved.
+		// https://github.com/brawer/wikidata-qrank/issues/40
+		logger.Printf(`LineMerger: scanner "%s" failed, lastLine=%q, err=%v`, item.name, lastLine, err)
+		for i, mg := range m.heap {
+			logger.Printf(`LineMerger: scanner "%s" (#%d) at %q`, mg.name, i, mg.scanner.Text())
+		}
+
 		return false
 	}
 	return len(m.heap) > 0
