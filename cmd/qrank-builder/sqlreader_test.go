@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 var pagePropsColumns = []string{"pp_page", "pp_propname", "pp_value", "pp_sortkey"}
@@ -155,7 +156,9 @@ func TestSQLLexer(t *testing.T) {
 
 // Lex returns a debug string for the lexed input.
 func lex(s string) string {
-	lexer := sqlLexer{reader: bufio.NewReader(strings.NewReader(s))}
+	stringReader := strings.NewReader(s)
+	reader := iotest.DataErrReader(iotest.HalfReader(stringReader))
+	lexer := sqlLexer{reader: bufio.NewReader(reader)}
 	var buf strings.Builder
 	for {
 		token, txt, err := lexer.read()
