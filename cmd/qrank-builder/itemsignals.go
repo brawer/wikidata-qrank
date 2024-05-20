@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -166,14 +167,37 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		return time.Time{}, err
 	}
 	defer compressor.Close()
-
 	writer := NewItemSignalsWriter(compressor)
+
+	// TODO: The following is an experiment which may or may not work.
+	// Download all pageview files from S3 storage to local disk, to work
+	// around an apparent flakiness in Wikimedia's storage infrastructure.
+	// https://github.com/brawer/wikidata-qrank/issues/40
+	tempDir, err := os.MkdirTemp("", "itemsignals-*")
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer os.RemoveAll(tempDir)
+
+	logger.Printf("BuildItemSignals(): download %d pageview files to %s", len(pageviews), tempDir)
+	localPageViews := make([]string, 0, len(pageviews))
+	for _, pv := range pageviews {
+		path := filepath.Join(tempDir, filepath.Base(pv))
+		localPageViews = append(localPageViews, path)
+		opts := minio.GetObjectOptions{}
+		if err := s3.FGetObject(ctx, "qrank", pv, path, opts); err != nil {
+			return time.Time{}, err
+		}
+	}
+	logger.Printf("BuildItemSignals(): finished downloading pageview files")
+
 	scanners := make([]LineScanner, 0, len(pageviews)+1)
 	scannerNames := make([]string, 0, len(pageviews)+1)
 	scanners = append(scanners, NewPageSignalsScanner(sites, s3))
 	scannerNames = append(scannerNames, "page_signals")
-	for _, pv := range pageviews {
-		reader, err := NewS3Reader(ctx, "qrank", pv, s3)
+
+	for _, pv := range localPageViews {
+		reader, err := os.Open(pv)
 		if err != nil {
 			return time.Time{}, err
 		}
