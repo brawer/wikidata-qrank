@@ -211,7 +211,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 
 	// TODO: This is just hack to investigate a bug. Remove it.
 	// https://github.com/brawer/wikidata-qrank/issues/40
-	if true {
+	if false {
 		merg := NewLineMerger(scanners, scannerNames)
 		logger.Printf("BuildItemSignals(): start testing LineMerger")
 		var lastLine string
