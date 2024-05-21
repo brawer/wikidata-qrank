@@ -19,7 +19,6 @@ import (
 
 func main() {
 	port := flag.Int("port", 0, "port for serving HTTP requests")
-	storagekey := flag.String("storage-key", "keys/storage-key", "path to key with storage access credentials")
 	workdir := flag.String("workdir", "webserver-workdir", "path to working directory on local disk")
 	flag.Parse()
 
@@ -30,7 +29,7 @@ func main() {
 		}
 	}
 
-	storage, err := NewStorage(*storagekey, *workdir)
+	storage, err := NewStorage(*workdir)
 	if err != nil {
 		log.Fatal(err)
 	}

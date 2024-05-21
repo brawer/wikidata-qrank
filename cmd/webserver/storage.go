@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
+// SPDX-FileCopyrightText: 2024 Sascha Brawer <sascha@brawer.ch>
 // SPDX-License-Identifier: MIT
 
 package main
@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"encoding/base32"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -43,25 +42,15 @@ type storageClient interface {
 }
 
 // NewStorage sets up a client for accessing S3-compatible object storage.
-func NewStorage(keypath, workdir string) (*Storage, error) {
+func NewStorage(workdir string) (*Storage, error) {
 	if err := os.MkdirAll(workdir, 0755); err != nil {
 		return nil, err
 	}
 
 	var config struct{ Endpoint, Key, Secret string }
-	if keypath == "" {
-		config.Endpoint = os.Getenv("S3_ENDPOINT")
-		config.Key = os.Getenv("S3_KEY")
-		config.Secret = os.Getenv("S3_SECRET")
-	} else {
-		data, err := os.ReadFile(keypath)
-		if err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(data, &config); err != nil {
-			return nil, err
-		}
-	}
+	config.Endpoint = os.Getenv("S3_ENDPOINT")
+	config.Key = os.Getenv("S3_KEY")
+	config.Secret = os.Getenv("S3_SECRET")
 
 	client, err := minio.New(config.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(config.Key, config.Secret, ""),
@@ -79,7 +68,7 @@ func NewStorage(keypath, workdir string) (*Storage, error) {
 	}, nil
 }
 
-var objRegexp = regexp.MustCompile(`public/([a-z\-]+)\-(2[0-9]{7})\.([a-z0-9\.]+)`)
+var objRegexp = regexp.MustCompile(`public/([a-z_\-]+)\-(2[0-9]{7})\.([a-z0-9\.]+)`)
 
 // Reload caches public content from remote object storage to local disk.
 // Any old content (which is not live anymore) is deleted from local disk.
@@ -138,6 +127,8 @@ func (s *Storage) Reload(ctx context.Context) error {
 			loc.ContentType = "image/tiff"
 		case ".txt":
 			loc.ContentType = "text/plain"
+		case ".zst":
+			loc.ContentType = "application/zstd"
 		}
 
 		files[filename] = loc
