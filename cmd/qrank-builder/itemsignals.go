@@ -169,7 +169,6 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	defer compressor.Close()
 	writer := NewItemSignalsWriter(compressor)
 
-	// TODO: The following is an experiment which may or may not work.
 	// Download all pageview files from S3 storage to local disk, to work
 	// around an apparent flakiness in Wikimedia's storage infrastructure.
 	// https://github.com/brawer/wikidata-qrank/issues/40
@@ -179,7 +178,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	}
 	defer os.RemoveAll(tempDir)
 
-	logger.Printf("BuildItemSignals(): download %d pageview files to %s", len(pageviews), tempDir)
+	// logger.Printf("BuildItemSignals(): download %d pageview files to %s", len(pageviews), tempDir)
 	localPageViews := make([]string, 0, len(pageviews))
 	for _, pv := range pageviews {
 		path := filepath.Join(tempDir, filepath.Base(pv))
@@ -189,7 +188,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 			return time.Time{}, err
 		}
 	}
-	logger.Printf("BuildItemSignals(): finished downloading pageview files")
+	// logger.Printf("BuildItemSignals(): finished downloading pageview files")
 
 	scanners := make([]LineScanner, 0, len(pageviews)+1)
 	scannerNames := make([]string, 0, len(pageviews)+1)
@@ -209,37 +208,6 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 		scannerNames = append(scannerNames, pv)
 	}
 
-	// TODO: This is just hack to investigate a bug. Remove it.
-	// https://github.com/brawer/wikidata-qrank/issues/40
-	if false {
-		merg := NewLineMerger(scanners, scannerNames)
-		logger.Printf("BuildItemSignals(): start testing LineMerger")
-		var lastLine string
-		var numOrderErrors int64
-		var numLines int64
-		for merg.Advance() {
-			if err := merg.Err(); err != nil {
-				logger.Printf("LineMerger.Err() is non-nil but LineMerger.Advance() was true; err=%v", err)
-				break
-			}
-			numLines += 1
-			line := merg.Line()
-			if lastLine > line {
-				numOrderErrors += 1
-				if numOrderErrors < 10 {
-					logger.Printf(`LineMerger broken: "%s" after "%s"`, line, lastLine)
-				}
-			}
-			lastLine = line
-		}
-		if err := merg.Err(); err != nil {
-			logger.Printf("LineMerger failed: %v", err)
-			return time.Time{}, err
-		}
-		logger.Printf("BuildItemSignals(): finished testing LineMerger, returned %d lines, %d of which were mis-ordered", numLines, numOrderErrors)
-		return time.Time{}, nil
-	}
-
 	// Produce a stream of ItemSignals, sorted by Wikidata item ID.
 	sigChan := make(chan extsort.SortType, 10000)
 	config := extsort.DefaultConfig()
@@ -247,11 +215,9 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.New(sigChan, ItemSignalsFromBytes, ItemSignalsLess, config)
 	merger := NewLineMerger(scanners, scannerNames)
-	logger.Printf("BuildItemSignals(): merging signals from %d files; #0=PageSignalsScanner; rest=pageviews", len(scanners))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		joiner := itemSignalsJoiner{out: sigChan}
-		var linesMerged int64
 		for merger.Advance() {
 			line := merger.Line()
 			if err := joiner.Process(line); err != nil {
@@ -259,10 +225,8 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 				logger.Printf(`ItemSignalsJoiner.Process("%s") failed: %v`, line, err)
 				return err
 			}
-			linesMerged += 1
 		}
 		joiner.Close()
-		logger.Printf("ItemSignalsJoiner: read %d lines", linesMerged)
 		if err := merger.Err(); err != nil {
 			logger.Printf("LineMerger failed: %v", err)
 			return err
@@ -271,7 +235,6 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 	})
 	group.Go(func() error {
 		sorter.Sort(groupCtx)
-		logger.Printf("BuildItemSignals(): start sorting")
 		for {
 			select {
 			case <-groupCtx.Done():
@@ -294,15 +257,17 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string
 			}
 		}
 	})
+
 	if err := group.Wait(); err != nil {
 		logger.Printf("BuildItemSignals(): group.Wait() failed, err==%v", err)
 		return time.Time{}, err
 	}
+
 	if err := <-errChan; err != nil {
-		logger.Printf("BuildItemSignals: sorting failed, err=%v", err)
+		logger.Printf("BuildItemSignals(): sorting failed, err=%v", err)
 		return time.Time{}, err
 	}
-	logger.Printf("BuildItemSignals(): finished sorting")
+
 	for _, s := range scanners {
 		if closer, ok := s.(io.Closer); ok {
 			if err := closer.Close(); err != nil {
