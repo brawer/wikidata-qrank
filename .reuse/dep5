@@ -5,3 +5,7 @@ Source: https://github.com/brawer/wikidata-qrank
 Files: cmd/qrank-builder/testdata/dumps/*
 Copyright: 2024 Sascha Brawer <sascha@brawer.ch>
 License: CC0-1.0
+
+Files: cmd/qrank-builder/testdata/fake_wikisite/*
+Copyright: 2024 Sascha Brawer <sascha@brawer.ch>
+License: CC0-1.0
