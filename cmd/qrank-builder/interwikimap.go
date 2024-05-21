@@ -24,6 +24,7 @@ type InterwikiMap map[string]string
 // As of May 2024, the `interwikimap` table is not part of the SQL dumps
 // that are available in the Wikimedia datacenter,  we need to fetch it
 // over the network from the live site.
+// https://phabricator.wikimedia.org/T365475
 func FetchInterwikiMap(client *http.Client, site WikiSite) (InterwikiMap, error) {
 	u := "/w/api.php?action=query&meta=siteinfo&siprop=interwikimap&format=json"
 	u = fmt.Sprintf("https://%s%s", site.Domain, u)
