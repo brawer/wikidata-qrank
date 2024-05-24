@@ -1,0 +1,37 @@
+<?php
+// SPDX-FileCopyrightText: 2024 Sascha Brawer <sascha@brawer.ch>
+// SPDX-License-Identifier: CC0-1.0
+//
+// Interwiki map for testing, with same structure as the live map at
+// https://noc.wikimedia.org/conf/interwiki.php.txt
+//
+// As of May 2024, Wikimedia serves a file with duplicate entries, some of
+// which have conflicting values. We replicate this in this test data file.
+// https://phabricator.wikimedia.org/T365679
+return [
+	'__global:advisory' => '1 https://advisory.wikimedia.org/wiki/$1',
+	'__global:c' => '1 https://commons.wikimedia.org/wiki/$1',
+	'__global:d' => '1 https://www.wikidata.org/wiki/$1',
+	'__global:commons' => '1 https://commons.wikimedia.org/wiki/$1',
+	'__global:gutenbergwiki' => '1 https://meta.wikimedia.org/w/index.php?title=Interwiki_map/discontinued#Gutenbergwiki',
+	'__global:metawiki' => '1 https://meta.wikimedia.org/wiki/$1',
+	'__global:metawikimedia' => '1 https://meta.wikimedia.org/wiki/$1',
+	'__global:xkcd' => '0 https://xkcd.com/$1',
+	'__global:wmfblog' => '1 https://diff.wikimedia.org/$1',
+	'__sites:rmwiki' => 'wiki',
+	'__sites:rmwikibooks' => 'wikibooks',
+	'rmwikibooks:w' => '1 https://rm.wikipedia.org/wiki/$1',
+	'rmwikibooks:wikt' => '1 https://rm.wiktionary.org/wiki/$1',
+	'rmwikibooks:s' => '1 https://rm.wikisource.org/wiki/$1',
+	'rmwikibooks:chapter' => '1 https://rm.wikimedia.org/wiki/$1',
+	'rmwikibooks:v' => '1 https://rm.wikiversity.org/wiki/$1',
+	'rmwikibooks:voy' => '1 https://rm.wikivoyage.org/wiki/$1',
+	'_wiki:rm' => '1 https://rm.wikipedia.org/wiki/$1',
+	'_wikibooks:de' => '1 https://de.wikibooks.org/wiki/$1',
+	'_wikibooks:gsw' => '1 https://gsw.wikibooks.org/wiki/$1',
+	'_wikibooks:gsw' => '1 https://als.wikibooks.org/wiki/$1'
+	'_wikibooks:rm' => '1 https://rm.wikibooks.org/wiki/$1',
+	'rmwiki:b' => '1 https://rm.wikibooks.org/wiki/$1',
+	'rmwiki:voy' => '1 https://rm.wikivoyage.org/wiki/$1',
+	'__list:rmwiki' => 'wikt q b n s chapter v voy',
+];

@@ -9,33 +9,32 @@ import (
 	"testing"
 )
 
-func TestFetchInterwikiMap(t *testing.T) {
+func TestInterwikiMap(t *testing.T) {
 	client := &http.Client{Transport: &FakeWikiSite{}}
-	site := WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org"}
-	got, err := FetchInterwikiMap(client, site)
+	iwm, err := FetchInterwikiMap(client)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	want := InterwikiMap{
-		"advisory": "advisory.wikimedia.org",
-		"b":        "rm.wikibooks.org",
-		"chapter":  "rm.wikimedia.org",
-		"d":        "www.wikidata.org",
-		"de":       "de.wikipedia.org",
-		"m":        "meta.wikimedia.org",
-		"meta":     "meta.wikimedia.org",
-		"n":        "rm.wikinews.org",
-		"q":        "rm.wikiquote.org",
-		"rm":       "rm.wikipedia.org",
-		"s":        "rm.wikisource.org",
-		"v":        "rm.wikiversity.org",
-		"voy":      "rm.wikivoyage.org",
-		"w":        "en.wikipedia.org",
-		"wikt":     "rm.wiktionary.org",
+	got := iwm.Build("rmwikibooks")
+	want := map[string]string{
+		"advisory":      "advisory.wikimedia.org",
+		"c":             "commons.wikimedia.org",
+		"chapter":       "rm.wikimedia.org",
+		"commons":       "commons.wikimedia.org",
+		"d":             "www.wikidata.org",
+		"de":            "de.wikibooks.org",
+		"gsw":           "als.wikibooks.org",
+		"metawiki":      "meta.wikimedia.org",
+		"metawikimedia": "meta.wikimedia.org",
+		"rm":            "rm.wikibooks.org",
+		"s":             "rm.wikisource.org",
+		"v":             "rm.wikiversity.org",
+		"voy":           "rm.wikivoyage.org",
+		"w":             "rm.wikipedia.org",
+		"wikt":          "rm.wiktionary.org",
 	}
-
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %q, want %q", got, want)
+		t.Errorf("got %v, want %v", got, want)
 	}
 }

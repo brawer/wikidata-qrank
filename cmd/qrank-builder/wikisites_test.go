@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -59,33 +58,11 @@ func (f *FakeWikiSite) RoundTrip(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 503, Body: body, Header: header}, nil
 	}
 
-	var project string
-	switch req.URL.Hostname() {
-	case "rm.wikipedia.org":
-		project = "rmwiki"
+	if req.URL.String() == "https://noc.wikimedia.org/conf/interwiki.php.txt" {
+		path := filepath.Join("testdata", "interwikimap.php.txt")
+		body, _ := os.Open(path)
+		return &http.Response{StatusCode: 200, Body: body, Header: header}, nil
 	}
 
-	var filename string
-	if req.URL.Path == "/w/api.php" {
-		if req.URL.RawQuery == "action=query&meta=siteinfo&siprop=interwikimap&format=json" {
-			filename = "interwikimap.json"
-		}
-	}
-
-	if project == "" || filename == "" {
-		fmt.Printf("*** %q\n", req.URL.RawPath)
-		fmt.Printf("*** %q\n", req.URL.RawQuery)
-		return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
-	}
-
-	path := filepath.Join("testdata", "fake_wikisite", project, filename)
-	body, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-
-	if strings.HasSuffix(path, ".json") {
-		header.Add("Content-Type", "application/json")
-	}
-	return &http.Response{StatusCode: 200, Body: body, Header: header}, nil
+	return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
 }
