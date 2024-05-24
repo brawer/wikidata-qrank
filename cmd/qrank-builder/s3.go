@@ -51,23 +51,34 @@ func (r *tempFileReader) Close() error {
 	}
 }
 
-// NewS3Reader is a heper to work around minio.Object not being constructable
-// outside package minio, which makes it difficult to mock out. Unfortunately,
-// minio.Client.GetObject() returns *minio.Object instead of io.ReadCloser.
+// NewS3Reader creates an io.ReadCloser for an S3 blob. To minimize the impact
+// of network problems (Wikimedia’s datacenter is sometimes a little flaky),
+// the blob is first downloaded to a temporary file on local disk; the temp file
+// gets deleted when the caller deletes the returned io.ReadCloser.
 func NewS3Reader(ctx context.Context, bucket string, path string, s3 S3) (io.ReadCloser, error) {
 	opts := minio.GetObjectOptions{}
-	if client, ok := s3.(*minio.Client); ok {
-		obj, err := client.GetObject(ctx, bucket, path, opts)
-		if err != nil {
-			return nil, err
-		}
-		return obj, nil
-	}
 
-	// The non-minio implementation is very ugly and quite inefficient,
-	// but only used in our unit tests. We fetch the content to a temp file,
-	// and then we return a custom io.ReadCloser that deletes that file file
-	// when Close() is called.
+	// Initially, we did the following, but Wikimedia’s datacenter
+	// seems to be too unreliable for reading a stream over the network
+	// for more than a few seconds. Therefore, we now download our S3 blobs
+	// to a temporary file. This decoupling of I/O from processing reduces
+	// the likelihood of getting hit by a network problem, at the cost of
+	// increasing local disk consumption. We don't actually know how Wikimedia’s
+	// Kubernetes cluster implements /tmp for Toolforge job workers;
+	// in case /tmp was always a RAM-backed tmpfs, this would be quite
+	// wasteful. But other than processing input streams over the network,
+	// downloading the blobs to /tmp seems to work better in production.
+	//
+	// See https://github.com/brawer/wikidata-qrank/issues/40 for background.
+	//
+	// if client, ok := s3.(*minio.Client); ok {
+	//     obj, err := client.GetObject(ctx, bucket, path, opts)
+	//	   if err != nil {
+	//         return nil, err
+	//     }
+	//     return obj, nil
+	// }
+
 	temp, err := os.CreateTemp("", "s3*")
 	if err != nil {
 		return nil, err
