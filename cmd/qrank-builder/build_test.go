@@ -5,9 +5,13 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"log"
 	"path/filepath"
+	"reflect"
 	"slices"
+	"sort"
 	"testing"
 )
 
@@ -40,5 +44,51 @@ func TestBuild(t *testing.T) {
 
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestBuildSiteFiles(t *testing.T) {
+	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
+	ctx := context.Background()
+	dumps := filepath.Join("testdata", "dumps")
+	s3 := NewFakeS3()
+	s3.data["foobar/loginwiki-20030203-foobar.zst"] = []byte("old-2003")
+	s3.data["foobar/rmwiki-20010203-foobar.zst"] = []byte("old-2001")
+	s3.data["foobar/rmwiki-20020203-foobar.zst"] = []byte("old-2002")
+	s3.data["foobar/rmwiki-20030203-foobar.zst"] = []byte("old-2003")
+
+	sites, err := ReadWikiSites(dumps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buildFunc := func(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
+		ymd := site.LastDumped.Format("20060102")
+		path := fmt.Sprintf("foobar/%s-%s-foobar.zst", site.Key, ymd)
+		s3.(*FakeS3).data[path] = []byte("fresh-" + ymd[:4])
+		return nil
+	}
+
+	if err := buildSiteFiles(ctx, "foobar", buildFunc, dumps, sites, s3); err != nil {
+		t.Fatal(err)
+	}
+
+	got := make([]string, 0, len(s3.data))
+	for path, value := range s3.data {
+		got = append(got, fmt.Sprintf("%s = %s", path, string(value)))
+	}
+	sort.Strings(got)
+
+	want := []string{
+		"foobar/loginwiki-20030203-foobar.zst = old-2003",
+		"foobar/loginwiki-20240501-foobar.zst = fresh-2024",
+		"foobar/rmwiki-20020203-foobar.zst = old-2002",
+		"foobar/rmwiki-20030203-foobar.zst = old-2003",
+		"foobar/rmwiki-20240301-foobar.zst = fresh-2024",
+		"foobar/wikidatawiki-20240401-foobar.zst = fresh-2024",
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

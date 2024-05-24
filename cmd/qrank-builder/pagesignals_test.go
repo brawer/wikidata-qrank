@@ -19,34 +19,21 @@ func TestBuildPageSignals(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
 	s3 := NewFakeS3()
-	s3.data["page_signals/loginwiki-20240501-page_signals.zst"] = []byte("old-loginwiki")
-	s3.data["page_signals/rmwiki-20010203-page_signals.zst"] = []byte("old-2001")
-	s3.data["page_signals/rmwiki-20020203-page_signals.zst"] = []byte("old-2002")
-	s3.data["page_signals/rmwiki-20030203-page_signals.zst"] = []byte("old-2003")
-	s3.data["page_signals/rmwiki-20040203-page_signals.zst"] = []byte("old-2004")
-	s3.data["page_signals/rmwiki-20050203-page_signals.zst"] = []byte("old-2005")
 	sites, err := ReadWikiSites(dumps)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := buildPageSignals(ctx, dumps, sites, s3); err != nil {
-		t.Fatal(err)
+	for _, site := range []string{"rmwiki", "wikidatawiki"} {
+		if err := buildPageSignals((*sites)[site], ctx, dumps, s3); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	// page_signals should be cached across pipeline runs
-	// https://github.com/brawer/wikidata-qrank/issues/33
-	got := string(s3.data["page_signals/loginwiki-20240501-page_signals.zst"])
-	want := "old-loginwiki"
-	if got != want {
-		t.Errorf("should not re-compute previously stored page_signals")
-	}
-
-	// For rmwiki-2024, new data should have been computed and put in storage.
-	// Make sure that data looks as expected.
 	gotLines, err := s3.ReadLines("page_signals/rmwiki-20240301-page_signals.zst")
 	if err != err {
 		t.Fatal(err)
@@ -57,7 +44,7 @@ func TestBuildPageSignals(t *testing.T) {
 		"799,Q72,3142",
 	}
 	if !slices.Equal(gotLines, wantLines) {
-		t.Errorf("got %v, want %v", got, want)
+		t.Errorf("got %v, want %v", gotLines, wantLines)
 	}
 
 	// For Wikidata, the mapping from page-id to wikidata-id needs to
@@ -79,17 +66,6 @@ func TestBuildPageSignals(t *testing.T) {
 	}
 	if !slices.Equal(gotLines, wantLines) {
 		t.Errorf("got %v, want %v", gotLines, wantLines)
-	}
-
-	// Verify that obsolete files have been cleaned up.
-	stored, err := ListStoredFiles(context.Background(), "page_signals", s3)
-	if err != nil {
-		t.Error(err)
-	}
-	got = strings.Join(stored["rmwiki"], " ")
-	want = "20040203 20050203 20240301"
-	if got != want {
-		t.Errorf(`should clean up old page_signals; got "%s", want "%s"`, got, want)
 	}
 }
 

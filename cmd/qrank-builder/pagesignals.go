@@ -23,72 +23,10 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
-	"github.com/minio/minio-go/v7"
 )
 
-// BuildPageSignals builds per-page signals and puts them in storage.
-// If a page_signals file is already stored for the last dumped version
-// of a site, it is not getting re-built.
-func buildPageSignals(ctx context.Context, dumps string, sites *map[string]WikiSite, s3 S3) error {
-	stored, err := ListStoredFiles(ctx, "page_signals", s3)
-	if err != nil {
-		return err
-	}
-	tasks := make(chan WikiSite, len(*sites))
-	group, groupCtx := errgroup.WithContext(ctx)
-	for i := 0; i < runtime.NumCPU(); i++ {
-		group.Go(func() error {
-			for {
-				select {
-				case <-groupCtx.Done():
-					logger.Printf("BuildPageSignals(): canceled, groupCtx.Err()=%v", groupCtx.Err())
-					return groupCtx.Err()
-
-				case t, more := <-tasks:
-					if !more {
-						return nil
-					}
-					if err := buildSitePageSignals(t, ctx, dumps, s3); err != nil {
-						return err
-					}
-				}
-			}
-		})
-	}
-
-	built := make(map[string]string, len(*sites))
-	for _, site := range *sites {
-		ymd := site.LastDumped.Format("20060102")
-		if arr, ok := stored[site.Key]; !ok || !slices.Contains(arr, ymd) {
-			tasks <- site
-			built[site.Key] = ymd
-		}
-	}
-	close(tasks)
-
-	if err := group.Wait(); err != nil {
-		return err
-	}
-
-	// Clean up old files. We only touch those wikis for which we built a new file.
-	for site, ymd := range built {
-		versions := append(stored[site], ymd)
-		sort.Strings(versions)
-		pos := slices.Index(versions, ymd)
-		for i := 0; i < pos-2; i += 1 {
-			path := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site, versions[i])
-			opts := minio.RemoveObjectOptions{}
-			if err := s3.RemoveObject(ctx, "qrank", path, opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// BuildSitePageSignals builds the page_signals file for one WikiSite.
-func buildSitePageSignals(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
+// BuildPageSignals builds the page_signals file for a WikiSite and puts it in S3 storage.
+func buildPageSignals(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
 	ymd := site.LastDumped.Format("20060102")
 	destPath := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site.Key, ymd)
 	logger.Printf("building %s", destPath)
