@@ -30,7 +30,7 @@ import (
 // If a page_signals file is already stored for the last dumped version
 // of a site, it is not getting re-built.
 func buildPageSignals(ctx context.Context, dumps string, sites *map[string]WikiSite, s3 S3) error {
-	stored, err := storedPageSignals(ctx, s3)
+	stored, err := ListStoredFiles(ctx, "page_signals", s3)
 	if err != nil {
 		return err
 	}
@@ -291,29 +291,6 @@ func processPageTable(ctx context.Context, dumps string, site *WikiSite, out cha
 			out <- fmt.Sprintf("%s,s=%s", row[pageCol], row[lenCol])
 		}
 	}
-}
-
-// StoredPageSignals returns what entity files are available in storage.
-func storedPageSignals(ctx context.Context, s3 S3) (map[string][]string, error) {
-	re := regexp.MustCompile(`^page_signals/([a-z0-9_\-]+)-(\d{8})-page_signals.zst$`)
-	result := make(map[string][]string, 1000)
-	opts := minio.ListObjectsOptions{Prefix: "page_signals/"}
-	for obj := range s3.ListObjects(ctx, "qrank", opts) {
-		if obj.Err != nil {
-			return nil, obj.Err
-		}
-		if match := re.FindStringSubmatch(obj.Key); match != nil {
-			arr, ok := result[match[1]]
-			if !ok {
-				arr = make([]string, 0, 3)
-			}
-			result[match[1]] = append(arr, match[2])
-		}
-	}
-	for _, val := range result {
-		sort.Strings(val)
-	}
-	return result, nil
 }
 
 type pageSignalsScanner struct {

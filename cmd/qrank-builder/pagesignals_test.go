@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -83,7 +82,7 @@ func TestBuildPageSignals(t *testing.T) {
 	}
 
 	// Verify that obsolete files have been cleaned up.
-	stored, err := storedPageSignals(context.Background(), s3)
+	stored, err := ListStoredFiles(context.Background(), "page_signals", s3)
 	if err != nil {
 		t.Error(err)
 	}
@@ -91,29 +90,6 @@ func TestBuildPageSignals(t *testing.T) {
 	want = "20040203 20050203 20240301"
 	if got != want {
 		t.Errorf(`should clean up old page_signals; got "%s", want "%s"`, got, want)
-	}
-}
-
-func TestStoredPageSignals(t *testing.T) {
-	s3 := NewFakeS3()
-	for _, path := range []string{
-		"page_signals/alswikibooks-20010203-page_signals.zst",
-		"page_signals/alswikibooks-20050607-page_signals.zst",
-		"page_signals/rmwiki-20241122-page_signals.zst",
-		"page_signals/junk.txt",
-	} {
-		s3.data[path] = []byte("content")
-	}
-	got, err := storedPageSignals(context.Background(), s3)
-	if err != nil {
-		t.Error(err)
-	}
-	want := map[string][]string{
-		"alswikibooks": {"20010203", "20050607"},
-		"rmwiki":       {"20241122"},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

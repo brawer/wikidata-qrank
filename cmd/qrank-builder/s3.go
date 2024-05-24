@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"sort"
 
 	"github.com/minio/minio-go/v7"
 	//"github.com/minio/minio-go/v7/pkg/credentials"
@@ -104,4 +106,27 @@ func PutInStorage(ctx context.Context, file string, s3 S3, bucket string, dest s
 	options := minio.PutObjectOptions{ContentType: contentType}
 	_, err := s3.FPutObject(ctx, bucket, dest, file, options)
 	return err
+}
+
+// ListStoredFiles returns what files are available in S3 storage.
+func ListStoredFiles(ctx context.Context, filename string, s3 S3) (map[string][]string, error) {
+	re := regexp.MustCompile(fmt.Sprintf(`^%s/([a-z0-9_\-]+)-(\d{8})-%s.zst$`, filename, filename))
+	result := make(map[string][]string, 1000)
+	opts := minio.ListObjectsOptions{Prefix: filename + "/"}
+	for obj := range s3.ListObjects(ctx, "qrank", opts) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		if match := re.FindStringSubmatch(obj.Key); match != nil {
+			arr, ok := result[match[1]]
+			if !ok {
+				arr = make([]string, 0, 3)
+			}
+			result[match[1]] = append(arr, match[2])
+		}
+	}
+	for _, val := range result {
+		sort.Strings(val)
+	}
+	return result, nil
 }

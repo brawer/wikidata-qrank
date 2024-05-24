@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -227,5 +228,28 @@ func TestReadWriteLinest(t *testing.T) {
 		if !slices.Equal(got, lines) {
 			t.Errorf("got %v, want %v", got, lines)
 		}
+	}
+}
+
+func TestListStoredFiles(t *testing.T) {
+	s3 := NewFakeS3()
+	for _, path := range []string{
+		"page_signals/alswikibooks-20010203-page_signals.zst",
+		"page_signals/alswikibooks-20050607-page_signals.zst",
+		"page_signals/rmwiki-20241122-page_signals.zst",
+		"page_signals/junk.txt",
+	} {
+		s3.data[path] = []byte("content")
+	}
+	got, err := ListStoredFiles(context.Background(), "page_signals", s3)
+	if err != nil {
+		t.Error(err)
+	}
+	want := map[string][]string{
+		"alswikibooks": {"20010203", "20050607"},
+		"rmwiki":       {"20241122"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
