@@ -28,8 +28,9 @@ func TestBuildPageSignals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, site := range []string{"rmwiki", "wikidatawiki"} {
-		if err := buildPageSignals((*sites)[site], ctx, dumps, s3); err != nil {
+	for _, siteKey := range []string{"rmwiki", "wikidatawiki"} {
+		site := (*sites)[siteKey]
+		if err := buildPageSignals(&site, ctx, dumps, s3); err != nil {
 			t.Fatal(err)
 		}
 	}

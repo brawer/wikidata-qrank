@@ -64,7 +64,7 @@ func TestBuildSiteFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	buildFunc := func(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
+	buildFunc := func(site *WikiSite, ctx context.Context, dumps string, s3 S3) error {
 		ymd := site.LastDumped.Format("20060102")
 		path := fmt.Sprintf("foobar/%s-%s-foobar.zst", site.Key, ymd)
 		s3.(*FakeS3).data[path] = []byte("fresh-" + ymd[:4])

@@ -48,7 +48,7 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 	return nil
 }
 
-type SiteFileBuilder func(site WikiSite, ctx context.Context, dumps string, s3 S3) error
+type SiteFileBuilder func(site *WikiSite, ctx context.Context, dumps string, s3 S3) error
 
 func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilder, dumps string, sites *map[string]WikiSite, s3 S3) error {
 	stored, err := ListStoredFiles(ctx, filename, s3)
@@ -69,7 +69,7 @@ func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilde
 					if !more {
 						return nil
 					}
-					if err := builder(t, ctx, dumps, s3); err != nil {
+					if err := builder(&t, ctx, dumps, s3); err != nil {
 						return err
 					}
 				}

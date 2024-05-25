@@ -26,7 +26,7 @@ import (
 )
 
 // BuildPageSignals builds the page_signals file for a WikiSite and puts it in S3 storage.
-func buildPageSignals(site WikiSite, ctx context.Context, dumps string, s3 S3) error {
+func buildPageSignals(site *WikiSite, ctx context.Context, dumps string, s3 S3) error {
 	ymd := site.LastDumped.Format("20060102")
 	destPath := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site.Key, ymd)
 	logger.Printf("building %s", destPath)
@@ -50,10 +50,10 @@ func buildPageSignals(site WikiSite, ctx context.Context, dumps string, s3 S3) e
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		defer close(linesChan)
-		if err := processPagePropsTable(groupCtx, dumps, &site, linesChan); err != nil {
+		if err := processPagePropsTable(groupCtx, dumps, site, linesChan); err != nil {
 			return err
 		}
-		if err := processPageTable(groupCtx, dumps, &site, linesChan); err != nil {
+		if err := processPageTable(groupCtx, dumps, site, linesChan); err != nil {
 			return err
 		}
 		return nil
