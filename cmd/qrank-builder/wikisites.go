@@ -112,6 +112,30 @@ func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*WikiSites, error) {
 			}
 		}
 
+		projectInterwikiMaps := make(map[string]map[string]*WikiSite, 20)
+		for key, project := range *iwmap {
+			// '__sites:rmwikibooks' => 'wikibooks'
+			if wiki, found := strings.CutPrefix(key, "__sites:"); found {
+				if _, siteFound := sites.Sites[wiki]; siteFound {
+					pm, pmFound := projectInterwikiMaps[project]
+					if !pmFound {
+						pm = make(map[string]*WikiSite, 200)
+						projectInterwikiMaps[project] = pm
+					}
+				}
+			}
+		}
+		for project, langMap := range projectInterwikiMaps {
+			prefix := "_" + project + ":" // match eg "_wikibooks:rm"
+			for key, domain := range *iwmap {
+				if lang, found := strings.CutPrefix(key, prefix); found {
+					if site, siteFound := sites.Domains[domain]; siteFound {
+						langMap[lang] = site
+					}
+				}
+			}
+		}
+
 		for _, site := range sites.Sites {
 			localInterwikiMap := make(map[string]*WikiSite, 10)
 			k := site.Key + ":" // eg "rmwiktionary:"
@@ -123,8 +147,12 @@ func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*WikiSites, error) {
 				}
 			}
 
-			// TODO: also add interwikimap for _wiki, _wiktionary etc.
 			site.InterwikiMaps = append(site.InterwikiMaps, localInterwikiMap)
+			if project, found := (*iwmap)["__sites:"+site.Key]; found {
+				if langMap, langMapFound := projectInterwikiMaps[project]; langMapFound {
+					site.InterwikiMaps = append(site.InterwikiMaps, langMap)
+				}
+			}
 			site.InterwikiMaps = append(site.InterwikiMaps, globalInterwikiMap)
 		}
 	}

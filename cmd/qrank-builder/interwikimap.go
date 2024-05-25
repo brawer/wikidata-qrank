@@ -82,28 +82,3 @@ func FetchInterwikiMap(client *http.Client) (InterwikiMap, error) {
 
 	return result, nil
 }
-
-// Build returns the interwikimap for a wiki site such as `rmwikibooks`.
-// The returned map is useful for resolving links across wikis,
-// for example when interpreting the SQL dump of the `iwlinks` table.
-func (m InterwikiMap) Build(siteid string) map[string]string {
-	result := make(map[string]string, 200)
-
-	prefixes := make([]string, 0, 3)
-	prefixes = append(prefixes, "__global:")
-	if siteType, ok := m["__sites:"+siteid]; ok {
-		prefix := fmt.Sprintf("_%s:", siteType)
-		prefixes = append(prefixes, prefix)
-	}
-	prefixes = append(prefixes, siteid+":")
-	for key, value := range m {
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(key, prefix) {
-				k := key[len(prefix):len(key)]
-				result[k] = value
-			}
-		}
-	}
-
-	return result
-}

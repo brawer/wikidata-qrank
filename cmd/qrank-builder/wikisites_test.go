@@ -50,9 +50,11 @@ func TestReadWikiSites(t *testing.T) {
 		prefix string
 		want   string
 	}{
-		{"rmwiki", "d", "wikidatawiki"}, // __global:d => wikidatawiki
-		{"rmwiki", "b", "rmwikibooks"},  // rmwiki:b => rmwikibooks
-		{"rmwiki", "unknown", ""},       // no such prefix
+		{"rmwiki", "d", "wikidatawiki"},      // __global:d => wikidatawiki
+		{"rmwiki", "b", "rmwikibooks"},       // rmwiki:b => rmwikibooks
+		{"rmwiki", "unknown", ""},            // no such prefix
+		{"rmwiki", "rm", "rmwiki"},           // _wiki:rm => rmwiki
+		{"rmwikibooks", "rm", "rmwikibooks"}, // _wikibooks:rm => rmwikibooks
 	} {
 		got := ""
 		if target := sites.Sites[tc.wiki].ResolveInterwikiPrefix(tc.prefix); target != nil {
