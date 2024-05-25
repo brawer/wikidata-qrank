@@ -27,7 +27,14 @@ type InterwikiMap map[string]string
 // See also https://www.mediawiki.org/wiki/Manual:Interwiki_cache.
 func FetchInterwikiMap(client *http.Client) (InterwikiMap, error) {
 	u := "https://noc.wikimedia.org/conf/interwiki.php.txt"
-	resp, err := client.Get(u)
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// https://foundation.wikimedia.org/wiki/Policy:User-Agent_policy
+	req.Header.Set("User-Agent", "QRankBuilderBot/1.0 (https://github.com/brawer/wikidata-qrank; sascha@brawer.ch)")
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
