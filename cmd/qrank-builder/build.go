@@ -34,7 +34,7 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 	if err != nil {
 		return err
 	}
-	logger.Printf("found wikimedia dumps for %d sites", len(*sites))
+	logger.Printf("found wikimedia dumps for %d sites", len(sites.Sites))
 
 	if err := buildSiteFiles(ctx, "page_signals", buildPageSignals, dumps, sites, s3); err != nil {
 		return err
@@ -50,12 +50,12 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 
 type SiteFileBuilder func(site *WikiSite, ctx context.Context, dumps string, s3 S3) error
 
-func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilder, dumps string, sites *map[string]WikiSite, s3 S3) error {
+func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilder, dumps string, sites *WikiSites, s3 S3) error {
 	stored, err := ListStoredFiles(ctx, filename, s3)
 	if err != nil {
 		return err
 	}
-	tasks := make(chan WikiSite, len(*sites))
+	tasks := make(chan WikiSite, len(sites.Sites))
 	group, groupCtx := errgroup.WithContext(ctx)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		group.Go(func() error {
@@ -77,11 +77,11 @@ func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilde
 		})
 	}
 
-	built := make(map[string]string, len(*sites))
-	for _, site := range *sites {
+	built := make(map[string]string, len(sites.Sites))
+	for _, site := range sites.Sites {
 		ymd := site.LastDumped.Format("20060102")
 		if arr, ok := stored[site.Key]; !ok || !slices.Contains(arr, ymd) {
-			tasks <- site
+			tasks <- *site
 			built[site.Key] = ymd
 		}
 	}

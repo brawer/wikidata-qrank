@@ -137,7 +137,7 @@ func ItemSignalsLess(a, b extsort.SortType) bool {
 
 // BuildItemSignals builds per-item signals and puts them in storage.
 // If the signals file is already in storage, it does not get re-built.
-func buildItemSignals(ctx context.Context, pageviews []string, sites *map[string]WikiSite, s3 S3) (time.Time, error) {
+func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites, s3 S3) (time.Time, error) {
 	stored, err := StoredItemSignalsVersion(ctx, s3)
 	if err != nil {
 		return time.Time{}, err
@@ -387,7 +387,7 @@ func (j *itemSignalsJoiner) flush() {
 	j.sitelinks = 0
 }
 
-func ItemSignalsVersion(pageviews []string, sites *map[string]WikiSite) time.Time {
+func ItemSignalsVersion(pageviews []string, sites *WikiSites) time.Time {
 	var date time.Time
 	re := regexp.MustCompile(`^pageviews/pageviews-(\d{4}-W\d{2}).zst$`)
 	for _, pv := range pageviews {
@@ -402,7 +402,7 @@ func ItemSignalsVersion(pageviews []string, sites *map[string]WikiSite) time.Tim
 		}
 	}
 
-	for _, site := range *sites {
+	for _, site := range sites.Sites {
 		if site.LastDumped.After(date) {
 			date = site.LastDumped
 		}

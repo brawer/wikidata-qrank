@@ -246,9 +246,9 @@ type pageSignalsScanner struct {
 // NewPageSignalsScanner returns an object similar to bufio.Scanner
 // that sequentially scans pageid-to-qid mapping files for all WikiSites.
 // Lines are returned in the exact same order and format as pageviews files.
-func NewPageSignalsScanner(sites *map[string]WikiSite, s3 S3) *pageSignalsScanner {
-	sorted := make([]WikiSite, 0, len(*sites))
-	for _, site := range *sites {
+func NewPageSignalsScanner(sites *WikiSites, s3 S3) *pageSignalsScanner {
+	sorted := make([]*WikiSite, 0, len(sites.Sites))
+	for _, site := range sites.Sites {
 		sorted = append(sorted, site)
 	}
 	sort.Slice(sorted, func(i, j int) bool {

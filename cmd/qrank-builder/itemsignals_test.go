@@ -134,9 +134,11 @@ func TestBuildItemSignals(t *testing.T) {
 	s3.WriteLines(wdwiki, "page_signals/wikidatawiki-20110403-page_signals.zst")
 	rmDumped, _ := time.Parse(time.DateOnly, "2011-12-09")
 	wdDumped, _ := time.Parse(time.DateOnly, "2011-04-03")
-	sites := &map[string]WikiSite{
-		"rm.wikipedia.org": WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped},
-		"www.wikidata.org": WikiSite{Key: "wikidatawiki", Domain: "www.wikidata.org", LastDumped: wdDumped},
+	rmwikiSite := &WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped}
+	wikidatawikiSite := &WikiSite{Key: "wikidatawiki", Domain: "www.wikidata.org", LastDumped: wdDumped}
+	sites := &WikiSites{
+		Sites:   map[string]*WikiSite{"rmwiki": rmwikiSite, "wikidatawiki": wikidatawikiSite},
+		Domains: map[string]*WikiSite{"rm.wikipedia.org": rmwikiSite, "www.wikidata.org": wikidatawikiSite},
 	}
 
 	date, err := buildItemSignals(ctx, pageviews, sites, s3)
@@ -178,12 +180,14 @@ func TestItemSignalsVersion_FreshPageviews(t *testing.T) {
 
 	enDumped, _ := time.Parse(time.DateOnly, "2011-12-31")
 	rmDumped, _ := time.Parse(time.DateOnly, "2011-11-11")
-	sites := map[string]WikiSite{
-		"en.wikipedia.org": WikiSite{Key: "enwiki", Domain: "en.wikipedia.org", LastDumped: enDumped},
-		"rm.wikipedia.org": WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped},
+	enwikiSite := &WikiSite{Key: "enwiki", Domain: "en.wikipedia.org", LastDumped: enDumped}
+	rmwikiSite := &WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped}
+	sites := &WikiSites{
+		Sites:   map[string]*WikiSite{"enwiki": enwikiSite, "rmwiki": rmwikiSite},
+		Domains: map[string]*WikiSite{"en.wikipedia.org": enwikiSite, "rm.wikipedia.org": rmwikiSite},
 	}
 
-	got := ItemSignalsVersion(pageviews, &sites).Format(time.DateOnly)
+	got := ItemSignalsVersion(pageviews, sites).Format(time.DateOnly)
 	want := "2023-05-14"
 	if got != want {
 		t.Errorf("got %s, want %s", got, want)
@@ -202,12 +206,14 @@ func TestItemSignalsVersion_OldPageviews(t *testing.T) {
 
 	enDumped, _ := time.Parse(time.DateOnly, "2011-12-31")
 	rmDumped, _ := time.Parse(time.DateOnly, "2011-11-11")
-	sites := map[string]WikiSite{
-		"en.wikipedia.org": WikiSite{Key: "enwiki", Domain: "en.wikipedia.org", LastDumped: enDumped},
-		"rm.wikipedia.org": WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped},
+	enwikiSite := &WikiSite{Key: "enwiki", Domain: "en.wikipedia.org", LastDumped: enDumped}
+	rmwikiSite := &WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped}
+	sites := &WikiSites{
+		Sites:   map[string]*WikiSite{"enwiki": enwikiSite, "rmwiki": rmwikiSite},
+		Domains: map[string]*WikiSite{"en.wikipedia.org": enwikiSite, "rm.wikipedia.org": rmwikiSite},
 	}
 
-	got := ItemSignalsVersion(pageviews, &sites).Format(time.DateOnly)
+	got := ItemSignalsVersion(pageviews, sites).Format(time.DateOnly)
 	want := "2011-12-31"
 	if got != want {
 		t.Errorf("got %s, want %s", got, want)

@@ -32,9 +32,12 @@ func TestReadWikiSites(t *testing.T) {
 		{"wikidatawiki", "www.wikidata.org", "2024-04-01"},
 	}
 	for _, tc := range tests {
-		site := (*sites)[tc.key]
+		site := sites.Sites[tc.key]
 		if site.Domain != tc.domain {
 			t.Errorf(`got "%s", want "%s", for sites["%s"].Domain`, site.Domain, tc.domain, tc.key)
+		}
+		if sites.Sites[tc.key] != sites.Domains[tc.domain] {
+			t.Errorf("sites.Sites[%q] should be same as sites.Domains[%q]", tc.key, tc.domain)
 		}
 		lastDumped := site.LastDumped.Format(time.DateOnly)
 		if lastDumped != tc.lastDumped {

@@ -20,7 +20,12 @@ type WikiSite struct {
 	LastDumped time.Time // Date of last complete database dump
 }
 
-func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*map[string]WikiSite, error) {
+type WikiSites struct {
+	Sites   map[string]*WikiSite
+	Domains map[string]*WikiSite
+}
+
+func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*WikiSites, error) {
 	dirContent, err := os.ReadDir(dumps)
 	if err != nil {
 		return nil, err
@@ -30,7 +35,11 @@ func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*map[string]WikiSite, err
 		dumpDirs[d.Name()] = d
 	}
 
-	sites := make(map[string]WikiSite, 400)
+	sites := &WikiSites{
+		Sites:   make(map[string]*WikiSite, 400),
+		Domains: make(map[string]*WikiSite, 400),
+	}
+
 	f, err := os.Open(filepath.Join(
 		dumps, "metawiki", "latest/metawiki-latest-sites.sql.gz",
 	))
@@ -62,7 +71,7 @@ func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*map[string]WikiSite, err
 			return nil, err
 		}
 
-		site := WikiSite{
+		site := &WikiSite{
 			Key:    row[globalKeyCol],
 			Domain: decodeDomain(row[domainCol]),
 		}
@@ -86,11 +95,12 @@ func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*map[string]WikiSite, err
 		}
 
 		if !site.LastDumped.IsZero() {
-			sites[site.Key] = site
+			sites.Sites[site.Key] = site
+			sites.Domains[site.Domain] = site
 		}
 	}
 
-	return &sites, nil
+	return sites, nil
 }
 
 func decodeDomain(s string) string {

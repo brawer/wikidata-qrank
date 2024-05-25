@@ -29,8 +29,8 @@ func TestBuildPageSignals(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, siteKey := range []string{"rmwiki", "wikidatawiki"} {
-		site := (*sites)[siteKey]
-		if err := buildPageSignals(&site, ctx, dumps, s3); err != nil {
+		site := sites.Sites[siteKey]
+		if err := buildPageSignals(site, ctx, dumps, s3); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -78,13 +78,15 @@ func TestPageSignalsScanner(t *testing.T) {
 	storeFakePageSignals("rmwiki-20111111", "1,Q11|3,Q33", s3, t)
 	enDumped, _ := time.Parse(time.DateOnly, "2011-12-31")
 	rmDumped, _ := time.Parse(time.DateOnly, "2011-11-11")
-	sites := map[string]WikiSite{
-		"en.wikipedia.org": WikiSite{Key: "enwiki", Domain: "en.wikipedia.org", LastDumped: enDumped},
-		"rm.wikipedia.org": WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped},
+	enwikiSite := &WikiSite{Key: "enwiki", Domain: "en.wikipedia.org", LastDumped: enDumped}
+	rmwikiSite := &WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped}
+	sites := &WikiSites{
+		Sites:   map[string]*WikiSite{"enwiki": enwikiSite, "rmwiki": rmwikiSite},
+		Domains: map[string]*WikiSite{"en.wikipedia.org": enwikiSite, "rm.wikipedia.org": rmwikiSite},
 	}
 
 	got := make([]string, 0, 10)
-	scanner := NewPageSignalsScanner(&sites, s3)
+	scanner := NewPageSignalsScanner(sites, s3)
 	for scanner.Scan() {
 		got = append(got, scanner.Text())
 	}
