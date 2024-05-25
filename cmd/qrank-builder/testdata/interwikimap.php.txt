@@ -20,6 +20,7 @@ return [
 	'__global:wmfblog' => '1 https://diff.wikimedia.org/$1',
 	'__sites:rmwiki' => 'wiki',
 	'__sites:rmwikibooks' => 'wikibooks',
+	'rmwiki:b' => '1 https://rm.wikibooks.org/wiki/$1',
 	'rmwikibooks:w' => '1 https://rm.wikipedia.org/wiki/$1',
 	'rmwikibooks:wikt' => '1 https://rm.wiktionary.org/wiki/$1',
 	'rmwikibooks:s' => '1 https://rm.wikisource.org/wiki/$1',

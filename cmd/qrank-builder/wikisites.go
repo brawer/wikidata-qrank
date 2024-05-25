@@ -15,9 +15,10 @@ import (
 
 // WikiSite keeps what we know about a Wikimedia site such as en.wikipedia.org.
 type WikiSite struct {
-	Key        string    // Wikimedia key, such as "enwiki"
-	Domain     string    // Internet domain, such as "en.wikipedia.org"
-	LastDumped time.Time // Date of last complete database dump
+	Key           string    // Wikimedia key, such as "enwiki"
+	Domain        string    // Internet domain, such as "en.wikipedia.org"
+	LastDumped    time.Time // Date of last complete database dump
+	InterwikiMaps []map[string]*WikiSite
 }
 
 type WikiSites struct {
@@ -72,8 +73,9 @@ func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*WikiSites, error) {
 		}
 
 		site := &WikiSite{
-			Key:    row[globalKeyCol],
-			Domain: decodeDomain(row[domainCol]),
+			Key:           row[globalKeyCol],
+			Domain:        decodeDomain(row[domainCol]),
+			InterwikiMaps: make([]map[string]*WikiSite, 0, 3),
 		}
 		if dirent, ok := dumpDirs[site.Key]; !ok || !dirent.IsDir() {
 			continue
@@ -100,7 +102,43 @@ func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*WikiSites, error) {
 		}
 	}
 
+	if iwmap != nil {
+		globalInterwikiMap := make(map[string]*WikiSite, 200)
+		for key, domain := range *iwmap {
+			if prefix, found := strings.CutPrefix(key, "__global:"); found {
+				if site, siteFound := sites.Domains[domain]; siteFound {
+					globalInterwikiMap[prefix] = site
+				}
+			}
+		}
+
+		for _, site := range sites.Sites {
+			localInterwikiMap := make(map[string]*WikiSite, 10)
+			k := site.Key + ":" // eg "rmwiktionary:"
+			for key, domain := range *iwmap {
+				if prefix, found := strings.CutPrefix(key, k); found {
+					if site, siteFound := sites.Domains[domain]; siteFound {
+						localInterwikiMap[prefix] = site
+					}
+				}
+			}
+
+			// TODO: also add interwikimap for _wiki, _wiktionary etc.
+			site.InterwikiMaps = append(site.InterwikiMaps, localInterwikiMap)
+			site.InterwikiMaps = append(site.InterwikiMaps, globalInterwikiMap)
+		}
+	}
+
 	return sites, nil
+}
+
+func (w *WikiSite) ResolveInterwikiPrefix(prefix string) *WikiSite {
+	for _, m := range w.InterwikiMaps {
+		if target, found := m[prefix]; found {
+			return target
+		}
+	}
+	return nil
 }
 
 func decodeDomain(s string) string {

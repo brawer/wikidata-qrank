@@ -40,6 +40,7 @@ func TestBuild(t *testing.T) {
 		"Q72,0,3142,550,85,186",
 		"Q5296,0,2872,0,0,0",
 		"Q662541,3,4973,32,9,15",
+		"Q4847311,0,0,0,0,0",
 		"Q5649951,0,0,1,0,20",
 		"Q107661323,0,3470,0,0,0",
 	}
@@ -87,6 +88,7 @@ func TestBuildSiteFiles(t *testing.T) {
 		"foobar/rmwiki-20020203-foobar.zst = old-2002",
 		"foobar/rmwiki-20030203-foobar.zst = old-2003",
 		"foobar/rmwiki-20240301-foobar.zst = fresh-2024",
+		"foobar/rmwikibooks-20240301-foobar.zst = fresh-2024",
 		"foobar/wikidatawiki-20240401-foobar.zst = fresh-2024",
 	}
 

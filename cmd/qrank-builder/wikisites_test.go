@@ -44,6 +44,24 @@ func TestReadWikiSites(t *testing.T) {
 			t.Errorf(`got %s, want %s, for sites["%s"].LastDumped`, lastDumped, tc.lastDumped, tc.key)
 		}
 	}
+
+	for _, tc := range []struct {
+		wiki   string
+		prefix string
+		want   string
+	}{
+		{"rmwiki", "d", "wikidatawiki"}, // __global:d => wikidatawiki
+		{"rmwiki", "b", "rmwikibooks"},  // rmwiki:b => rmwikibooks
+		{"rmwiki", "unknown", ""},       // no such prefix
+	} {
+		got := ""
+		if target := sites.Sites[tc.wiki].ResolveInterwikiPrefix(tc.prefix); target != nil {
+			got = target.Key
+		}
+		if got != tc.want {
+			t.Errorf("got %q, want %q", got, tc.want)
+		}
+	}
 }
 
 func TestReadWikiSites_BadPath(t *testing.T) {
