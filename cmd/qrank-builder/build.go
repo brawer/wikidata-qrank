@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"runtime"
 	"slices"
 	"sort"
@@ -15,7 +16,7 @@ import (
 )
 
 // Build runs the entire QRank pipeline.
-func Build(dumps string, numWeeks int, s3 S3) error {
+func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 	ctx := context.Background()
 
 	pageviews, err := buildPageviews(ctx, dumps, numWeeks, s3)
@@ -23,7 +24,13 @@ func Build(dumps string, numWeeks int, s3 S3) error {
 		return err
 	}
 
-	sites, err := ReadWikiSites(dumps)
+	iwmap, err := FetchInterwikiMap(client)
+	if err != nil {
+		return err
+	}
+	logger.Printf("fetched InterwikiMap with %d entries", len(iwmap))
+
+	sites, err := ReadWikiSites(dumps, &iwmap)
 	if err != nil {
 		return err
 	}

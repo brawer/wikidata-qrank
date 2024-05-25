@@ -20,7 +20,7 @@ type WikiSite struct {
 	LastDumped time.Time // Date of last complete database dump
 }
 
-func ReadWikiSites(dumps string) (*map[string]WikiSite, error) {
+func ReadWikiSites(dumps string, iwmap *InterwikiMap) (*map[string]WikiSite, error) {
 	dirContent, err := os.ReadDir(dumps)
 	if err != nil {
 		return nil, err

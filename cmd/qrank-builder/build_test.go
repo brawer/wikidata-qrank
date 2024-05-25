@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -23,8 +24,9 @@ func TestBuild(t *testing.T) {
 
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	dumps := filepath.Join("testdata", "dumps")
+	client := &http.Client{Transport: &FakeWikiSite{}}
 	s3 := NewFakeS3()
-	if err := Build(dumps /*numWeeks*/, 1, s3); err != nil {
+	if err := Build(client, dumps /*numWeeks*/, 1, s3); err != nil {
 		t.Fatal(err)
 	}
 
@@ -57,7 +59,7 @@ func TestBuildSiteFiles(t *testing.T) {
 	s3.data["foobar/rmwiki-20020203-foobar.zst"] = []byte("old-2002")
 	s3.data["foobar/rmwiki-20030203-foobar.zst"] = []byte("old-2003")
 
-	sites, err := ReadWikiSites(dumps)
+	sites, err := ReadWikiSites(dumps, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

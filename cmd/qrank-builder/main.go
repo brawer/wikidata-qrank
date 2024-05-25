@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -99,7 +100,7 @@ func NewStorageClient(keypath string) (*minio.Client, error) {
 }
 
 func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
-	return Build(dumpsPath /*numWeeks*/, 52, storage)
+	return Build(&http.Client{}, dumpsPath /*numWeeks*/, 52, storage)
 
 	// TODO: Old code starts here, remove after new implementation is done.
 

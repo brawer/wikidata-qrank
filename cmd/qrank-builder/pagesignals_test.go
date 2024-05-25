@@ -24,7 +24,7 @@ func TestBuildPageSignals(t *testing.T) {
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
 	s3 := NewFakeS3()
-	sites, err := ReadWikiSites(dumps)
+	sites, err := ReadWikiSites(dumps, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,8 +78,8 @@ func TestPageSignalsScanner(t *testing.T) {
 	enDumped, _ := time.Parse(time.DateOnly, "2011-12-31")
 	rmDumped, _ := time.Parse(time.DateOnly, "2011-11-11")
 	sites := map[string]WikiSite{
-		"en.wikipedia.org": WikiSite{"enwiki", "en.wikipedia.org", enDumped},
-		"rm.wikipedia.org": WikiSite{"rmwiki", "rm.wikipedia.org", rmDumped},
+		"en.wikipedia.org": WikiSite{Key: "enwiki", Domain: "en.wikipedia.org", LastDumped: enDumped},
+		"rm.wikipedia.org": WikiSite{Key: "rmwiki", Domain: "rm.wikipedia.org", LastDumped: rmDumped},
 	}
 
 	got := make([]string, 0, 10)
