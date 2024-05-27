@@ -24,7 +24,7 @@ func TestBuildPageSignals(t *testing.T) {
 	ctx := context.Background()
 	dumps := filepath.Join("testdata", "dumps")
 	s3 := NewFakeS3()
-	sites, err := ReadWikiSites(dumps, nil)
+	sites, err := ReadWikiSites(nil, dumps)
 	if err != nil {
 		t.Fatal(err)
 	}

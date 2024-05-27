@@ -53,14 +53,14 @@ func TestBuild(t *testing.T) {
 func TestBuildSiteFiles(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
-	dumps := filepath.Join("testdata", "dumps")
 	s3 := NewFakeS3()
 	s3.data["foobar/loginwiki-20030203-foobar.zst"] = []byte("old-2003")
 	s3.data["foobar/rmwiki-20010203-foobar.zst"] = []byte("old-2001")
 	s3.data["foobar/rmwiki-20020203-foobar.zst"] = []byte("old-2002")
 	s3.data["foobar/rmwiki-20030203-foobar.zst"] = []byte("old-2003")
 
-	sites, err := ReadWikiSites(dumps, nil)
+	dumps := filepath.Join("testdata", "dumps")
+	sites, err := ReadWikiSites(nil, dumps)
 	if err != nil {
 		t.Fatal(err)
 	}

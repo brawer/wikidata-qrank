@@ -16,12 +16,7 @@ import (
 
 func TestReadWikiSites(t *testing.T) {
 	client := &http.Client{Transport: &FakeWikiSite{}}
-	iwmap, err := FetchInterwikiMap(client)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sites, err := ReadWikiSites(filepath.Join("testdata", "dumps"), &iwmap)
+	sites, err := ReadWikiSites(client, filepath.Join("testdata", "dumps"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +62,7 @@ func TestReadWikiSites(t *testing.T) {
 }
 
 func TestReadWikiSites_BadPath(t *testing.T) {
-	_, err := ReadWikiSites(filepath.Join("testdata", "no-such-dir"), nil)
+	_, err := ReadWikiSites(nil, filepath.Join("testdata", "no-such-dir"))
 	if !os.IsNotExist(err) {
 		t.Errorf("want os.NotExists, got %v", err)
 	}

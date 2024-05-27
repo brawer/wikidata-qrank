@@ -24,13 +24,7 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 		return err
 	}
 
-	iwmap, err := FetchInterwikiMap(client)
-	if err != nil {
-		return err
-	}
-	logger.Printf("fetched InterwikiMap with %d entries", len(iwmap))
-
-	sites, err := ReadWikiSites(dumps, &iwmap)
+	sites, err := ReadWikiSites(client, dumps)
 	if err != nil {
 		return err
 	}
