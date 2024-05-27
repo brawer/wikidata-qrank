@@ -42,6 +42,7 @@ func TestBuild(t *testing.T) {
 		"Q662541,3,4973,32,9,15",
 		"Q4847311,0,0,0,0,0",
 		"Q5649951,0,0,1,0,20",
+		"Q8681970,0,5678,0,0,0",
 		"Q107661323,0,3470,0,0,0",
 	}
 
@@ -54,6 +55,7 @@ func TestBuildSiteFiles(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	s3 := NewFakeS3()
+	s3.data["foobar/itwikibooks-20240301-foobar.zst"] = []byte("old-2024")
 	s3.data["foobar/loginwiki-20030203-foobar.zst"] = []byte("old-2003")
 	s3.data["foobar/rmwiki-20010203-foobar.zst"] = []byte("old-2001")
 	s3.data["foobar/rmwiki-20020203-foobar.zst"] = []byte("old-2002")
@@ -83,6 +85,7 @@ func TestBuildSiteFiles(t *testing.T) {
 	sort.Strings(got)
 
 	want := []string{
+		"foobar/itwikibooks-20240301-foobar.zst = old-2024",
 		"foobar/loginwiki-20030203-foobar.zst = old-2003",
 		"foobar/loginwiki-20240501-foobar.zst = fresh-2024",
 		"foobar/rmwiki-20020203-foobar.zst = old-2002",

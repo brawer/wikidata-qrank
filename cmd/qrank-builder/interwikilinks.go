@@ -188,7 +188,21 @@ func (j *interwikiLinksJoiner) Process(line string) error {
 	if stream == "B" && page == j.page {
 		if site := j.site.ResolveInterwikiPrefix(cols[2]); site != nil {
 			title := cols[3]
-			// TODO: Also resolve interwiki prefixes in titles, eg "it:Foobar<".
+
+			// Resolve interwiki prefixes in titles such as "it:m:Foobar".
+			for {
+				pos := strings.IndexRune(title, ':')
+				if pos <= 0 {
+					break
+				}
+				target := site.ResolveInterwikiPrefix(title[0:pos])
+				if target == nil {
+					break
+				}
+				site = target
+				title = title[pos+1 : len(title)]
+			}
+
 			var buf bytes.Buffer
 			buf.WriteString(site.Domain)
 			buf.WriteRune('\t')

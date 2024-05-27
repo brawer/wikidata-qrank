@@ -21,6 +21,7 @@ return [
 	'__sites:rmwiki' => 'wiki',
 	'__sites:rmwikibooks' => 'wikibooks',
 	'rmwiki:b' => '1 https://rm.wikibooks.org/wiki/$1',
+	'rmwiki:s' => '1 https://rm.wikisource.org/wiki/$1',
 	'rmwikibooks:w' => '1 https://rm.wikipedia.org/wiki/$1',
 	'rmwikibooks:wikt' => '1 https://rm.wiktionary.org/wiki/$1',
 	'rmwikibooks:s' => '1 https://rm.wikisource.org/wiki/$1',
@@ -31,6 +32,7 @@ return [
 	'_wikibooks:de' => '1 https://de.wikibooks.org/wiki/$1',
 	'_wikibooks:gsw' => '1 https://gsw.wikibooks.org/wiki/$1',
 	'_wikibooks:gsw' => '1 https://als.wikibooks.org/wiki/$1'
+	'_wikibooks:it' => '1 https://it.wikibooks.org/wiki/$1',
 	'_wikibooks:rm' => '1 https://rm.wikibooks.org/wiki/$1',
 	'rmwiki:b' => '1 https://rm.wikibooks.org/wiki/$1',
 	'rmwiki:voy' => '1 https://rm.wikivoyage.org/wiki/$1',

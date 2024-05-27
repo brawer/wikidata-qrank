@@ -43,7 +43,7 @@ func TestBuildInterwikiLinks(t *testing.T) {
 
 	want := []string{
 		"rm.wikibooks.org	Main_Page/Rumantsch	Q5296",
-		"rm.wikibooks.org	it:Categoria:Testi_in_romancio	Q5296",
+		"it.wikibooks.org	Categoria:Testi_in_romancio	Q5296",
 		"www.wikidata.org	Wikidata:Accueil_principal	Q5296",
 	}
 	if !slices.Equal(got, want) {
