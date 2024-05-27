@@ -34,6 +34,10 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 		return err
 	}
 
+	if err := buildSiteFiles(ctx, "interwiki_links", buildInterwikiLinks, dumps, sites, s3); err != nil {
+		return err
+	}
+
 	_, err = buildItemSignals(ctx, pageviews, sites, s3)
 	if err != nil {
 		return err
