@@ -470,3 +470,42 @@ func (m *pageSignalMerger) write() error {
 
 	return err
 }
+
+// ReadPageItems reads our page_signals file and emits lines of the form
+// `<PageID>,<property>,<WikidataItemID>` to an output channel.
+func ReadPageItems(ctx context.Context, site *WikiSite, property string, s3 S3, out chan<- string) error {
+	ymd := site.LastDumped.Format("20060102")
+	path := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site.Key, ymd)
+	reader, err := NewS3Reader(ctx, "qrank", path, s3)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	decompressor, err := zstd.NewReader(reader)
+	if err != nil {
+		return err
+	}
+	defer decompressor.Close()
+
+	scanner := bufio.NewScanner(decompressor)
+	for scanner.Scan() {
+		cols := strings.Split(scanner.Text(), ",")
+		if len(cols) >= 2 {
+			var buf bytes.Buffer
+			buf.WriteString(cols[0])
+			buf.WriteByte('\t')
+			buf.WriteString(property)
+			buf.WriteByte('\t')
+			buf.WriteString(cols[1])
+			out <- buf.String()
+		}
+	}
+
+	decompressor.Close()
+	if err := reader.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
