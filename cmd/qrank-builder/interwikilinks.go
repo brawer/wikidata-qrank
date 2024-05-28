@@ -18,7 +18,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
 )
 
@@ -32,11 +31,7 @@ func buildInterwikiLinks(site *WikiSite, ctx context.Context, dumps string, s3 S
 	if err != nil {
 		return err
 	}
-	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedBestCompression)
-	writer, err := zstd.NewWriter(outFile, zstdLevel)
-	if err != nil {
-		return err
-	}
+	defer os.Remove(outFile.Name())
 
 	linesChan := make(chan string, 10000)
 	config := extsort.DefaultConfig()
@@ -57,7 +52,7 @@ func buildInterwikiLinks(site *WikiSite, ctx context.Context, dumps string, s3 S
 	})
 	group.Go(func() error {
 		sorter.Sort(groupCtx)
-		joiner := NewInterwikiLinksJoiner(site, writer)
+		joiner := NewInterwikiLinksJoiner(site, outFile)
 		for {
 			select {
 			case <-groupCtx.Done():
@@ -80,15 +75,13 @@ func buildInterwikiLinks(site *WikiSite, ctx context.Context, dumps string, s3 S
 	if err := <-errChan; err != nil {
 		return err
 	}
-	if err := outFile.Close(); err != nil {
+	sorted, err := SortLines(ctx, outFile.Name())
+	if err != nil {
 		return err
 	}
+	defer os.Remove(sorted)
 
-	if err := PutInStorage(ctx, outFile.Name(), s3, "qrank", destPath, "application/zstd"); err != nil {
-		return err
-	}
-
-	if err := os.Remove(outFile.Name()); err != nil {
+	if err := PutInStorage(ctx, sorted, s3, "qrank", destPath, "application/zstd"); err != nil {
 		return err
 	}
 
@@ -152,8 +145,6 @@ func processInterwikiLinks(ctx context.Context, site *WikiSite, property string,
 			}
 		}
 	}
-
-	return nil
 }
 
 type interwikiLinksJoiner struct {
