@@ -4,12 +4,19 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strings"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestLatestDump(t *testing.T) {
@@ -198,5 +205,37 @@ func TestISOWeekStart(t *testing.T) {
 		if tc.expected != got {
 			t.Errorf("want ISOWeekStart(%d, %d) = %s, got %s", tc.year, tc.day, tc.expected, got)
 		}
+	}
+}
+
+func TestSortLines(t *testing.T) {
+	unsorted, _ := os.CreateTemp("", "*.txt")
+	unsorted.Close()
+	defer os.Remove(unsorted.Name())
+	os.WriteFile(unsorted.Name(), []byte("C\nB\nA\n"), 0666)
+
+	ctx := context.Background()
+	gotPath, err := SortLines(ctx, unsorted.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotFile, err := os.Open(gotPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gotFile.Close()
+
+	decoder, _ := zstd.NewReader(gotFile, zstd.WithDecoderConcurrency(0))
+	defer decoder.Close()
+	gotBytes, err := io.ReadAll(decoder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := strings.Split(strings.TrimSuffix(string(gotBytes), "\n"), "\n")
+	want := []string{"A", "B", "C"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }

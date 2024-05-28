@@ -4,11 +4,15 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,8 +21,12 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/klauspost/compress/zstd"
+	"github.com/lanrat/extsort"
 )
 
 // LatestDump finds the most recent Wikimedia dump file with a matching name.
@@ -394,4 +402,74 @@ func ISOWeekStart(year, week int) time.Time {
 
 	_, w := t.ISOWeek()
 	return t.AddDate(0, 0, (week-w)*7)
+}
+
+func SortLines(ctx context.Context, path string) (string, error) {
+	outFile, err := os.CreateTemp("", "*-sorted.zst")
+	if err != nil {
+		return "", err
+	}
+	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedBestCompression)
+	writer, err := zstd.NewWriter(outFile, zstdLevel)
+	if err != nil {
+		return "", err
+	}
+	linesChan := make(chan string, 10000)
+	config := extsort.DefaultConfig()
+	config.ChunkSize = 8 * 1024 * 1024 / 64 // 8 MiB, 64 Bytes/line avg
+	config.NumWorkers = runtime.NumCPU()
+	sorter, sortedChan, errChan := extsort.Strings(linesChan, config)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		defer close(linesChan)
+
+		r, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			select {
+			case <-groupCtx.Done():
+				return groupCtx.Err()
+			case linesChan <- scanner.Text():
+			}
+		}
+		return scanner.Err()
+	})
+	group.Go(func() error {
+		sorter.Sort(groupCtx)
+		for {
+			select {
+			case <-groupCtx.Done():
+				return groupCtx.Err()
+
+			case line, more := <-sortedChan:
+				if !more {
+					return nil
+				}
+				var buf bytes.Buffer
+				buf.WriteString(line)
+				buf.WriteByte('\n')
+				if _, err := buf.WriteTo(writer); err != nil {
+					return err
+				}
+			}
+		}
+	})
+	if err := group.Wait(); err != nil {
+		return "", err
+	}
+	if err := <-errChan; err != nil {
+		return "", err
+	}
+	if err := writer.Close(); err != nil {
+		return "", err
+	}
+	if err := outFile.Close(); err != nil {
+		return "", err
+	}
+	return outFile.Name(), nil
 }
