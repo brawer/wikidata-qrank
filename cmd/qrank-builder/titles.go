@@ -143,10 +143,11 @@ func readTitles(ctx context.Context, site *WikiSite, property string, dumps stri
 		namespace := row[namespaceCol]
 		title := row[titleCol]
 
-		// TODO: Look up namespace names.
 		var nsPrefix string
 		if namespace != "0" {
-			nsPrefix = fmt.Sprintf("namespace-%s:", namespace)
+			if ns, found := site.Namespaces[row[namespaceCol]]; found && ns.Localized != "" {
+				nsPrefix = ns.Localized + ":"
+			}
 		}
 
 		out <- fmt.Sprintf("%s\t%s\t%s%s", page, property, nsPrefix, title)

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -58,6 +59,33 @@ func TestReadWikiSites(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("got %q, want %q", got, tc.want)
 		}
+	}
+
+	got := make(map[string]string, 18)
+	for key, value := range sites.Sites["rmwiki"].Namespaces {
+		got[key] = fmt.Sprintf("%d,%q,%q", value.ID, value.Canonical, value.Localized)
+	}
+	want := map[string]string{
+		"":           `0,"",""`,
+		"-1":         `-1,"Special","Spezial"`,
+		"-2":         `-2,"Media","Multimedia"`,
+		"0":          `0,"",""`,
+		"1":          `1,"Talk","Discussiun"`,
+		"2":          `2,"User","Utilisader"`,
+		"4":          `4,"Project","Wikipedia"`,
+		"Discussiun": `1,"Talk","Discussiun"`,
+		"Media":      `-2,"Media","Multimedia"`,
+		"Multimedia": `-2,"Media","Multimedia"`,
+		"Project":    `4,"Project","Wikipedia"`,
+		"Special":    `-1,"Special","Spezial"`,
+		"Spezial":    `-1,"Special","Spezial"`,
+		"Talk":       `1,"Talk","Discussiun"`,
+		"User":       `2,"User","Utilisader"`,
+		"Utilisader": `2,"User","Utilisader"`,
+		"Wikipedia":  `4,"Project","Wikipedia"`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

@@ -44,7 +44,7 @@ func TestBuildTitles(t *testing.T) {
 	want := []string{
 		"Obergesteln	Q662541",
 		"Turitg	Q72",
-		"namespace-4:Pagina_principala	Q5296",
+		"Wikipedia:Pagina_principala	Q5296",
 	}
 
 	if !slices.Equal(got, want) {

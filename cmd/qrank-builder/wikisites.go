@@ -5,6 +5,7 @@ package main
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,12 +18,19 @@ import (
 	"time"
 )
 
+type Namespace struct {
+	ID        int
+	Localized string
+	Canonical string
+}
+
 // WikiSite keeps what we know about a Wikimedia site such as en.wikipedia.org.
 type WikiSite struct {
 	Key           string    // Wikimedia key, such as "enwiki"
 	Domain        string    // Internet domain, such as "en.wikipedia.org"
 	LastDumped    time.Time // Date of last complete database dump
 	InterwikiMaps []map[string]*WikiSite
+	Namespaces    map[string]*Namespace
 }
 
 type WikiSites struct {
@@ -80,6 +88,7 @@ func ReadWikiSites(client *http.Client, dumps string) (*WikiSites, error) {
 			Key:           row[globalKeyCol],
 			Domain:        decodeDomain(row[domainCol]),
 			InterwikiMaps: make([]map[string]*WikiSite, 0, 3),
+			Namespaces:    make(map[string]*Namespace, 20),
 		}
 		if dirent, ok := dumpDirs[site.Key]; !ok || !dirent.IsDir() {
 			continue
@@ -94,13 +103,15 @@ func ReadWikiSites(client *http.Client, dumps string) (*WikiSites, error) {
 				if dumped, err := time.Parse("20060102", version); err == nil {
 					if site.LastDumped.IsZero() || dumped.Before(site.LastDumped) {
 						site.LastDumped = dumped
-
 					}
 				}
 			}
 		}
 
 		if !site.LastDumped.IsZero() {
+			if err := readNamespaces(site, dumps); err != nil {
+				return nil, err
+			}
 			sites.Sites[site.Key] = site
 			sites.Domains[site.Domain] = site
 		}
@@ -252,4 +263,51 @@ func fetchInterwikiMap(client *http.Client) (map[string]string, error) {
 	}
 
 	return result, nil
+}
+
+func readNamespaces(site *WikiSite, dumps string) error {
+	ymd := site.LastDumped.Format("20060102")
+	filename := fmt.Sprintf("%s-%s-siteinfo-namespaces.json.gz", site.Key, ymd)
+	path := filepath.Join(dumps, site.Key, ymd, filename)
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	data, err := io.ReadAll(gz)
+	if err != nil {
+		return err
+	}
+
+	type namespace struct {
+		ID        int    `json:"id"`
+		Canonical string `json:"canonical"`
+		Localized string `json:"*"`
+	}
+	type query struct {
+		Namespaces map[string]namespace `json:"namespaces"`
+	}
+	type siteinfo struct {
+		Query query `json:"query"`
+	}
+	var si siteinfo
+	if err := json.Unmarshal(data, &si); err != nil {
+		return err
+	}
+
+	for key, ns := range si.Query.Namespaces {
+		n := &Namespace{ID: ns.ID, Canonical: ns.Canonical, Localized: ns.Localized}
+		site.Namespaces[key] = n
+		site.Namespaces[ns.Canonical] = n
+		site.Namespaces[ns.Localized] = n
+	}
+
+	return nil
 }
