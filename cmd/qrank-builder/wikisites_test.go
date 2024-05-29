@@ -7,10 +7,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -117,4 +119,29 @@ func (f *FakeWikiSite) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+}
+
+// https://github.com/brawer/wikidata-qrank/issues/41
+func TestReadNamespaces_Bug41(t *testing.T) {
+	var buf bytes.Buffer
+	logger = log.New(&buf, "", log.Lshortfile)
+	dumped, _ := time.Parse(time.DateOnly, "2018-01-01")
+	site := &WikiSite{
+		Key:        "alswiktionary",
+		Domain:     "als.wiktionary.org",
+		LastDumped: dumped,
+		Namespaces: make(map[string]*Namespace, 20),
+	}
+	dumps := filepath.Join("testdata", "bug_41")
+	err := readNamespaces(site, dumps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(site.Namespaces) != 0 {
+		t.Errorf("got %v, want empty map", site.Namespaces)
+	}
+	gotLog := string(buf.Bytes())
+	if !strings.Contains(gotLog, "alswiktionary") {
+		fmt.Errorf("log should contain name of malformed Wiki dump, log=%q", gotLog)
+	}
 }

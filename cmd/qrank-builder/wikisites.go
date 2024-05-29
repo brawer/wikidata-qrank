@@ -299,8 +299,12 @@ func readNamespaces(site *WikiSite, dumps string) error {
 	}
 	var si siteinfo
 	if err := json.Unmarshal(data, &si); err != nil {
+		// Intentionally logging an error without failing, because some
+		// deprecated wiki projects such as alswiktionary contain HTML
+		// instead of JSON in their `siteinfo-namespaces.json.gz` file.
+		// https://github.com/brawer/wikidata-qrank/issues/41
 		logger.Printf("malformed json: %s", path)
-		return err
+		return nil
 	}
 
 	for key, ns := range si.Query.Namespaces {
