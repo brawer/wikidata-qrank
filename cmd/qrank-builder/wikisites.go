@@ -299,6 +299,7 @@ func readNamespaces(site *WikiSite, dumps string) error {
 	}
 	var si siteinfo
 	if err := json.Unmarshal(data, &si); err != nil {
+		logger.Printf("malformed json: %s", path)
 		return err
 	}
 
