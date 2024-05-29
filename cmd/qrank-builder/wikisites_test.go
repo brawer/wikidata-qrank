@@ -142,6 +142,34 @@ func TestReadNamespaces_Bug41(t *testing.T) {
 	}
 	gotLog := string(buf.Bytes())
 	if !strings.Contains(gotLog, "alswiktionary") {
-		fmt.Errorf("log should contain name of malformed Wiki dump, log=%q", gotLog)
+		t.Errorf("log should contain name of malformed Wiki dump, log=%q", gotLog)
+	}
+}
+
+// https://github.com/brawer/wikidata-qrank/issues/41
+func TestReadNamespaces_Bug42(t *testing.T) {
+	var buf bytes.Buffer
+	logger = log.New(&buf, "", log.Lshortfile)
+	dumps, _ := os.MkdirTemp("", "*.tmp")
+	os.MkdirAll(filepath.Join(dumps, "ukwikimedia"), os.ModePerm)
+	defer os.RemoveAll(dumps)
+
+	dumped, _ := time.Parse(time.DateOnly, "2017-07-01")
+	site := &WikiSite{
+		Key:        "ukwikimedia",
+		Domain:     "www.wikimedia.org.uk",
+		LastDumped: dumped,
+		Namespaces: make(map[string]*Namespace, 2),
+	}
+	err := readNamespaces(site, dumps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(site.Namespaces) != 0 {
+		t.Errorf("got %v, want empty map", site.Namespaces)
+	}
+	gotLog := string(buf.Bytes())
+	if !strings.Contains(gotLog, "ukwikimedia") {
+		t.Errorf("log should contain name of missing namespace file, log=%q", gotLog)
 	}
 }

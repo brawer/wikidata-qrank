@@ -270,7 +270,14 @@ func readNamespaces(site *WikiSite, dumps string) error {
 	filename := fmt.Sprintf("%s-%s-siteinfo-namespaces.json.gz", site.Key, ymd)
 	path := filepath.Join(dumps, site.Key, ymd, filename)
 	file, err := os.Open(path)
-	if err != nil {
+	if os.IsNotExist(err) {
+		// Intentionally logging an error without failing, because some
+		// deprecated wiki projects such as ukwikimedia do not contain
+		// any `siteinfo-namespaces.json.gz` file in their dumps.
+		// https://github.com/brawer/wikidata-qrank/issues/42
+		logger.Printf("missing namespace file: %s", path)
+		return nil
+	} else if err != nil {
 		return err
 	}
 	defer file.Close()
@@ -303,7 +310,7 @@ func readNamespaces(site *WikiSite, dumps string) error {
 		// deprecated wiki projects such as alswiktionary contain HTML
 		// instead of JSON in their `siteinfo-namespaces.json.gz` file.
 		// https://github.com/brawer/wikidata-qrank/issues/41
-		logger.Printf("malformed json: %s", path)
+		logger.Printf("malformed namespace file: %s", path)
 		return nil
 	}
 
