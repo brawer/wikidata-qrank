@@ -40,13 +40,23 @@ func TestBuildTitles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	want := []string{
 		"Obergesteln	Q662541",
 		"Turitg	Q72",
 		"Wikipedia:Pagina_principala	Q5296",
 	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
 
+	got, err = s3.ReadLines("redirects/rmwiki-20240301-redirects.zst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []string{
+		"Main_Page	Q5296",
+		"Zürich	Q72",
+	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}

@@ -42,15 +42,15 @@ func TestLineMerger(t *testing.T) {
 		inputs string
 		want   string
 	}{
-		{"C1|D1 <empty> B2|E2 A3|B3 B5", "A3|B2|B3|B5|C1|D1|E2"},
+		{"C1|D1 <empty> B2|E2 A3|B3 B5", "➃A3|➂B2|➃B3|➄B5|➀C1|➀D1|➂E2"},
 
-		{"A B <err>", "<err>"},   // error at start
-		{"A|<err> B", "A|<err>"}, // error not at start
+		{"A B <err>", "➀<err>"},    // error at start
+		{"A|<err> B", "➀A|➁<err>"}, // error not at start
 
 		// Trigger calls to LineMerger.Advance() where the current
 		// top of heap is reaching the end of its input stream.
-		{"A A|A", "A|A|A"},
-		{"C1|C2|C3 B1|B2|B3 A1|A2", "A1|A2|B1|B2|B3|C1|C2|C3"},
+		{"A A|A", "➀A|➁A|➁A"},
+		{"C1|C2|C3 B1|B2|B3 A1|A2", "➂A1|➂A2|➁B1|➁B2|➁B3|➀C1|➀C2|➀C3"},
 	} {
 		scanners := make([]LineScanner, 0, 10)
 		names := make([]string, 0, 10)
@@ -61,16 +61,16 @@ func TestLineMerger(t *testing.T) {
 			}
 			scanner := bufio.NewScanner(&testLineReader{lines: lines})
 			scanners = append(scanners, scanner)
-			names = append(names, fmt.Sprintf("S%d", i))
+			names = append(names, string(rune(0x2780+i)))
 		}
 		merger := NewLineMerger(scanners, names)
 		result := make([]string, 0, 5)
 		for merger.Advance() {
-			result = append(result, merger.Line())
+			result = append(result, merger.Name()+merger.Line())
 		}
 		if err := merger.Err(); err != nil {
 			if err.Error() == "test error" {
-				result = append(result, "<err>")
+				result = append(result, merger.Name()+"<err>")
 			} else {
 				t.Errorf("test case %d failed; err=%v", tcIndex, err)
 			}

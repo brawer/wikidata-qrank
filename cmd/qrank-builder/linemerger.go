@@ -91,6 +91,15 @@ func (m *LineMerger) Line() string {
 	}
 }
 
+func (m *LineMerger) Name() string {
+	n := len(m.heap)
+	if n > 0 {
+		return m.heap[0].name
+	} else {
+		return ""
+	}
+}
+
 type mergee struct {
 	scanner LineScanner
 	name    string
