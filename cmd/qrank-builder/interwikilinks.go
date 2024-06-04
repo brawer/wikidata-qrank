@@ -23,8 +23,7 @@ import (
 
 // BuildInterwikiLinks builds the interwiki_links file for a WikiSite and puts it in S3 storage.
 func buildInterwikiLinks(site *WikiSite, ctx context.Context, dumps string, s3 S3) error {
-	ymd := site.LastDumped.Format("20060102")
-	destPath := fmt.Sprintf("interwiki_links/%s-%s-interwiki_links.zst", site.Key, ymd)
+	destPath := site.S3Path("interwiki_links")
 	logger.Printf("building %s", destPath)
 
 	outFile, err := os.CreateTemp("", "*-interwiki_links.zst")

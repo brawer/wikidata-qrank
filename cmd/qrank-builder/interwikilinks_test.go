@@ -36,7 +36,7 @@ func TestBuildInterwikiLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s3.ReadLines("interwiki_links/rmwiki-20240301-interwiki_links.zst")
+	got, err := s3.ReadLines(site.S3Path("interwiki_links"))
 	if err != nil {
 		t.Fatal(err)
 	}

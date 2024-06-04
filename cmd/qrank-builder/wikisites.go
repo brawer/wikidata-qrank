@@ -33,6 +33,11 @@ type WikiSite struct {
 	Namespaces    map[string]*Namespace
 }
 
+func (site *WikiSite) S3Path(filename string) string {
+	ymd := site.LastDumped.Format("20060102")
+	return fmt.Sprintf("%s/%s-%s-%s.zst", filename, site.Key, ymd, filename)
+}
+
 type WikiSites struct {
 	Sites   map[string]*WikiSite
 	Domains map[string]*WikiSite

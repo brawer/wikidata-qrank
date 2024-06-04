@@ -17,6 +17,20 @@ import (
 	"time"
 )
 
+func TestWikiSiteS3Path(t *testing.T) {
+	dumped, _ := time.Parse(time.DateOnly, "2019-08-17")
+	site := &WikiSite{
+		Key:        "hiwiki",
+		Domain:     "hi.wikipedia.org",
+		LastDumped: dumped,
+	}
+	got := site.S3Path("foo")
+	want := "foo/hiwiki-20190817-foo.zst"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestReadWikiSites(t *testing.T) {
 	client := &http.Client{Transport: &FakeWikiSite{}}
 	sites, err := ReadWikiSites(client, filepath.Join("testdata", "dumps"))

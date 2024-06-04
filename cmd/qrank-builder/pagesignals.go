@@ -27,8 +27,7 @@ import (
 
 // BuildPageSignals builds the page_signals file for a WikiSite and puts it in S3 storage.
 func buildPageSignals(site *WikiSite, ctx context.Context, dumps string, s3 S3) error {
-	ymd := site.LastDumped.Format("20060102")
-	destPath := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site.Key, ymd)
+	destPath := site.S3Path("page_signals")
 	logger.Printf("building %s", destPath)
 
 	outFile, err := os.CreateTemp("", "*-page_signals.zst")
