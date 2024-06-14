@@ -140,12 +140,18 @@ func readPageLinks(ctx context.Context, site *WikiSite, property string, dumps s
 		}
 
 		fromPage := row[fromPageCol]
-		namespace := row[namespaceCol]
 		title := row[titleCol]
 
+		// Depending on the Wikimedia software version and the wiki project,
+		// the pagelinks dump may not always have a namespace column.
+		var namespace string
+		if namespaceCol >= 0 {
+			namespace = row[namespaceCol]
+		}
+
 		var nsPrefix string
-		if namespace != "0" {
-			if ns, found := site.Namespaces[row[namespaceCol]]; found && ns.Localized != "" {
+		if len(namespace) > 0 && namespace != "0" {
+			if ns, found := site.Namespaces[namespace]; found && ns.Localized != "" {
 				nsPrefix = ns.Localized + ":"
 			}
 		}
