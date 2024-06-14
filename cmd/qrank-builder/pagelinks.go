@@ -124,6 +124,11 @@ func readPageLinks(ctx context.Context, site *WikiSite, property string, dumps s
 	namespaceCol := slices.Index(columns, "pl_namespace")
 	titleCol := slices.Index(columns, "pl_title")
 
+	if fromPageCol < 0 || namespaceCol < 0 || titleCol < 0 {
+		logger.Printf("bad pagelinks dump: %s", pageLinksPath)
+		return nil
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -141,16 +146,10 @@ func readPageLinks(ctx context.Context, site *WikiSite, property string, dumps s
 
 		fromPage := row[fromPageCol]
 		title := row[titleCol]
-
-		// Depending on the Wikimedia software version and the wiki project,
-		// the pagelinks dump may not always have a namespace column.
-		var namespace string
-		if namespaceCol >= 0 {
-			namespace = row[namespaceCol]
-		}
+		namespace := row[namespaceCol]
 
 		var nsPrefix string
-		if len(namespace) > 0 && namespace != "0" {
+		if namespace != "0" {
 			if ns, found := site.Namespaces[namespace]; found && ns.Localized != "" {
 				nsPrefix = ns.Localized + ":"
 			}
