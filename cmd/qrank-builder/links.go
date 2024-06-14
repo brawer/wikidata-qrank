@@ -4,7 +4,11 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
+	"fmt"
+	"io"
+
 	"github.com/lanrat/extsort"
 )
 
@@ -41,4 +45,37 @@ func LinkLess(a, b extsort.SortType) bool {
 	}
 
 	return false
+}
+
+type LinkWriter struct {
+	out        *bufio.Writer
+	lastSource int64
+	lastTarget int64
+}
+
+func NewLinkWriter(w io.Writer) *LinkWriter {
+	return &LinkWriter{out: bufio.NewWriter(w)}
+}
+
+func (w *LinkWriter) Write(link Link) error {
+	if link.Source == w.lastSource && link.Target == w.lastTarget {
+		return nil
+	}
+
+	if link.Source == link.Target {
+		return nil
+	}
+
+	line := fmt.Sprintf("Q%d,Q%d\n", link.Source, link.Target)
+	if _, err := w.out.WriteString(line); err != nil {
+		return err
+	}
+
+	w.lastSource = link.Source
+	w.lastTarget = link.Target
+	return nil
+}
+
+func (w *LinkWriter) Flush() error {
+	return w.out.Flush()
 }

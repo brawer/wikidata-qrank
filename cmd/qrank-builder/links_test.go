@@ -5,6 +5,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -32,5 +33,28 @@ func TestLinkLess(t *testing.T) {
 		if got := LinkLess(tc.a, tc.b); got != tc.want {
 			t.Errorf("got %v for %v, want %v", got, tc, tc.want)
 		}
+	}
+}
+
+func TestLinkWriter(t *testing.T) {
+	var buf strings.Builder
+	writer := NewLinkWriter(&buf)
+	for _, link := range []Link{
+		Link{Source: 1, Target: 2},
+		Link{Source: 1, Target: 2},
+		Link{Source: 7, Target: 7},
+		Link{Source: 7, Target: 8},
+	} {
+		if err := writer.Write(link); err != nil {
+			t.Error(err)
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		t.Error(err)
+	}
+	got := strings.Join(strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n"), "|")
+	want := "Q1,Q2|Q7,Q8"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
