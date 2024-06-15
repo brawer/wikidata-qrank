@@ -39,6 +39,8 @@ func TestBuild(t *testing.T) {
 		"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks",
 		"Q72,0,3142,550,85,186",
 		"Q5296,0,2872,0,0,0",
+		"Q54321,0,23,0,0,0",
+		"Q54322,0,24,0,0,0",
 		"Q662541,3,4973,32,9,15",
 		"Q4847311,0,0,0,0,0",
 		"Q5649951,0,0,1,0,20",
