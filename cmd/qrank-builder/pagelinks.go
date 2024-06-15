@@ -124,9 +124,8 @@ func readPageLinks(ctx context.Context, site *WikiSite, property string, dumps s
 	namespaceCol := slices.Index(columns, "pl_namespace")
 	titleCol := slices.Index(columns, "pl_title")
 
-	if fromPageCol < 0 || namespaceCol < 0 || titleCol < 0 {
-		logger.Printf("bad pagelinks dump: %s", pageLinksPath)
-		return nil
+	if namespaceCol < 0 || titleCol < 0 {
+		return joinLinkTargets(ctx, site, property, dumps, out)
 	}
 
 	for {
