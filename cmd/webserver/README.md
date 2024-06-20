@@ -21,7 +21,12 @@ scp -J sascha@bastion.wmcloud.org ./webserver sascha@172.16.0.220:bin/webserver
 ```
 
 On the server, we have the following configuration file
-in `/etc/systemd/system/qrank-webserver.service`:
+in `/etc/systemd/system/qrank-webserver.service`. The
+redacted values of `S3_KEY` and `S3_SECRET` can be retrieved
+by `ssh login.toolforge.org` followed by `become qrank` and
+then `toolforge envvars list`.
+
+[here](
 
 ```
 [Unit]
@@ -33,9 +38,10 @@ Type=simple
 Restart=always
 User=sascha
 WorkingDirectory=/home/sascha
-ExecStart=/home/sascha/bin/webserver \
-  --port=8080 \
-  --storage-key=keys/storage-key
+Environment="S3_ENDPOINT=object.eqiad1.wikimediacloud.org"
+Environment="S3_KEY=redacted"
+Environment="S3_SECRET=redacted"
+ExecStart=/home/sascha/bin/webserver --port=8080
 
 [Install]
 WantedBy=multi-user.target
