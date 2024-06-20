@@ -26,8 +26,6 @@ redacted values of `S3_KEY` and `S3_SECRET` can be retrieved
 by `ssh login.toolforge.org` followed by `become qrank` and
 then `toolforge envvars list`.
 
-[here](
-
 ```
 [Unit]
 Description=QRank Webserver
