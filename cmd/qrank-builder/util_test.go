@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
+// SPDX-FileCopyrightText: 2024 Sascha Brawer <sascha@brawer.ch>
 // SPDX-License-Identifier: MIT
 
 package main
@@ -18,6 +18,21 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 )
+
+func TestItemString(t *testing.T) {
+	for _, item := range []string{"Q1", "Q12345", "L1", "L12345"} {
+		got := ParseItem(item)
+		if got.String() != item {
+			t.Errorf("ParseItem(%q): got %s, want %s", item, got.String(), item)
+		}
+	}
+	for _, s := range []string{"", "junk", "q7", "l1", "Q8x", "L123-S3"} {
+		got := ParseItem(s)
+		if got != NoItem {
+			t.Errorf("ParseItem(%q): got %s, want NoItem", s, got.String())
+		}
+	}
+}
 
 func TestLatestDump(t *testing.T) {
 	dir := filepath.Join("testdata", "dumps", "other", "pageview_complete")

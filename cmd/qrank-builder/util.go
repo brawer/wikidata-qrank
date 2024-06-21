@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2022 Sascha Brawer <sascha@brawer.ch>
+// SPDX-FileCopyrightText: 2024 Sascha Brawer <sascha@brawer.ch>
 // SPDX-License-Identifier: MIT
 
 package main
@@ -28,6 +28,36 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
 )
+
+type Item uint64
+
+const NoItem = Item(0)
+const lexemeMask uint64 = 0x8000000000000000
+
+func ParseItem(s string) Item {
+	if len(s) < 2 {
+		return NoItem
+	}
+	n, err := strconv.ParseInt(s[1:len(s)], 10, 64)
+	if err != nil || n <= 0 {
+		return NoItem
+	}
+	if s[0] == 'Q' {
+		return Item(n)
+	}
+	if s[0] == 'L' {
+		return Item(uint64(n) | lexemeMask)
+	}
+	return NoItem
+}
+
+func (i Item) String() string {
+	if uint64(i)&lexemeMask == 0 {
+		return fmt.Sprintf("Q%d", i)
+	} else {
+		return fmt.Sprintf("L%d", uint64(i)&0x7fff_ffff_ffff_ffff)
+	}
+}
 
 // LatestDump finds the most recent Wikimedia dump file with a matching name.
 func LatestDump(dir string, re *regexp.Regexp) (string, error) {
