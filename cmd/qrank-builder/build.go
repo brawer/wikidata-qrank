@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"slices"
 	"sort"
@@ -42,7 +43,7 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 		return err
 	}
 
-	if err := buildSiteFiles(ctx, "links", buildLinks, dumps, sites, s3); err != nil {
+	if err := buildSiteFiles(ctx, "page_items", buildSite, dumps, sites, s3); err != nil {
 		return err
 	}
 
@@ -109,6 +110,28 @@ func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilde
 				return err
 			}
 		}
+	}
+
+	return nil
+}
+
+func buildSite(site *WikiSite, ctx context.Context, dumps string, s3 S3) error {
+	dest := site.S3Path("page_items") // TODO: change to "links" once implemented
+	logger.Printf("building %s", dest)
+
+	pageItems, err := buildPageItems(ctx, site, dumps)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(pageItems)
+
+	// TODO: Move generation of titles and redirects to here.
+	// Note that the sort order has changed; the ordering by page ID
+	// will allow us to replace the sort by a (much faster) merge.
+
+	// TODO: Ultimately, we want the resolved links, not any intermediate files.
+	if err := PutInStorage(ctx, pageItems, s3, "qrank", dest, "application/zstd"); err != nil {
+		return err
 	}
 
 	return nil

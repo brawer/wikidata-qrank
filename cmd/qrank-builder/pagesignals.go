@@ -470,9 +470,10 @@ func (m *pageSignalMerger) write() error {
 	return err
 }
 
-// ReadPageItems reads our page_signals file and emits lines of the form
+// ReadPageItemsOld reads our page_signals file and emits lines of the form
 // `<PageID>,<property>,<WikidataItemID>` to an output channel.
-func ReadPageItems(ctx context.Context, site *WikiSite, property string, s3 S3, out chan<- string) error {
+// TODO: Remove this method after refactoring clients to call ReadPageItems().
+func ReadPageItemsOld(ctx context.Context, site *WikiSite, property string, s3 S3, out chan<- string) error {
 	ymd := site.LastDumped.Format("20060102")
 	path := fmt.Sprintf("page_signals/%s-%s-page_signals.zst", site.Key, ymd)
 	reader, err := NewS3Reader(ctx, "qrank", path, s3)

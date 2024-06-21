@@ -45,7 +45,7 @@ func buildLinks(site *WikiSite, ctx context.Context, dumps string, s3 S3) error 
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		defer close(linesChan)
-		if err := ReadPageItems(groupCtx, site, "A", s3, linesChan); err != nil {
+		if err := ReadPageItemsOld(groupCtx, site, "A", s3, linesChan); err != nil {
 			return err
 		}
 		if err := readPageLinks(groupCtx, site, "B", dumps, linesChan); err != nil {

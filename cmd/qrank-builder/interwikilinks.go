@@ -41,7 +41,7 @@ func buildInterwikiLinks(site *WikiSite, ctx context.Context, dumps string, s3 S
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		defer close(linesChan)
-		if err := ReadPageItems(groupCtx, site, "A", s3, linesChan); err != nil {
+		if err := ReadPageItemsOld(groupCtx, site, "A", s3, linesChan); err != nil {
 			return err
 		}
 		if err := processInterwikiLinks(groupCtx, site, "B", dumps, linesChan); err != nil {
