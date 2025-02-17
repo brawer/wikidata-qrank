@@ -34,12 +34,12 @@ use QRank to display important features more prominently; [this map of Swiss cas
 
 For a **technical description** of the system, see the
 [Design Document](doc/design.md). To **download ranking data**,
-head over to [qrank.wmcloud.org](https://qrank.wmcloud.org/).
+head over to [qrank.toolforge.org](https://qrank.toolforge.org/).
 
 
 ## License
 
-*Data:* Like Wikidata, the [QRank data](https://qrank.wmcloud.org/)
+*Data:* Like Wikidata, the [QRank data](https://qrank.toolforge.org/)
 is dedicated to the Public domain
 via [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 To the extent possible under law, we have waived all copyright and related
