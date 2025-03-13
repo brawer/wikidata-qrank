@@ -6,7 +6,6 @@ module github.com/brawer/wikidata-qrank/v2
 // TODO: Update golang version. However, Wikimedia Toolforge Build Service
 // is still on golang 1.21.5; https://phabricator.wikimedia.org/T363854
 go 1.22
-
 toolchain go1.23.4
 
 // Tell the Heroku Go Buildpack (on Wikimedia Toolforge Build Service)
@@ -45,9 +44,9 @@ require (
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rs/xid v1.6.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/image v0.24.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 )
