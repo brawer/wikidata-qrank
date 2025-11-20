@@ -5,7 +5,7 @@ module github.com/brawer/wikidata-qrank/v2
 
 // TODO: Update golang version. However, Wikimedia Toolforge Build Service
 // is still on golang 1.21.5; https://phabricator.wikimedia.org/T363854
-go 1.23.0
+go 1.24.0
 
 toolchain go1.24.5
 
@@ -23,8 +23,8 @@ require (
 	github.com/lanrat/extsort v1.2.0
 	github.com/minio/minio-go/v7 v7.0.95
 	github.com/prometheus/client_golang v1.22.0
-	golang.org/x/sync v0.16.0
-	golang.org/x/text v0.27.0
+	golang.org/x/sync v0.18.0
+	golang.org/x/text v0.31.0
 )
 
 require (
@@ -45,9 +45,9 @@ require (
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/image v0.29.0 // indirect
-	golang.org/x/net v0.42.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
