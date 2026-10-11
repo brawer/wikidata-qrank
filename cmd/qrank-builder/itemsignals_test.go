@@ -235,7 +235,7 @@ func TestStoredItemSignalsVersion(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want, _ := time.Parse("2024-01-31", time.DateOnly)
+	want, _ := time.Parse(time.DateOnly, "2024-01-31")
 	if got != want {
 		t.Errorf("got %s, want 2024-01-31", got.Format(time.DateOnly))
 	}

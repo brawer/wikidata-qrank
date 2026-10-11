@@ -422,7 +422,7 @@ func StoredItemSignalsVersion(ctx context.Context, s3 S3) (time.Time, error) {
 			return time.Time{}, obj.Err
 		}
 		if match := re.FindStringSubmatch(obj.Key); match != nil {
-			if t, err := time.Parse(match[1], "20060201"); err == nil {
+			if t, err := time.Parse("20060102", match[1]); err == nil {
 				if t.After(result) {
 					result = t
 				}
