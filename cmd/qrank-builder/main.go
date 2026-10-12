@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/brawer/wikidata-qrank/v2/internal/version"
 
@@ -113,8 +114,14 @@ func NewStorageClient(keypath string) (*minio.Client, error) {
 		return nil, err
 	}
 
-	client.SetAppInfo("QRankBuilder", "0.1")
+	client.SetAppInfo("QRankBuilder", appVersion(SoftwareVersion))
 	return client, nil
+}
+
+// appVersion returns the version part of v, such as "v2.0.0+1a2b3c4d5e6f"
+// for "QRank/v2.0.0+1a2b3c4d5e6f", for the User-Agent of storage requests.
+func appVersion(v string) string {
+	return strings.TrimPrefix(v, version.Base+"/")
 }
 
 func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
