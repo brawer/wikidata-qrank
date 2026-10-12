@@ -207,3 +207,12 @@ func makeTestWebserver() *Webserver {
 
 	return &Webserver{storage: storage}
 }
+
+func TestWebserver_ServerHeader(t *testing.T) {
+	handler := withServerHeader(http.HandlerFunc(testWebserver.HandleRobotsTxt))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/robots.txt", nil))
+	if got := w.Result().Header.Get("Server"); got == "" || got != ServerVersion {
+		t.Errorf(`want "Server: %s", got "%s"`, ServerVersion, got)
+	}
+}
