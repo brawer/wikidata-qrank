@@ -43,6 +43,11 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 		return err
 	}
 
+	// buildTitles also writes redirects, which buildSiteFiles does not clean up.
+	if err := PruneStoredFiles(ctx, "redirects", 3, s3); err != nil {
+		return err
+	}
+
 	if err := buildSiteFiles(ctx, "page_items", buildSite, dumps, sites, s3); err != nil {
 		return err
 	}

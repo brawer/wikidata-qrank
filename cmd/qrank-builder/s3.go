@@ -130,3 +130,22 @@ func ListStoredFiles(ctx context.Context, filename string, s3 S3) (map[string][]
 	}
 	return result, nil
 }
+
+// PruneStoredFiles removes old versions of site-specific files from S3
+// storage, keeping only the newest `keep` versions for each site.
+func PruneStoredFiles(ctx context.Context, filename string, keep int, s3 S3) error {
+	stored, err := ListStoredFiles(ctx, filename, s3)
+	if err != nil {
+		return err
+	}
+	for site, versions := range stored {
+		for i := 0; i < len(versions)-keep; i++ {
+			path := fmt.Sprintf("%s/%s-%s-%s.zst", filename, site, versions[i], filename)
+			opts := minio.RemoveObjectOptions{}
+			if err := s3.RemoveObject(ctx, "qrank", path, opts); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
