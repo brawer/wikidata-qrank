@@ -10,4 +10,4 @@ package version
 // holds the placeholder "0.0.0", because release-please only rewrites a
 // version number on the marked line; Resolve then falls back to the source
 // revision.
-const Release = "2.1.0" // x-release-please-version
+const Release = "2.1.1" // x-release-please-version
