@@ -51,6 +51,17 @@ func TestBuild(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
+
+	qrank, err := gunzipString(s3.data["public/qrank-20240501.csv.gz"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Entity,QRank\nQ662541,3\n"; qrank != want {
+		t.Errorf("got %q, want %q", qrank, want)
+	}
+	if _, found := s3.data["public/qrank-stats-20240501.json"]; !found {
+		t.Error("Build() should store public/qrank-stats-20240501.json")
+	}
 }
 
 func TestBuildSiteFiles(t *testing.T) {
@@ -72,7 +83,10 @@ func TestBuildSiteFiles(t *testing.T) {
 	buildFunc := func(site *WikiSite, ctx context.Context, dumps string, s3 S3) error {
 		ymd := site.LastDumped.Format("20060102")
 		path := fmt.Sprintf("foobar/%s-%s-foobar.zst", site.Key, ymd)
-		s3.(*FakeS3).data[path] = []byte("fresh-" + ymd[:4])
+		fake := s3.(*FakeS3)
+		fake.mutex.Lock()
+		defer fake.mutex.Unlock()
+		fake.data[path] = []byte("fresh-" + ymd[:4])
 		return nil
 	}
 

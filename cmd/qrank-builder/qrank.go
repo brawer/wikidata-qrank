@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -21,7 +22,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
+	"github.com/minio/minio-go/v7"
 )
 
 type QRank struct {
@@ -68,18 +71,6 @@ func buildQRank(date time.Time, qviews string, outDir string, ctx context.Contex
 		logger.Printf("building %s", qrankPath)
 	}
 	start := time.Now()
-	tmpQRankPath := qrankPath + ".tmp"
-	tmpQRankFile, err := os.Create(tmpQRankPath)
-	if err != nil {
-		return "", err
-	}
-	defer tmpQRankFile.Close()
-
-	qrankWriter, err := gzip.NewWriterLevel(tmpQRankFile, 9)
-	if err != nil {
-		return "", err
-	}
-	defer qrankWriter.Close()
 
 	qviewsFile, err := os.Open(qviews)
 	if err != nil {
@@ -87,25 +78,55 @@ func buildQRank(date time.Time, qviews string, outDir string, ctx context.Contex
 	}
 	defer qviewsFile.Close()
 
+	read := func(ctx context.Context, ch chan<- extsort.SortType) error {
+		return readQViews(brotli.NewReader(qviewsFile), ch, ctx)
+	}
+	if err := writeQRankFile(ctx, qrankPath, read); err != nil {
+		return "", err
+	}
+
+	if logger != nil {
+		logger.Printf("built %s in %.1fs", qrankPath, time.Since(start).Seconds())
+	}
+
+	return qrankPath, nil
+}
+
+// WriteQRankFile sorts the QRank values sent by `read` by decreasing rank,
+// and writes them as gzip-compressed CSV to `qrankPath`.
+func writeQRankFile(ctx context.Context, qrankPath string, read func(ctx context.Context, ch chan<- extsort.SortType) error) error {
+	tmpQRankPath := qrankPath + ".tmp"
+	tmpQRankFile, err := os.Create(tmpQRankPath)
+	if err != nil {
+		return err
+	}
+	defer tmpQRankFile.Close()
+
+	qrankWriter, err := gzip.NewWriterLevel(tmpQRankFile, 9)
+	if err != nil {
+		return err
+	}
+	defer qrankWriter.Close()
+
 	ch := make(chan extsort.SortType, 50000)
 	g, subCtx := errgroup.WithContext(context.Background())
 	config := extsort.DefaultConfig()
 	config.NumWorkers = runtime.NumCPU()
 	sorter, outChan, errChan := extsort.New(ch, QRankFromBytes, QRankLess, config)
 	g.Go(func() error {
-		return readQViews(brotli.NewReader(qviewsFile), ch, subCtx)
+		return read(subCtx, ch)
 	})
 	g.Go(func() error {
 		sorter.Sort(ctx) // not subCtx, as per extsort docs
 		return nil
 	})
 	if err := g.Wait(); err != nil {
-		return "", err
+		return err
 	}
 
 	header := "Entity,QRank\n"
 	if _, err := qrankWriter.Write([]byte(header)); err != nil {
-		return "", err
+		return err
 	}
 
 	for data := range outChan {
@@ -117,32 +138,138 @@ func buildQRank(date time.Time, qviews string, outDir string, ctx context.Contex
 		buf.WriteString(strconv.FormatInt(qr.Rank, 10))
 		buf.WriteByte('\n')
 		if _, err := qrankWriter.Write(buf.Bytes()); err != nil {
-			return "", err
+			return err
 		}
 	}
 
 	if err := <-errChan; err != nil {
-		return "", err
+		return err
 	}
 
 	if err := qrankWriter.Close(); err != nil {
+		return err
 	}
 
 	if err := tmpQRankFile.Sync(); err != nil {
+		return err
 	}
 
 	if err := tmpQRankFile.Close(); err != nil {
+		return err
 	}
 
-	if err := os.Rename(tmpQRankPath, qrankPath); err != nil {
-		return "", err
+	return os.Rename(tmpQRankPath, qrankPath)
+}
+
+// BuildQRankFiles computes the QRank ranking from the item signals
+// of the given date, and puts `public/qrank-YYYYMMDD.csv.gz` and
+// `public/qrank-stats-YYYYMMDD.json` into storage. If both files
+// are already stored, they do not get re-built.
+func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
+	ymd := date.Format("20060102")
+	signalsPath := fmt.Sprintf("public/item_signals-%s.csv.zst", ymd)
+	qrankDest := fmt.Sprintf("public/qrank-%s.csv.gz", ymd)
+	statsDest := fmt.Sprintf("public/qrank-stats-%s.json", ymd)
+
+	stored := make(map[string]bool, 10)
+	for obj := range s3.ListObjects(ctx, "qrank", minio.ListObjectsOptions{Prefix: "public/"}) {
+		if obj.Err != nil {
+			return obj.Err
+		}
+		stored[obj.Key] = true
+	}
+	if stored[qrankDest] && stored[statsDest] {
+		logger.Printf("ranking in storage is still fresh: %s", qrankDest)
+		return nil
 	}
 
-	if logger != nil {
-		logger.Printf("built %s in %.1fs", qrankPath, time.Since(start).Seconds())
+	logger.Printf("building %s from %s", qrankDest, signalsPath)
+	start := time.Now()
+	tempDir, err := os.MkdirTemp("", "qrank-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempDir)
+
+	signalsFile := filepath.Join(tempDir, filepath.Base(signalsPath))
+	if err := s3.FGetObject(ctx, "qrank", signalsPath, signalsFile, minio.GetObjectOptions{}); err != nil {
+		return err
+	}
+	signals, err := os.Open(signalsFile)
+	if err != nil {
+		return err
+	}
+	defer signals.Close()
+	decompressor, err := zstd.NewReader(signals)
+	if err != nil {
+		return err
+	}
+	defer decompressor.Close()
+
+	qrankPath := filepath.Join(tempDir, filepath.Base(qrankDest))
+	read := func(ctx context.Context, ch chan<- extsort.SortType) error {
+		return readItemSignalsPageviews(ctx, decompressor, ch)
+	}
+	if err := writeQRankFile(ctx, qrankPath, read); err != nil {
+		return err
 	}
 
-	return qrankPath, nil
+	statsPath, err := buildStats(date, qrankPath, 50, 1000, tempDir)
+	if err != nil {
+		return err
+	}
+
+	if err := PutInStorage(ctx, qrankPath, s3, "qrank", qrankDest, "text/csv"); err != nil {
+		return err
+	}
+	if err := PutInStorage(ctx, statsPath, s3, "qrank", statsDest, "application/json"); err != nil {
+		return err
+	}
+	logger.Printf("built %s and %s in %.1fs", qrankDest, statsDest, time.Since(start).Seconds())
+
+	for _, re := range []string{`^public/qrank-\d{8}\.csv\.gz$`, `^public/qrank-stats-\d{8}\.json$`} {
+		if err := prunePublicFiles(ctx, regexp.MustCompile(re), 3, s3); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ReadItemSignalsPageviews reads an item_signals CSV file and sends
+// the 52-week pageviews of each item as QRank to a channel, before
+// closing that channel. Items without any pageviews are skipped,
+// as in the rankings computed before item signals existed.
+func readItemSignalsPageviews(ctx context.Context, r io.Reader, ch chan<- extsort.SortType) error {
+	defer close(ch)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "item,") {
+			continue // CSV header
+		}
+		cols := strings.SplitN(line, ",", 3)
+		if len(cols) < 2 || len(cols[0]) < 2 || cols[0][0] != 'Q' {
+			return fmt.Errorf("expected Q...,pageviews,..., got %q", line)
+		}
+		entity, err := strconv.ParseInt(cols[0][1:], 10, 64)
+		if err != nil {
+			return err
+		}
+		pageviews, err := strconv.ParseInt(cols[1], 10, 64)
+		if err != nil {
+			return err
+		}
+		if pageviews <= 0 {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case ch <- QRank{entity, pageviews}:
+		}
+	}
+	return scanner.Err()
 }
 
 func readQViews(r io.Reader, ch chan<- extsort.SortType, ctx context.Context) error {
