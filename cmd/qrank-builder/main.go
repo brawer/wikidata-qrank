@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -35,7 +34,6 @@ func main() {
 
 	var dumps = flag.String("dumps", "/public/dumps/public", "path to Wikimedia dumps")
 	var testRun = flag.Bool("testRun", false, "if true, we process only a small fraction of the data; used for testing")
-	storagekey := flag.String("", "", "path to key with storage access credentials")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -66,7 +64,7 @@ func main() {
 	logger = log.New(logfile, "", log.Ldate|log.Ltime|log.LUTC|log.Lshortfile)
 	logger.Printf("starting %s, built with %s", SoftwareVersion, runtime.Version())
 
-	storage, err := NewStorageClient(*storagekey)
+	storage, err := NewStorageClient()
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -88,26 +86,16 @@ func main() {
 	logger.Printf("qrank-builder exiting")
 }
 
-// NewStorageClient sets up a client for accessing S3-compatible object storage.
-func NewStorageClient(keypath string) (*minio.Client, error) {
-	var config struct{ Endpoint, Key, Secret string }
+// NewStorageClient sets up a client for accessing S3-compatible object
+// storage, configured by the S3_ENDPOINT, S3_KEY and S3_SECRET environment
+// variables.
+func NewStorageClient() (*minio.Client, error) {
+	endpoint := os.Getenv("S3_ENDPOINT")
+	key := os.Getenv("S3_KEY")
+	secret := os.Getenv("S3_SECRET")
 
-	if keypath == "" {
-		config.Endpoint = os.Getenv("S3_ENDPOINT")
-		config.Key = os.Getenv("S3_KEY")
-		config.Secret = os.Getenv("S3_SECRET")
-	} else {
-		data, err := os.ReadFile(keypath)
-		if err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(data, &config); err != nil {
-			return nil, err
-		}
-	}
-
-	client, err := minio.New(config.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.Key, config.Secret, ""),
+	client, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(key, secret, ""),
 		Secure: true,
 	})
 	if err != nil {
