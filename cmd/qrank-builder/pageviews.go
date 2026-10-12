@@ -254,7 +254,7 @@ func readDailyPageviews(ctx context.Context, path string, out chan<- string) err
 	defer file.Close()
 
 	reader, err := bzip2.NewReader(file, &bzip2.ReaderConfig{})
-	if err != err {
+	if err != nil {
 		return err
 	}
 	defer reader.Close()

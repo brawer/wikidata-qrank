@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"reflect"
@@ -26,8 +27,15 @@ func TestBuild(t *testing.T) {
 	dumps := filepath.Join("testdata", "dumps")
 	client := &http.Client{Transport: &FakeWikiSite{}}
 	s3 := NewFakeS3()
-	if err := Build(client, dumps /*numWeeks*/, 1, s3); err != nil {
+	if err := Build(client, dumps /*numWeeks*/, 2, s3); err != nil {
 		t.Fatal(err)
+	}
+
+	for _, week := range []string{"2023-W11", "2023-W12"} {
+		path := "pageviews/pageviews-" + week + ".zst"
+		if _, found := s3.data[path]; !found {
+			t.Errorf("Build() should store %s", path)
+		}
 	}
 
 	got, err := s3.ReadLines("public/item_signals-20240501.csv.zst")
@@ -37,8 +45,8 @@ func TestBuild(t *testing.T) {
 
 	want := []string{
 		"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks",
-		"Q72,0,3142,550,85,186",
-		"Q5296,0,2872,0,0,0",
+		"Q72,3,3142,550,85,186",
+		"Q5296,4,2872,0,0,0",
 		"Q54321,0,23,0,0,0",
 		"Q54322,0,24,0,0,0",
 		"Q662541,3,4973,32,9,15",
@@ -52,15 +60,45 @@ func TestBuild(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
+	// Sorted by decreasing QRank; ties by increasing numeric entity ID,
+	// so Q72 comes before Q662541. Items without pageviews are omitted.
 	qrank, err := gunzipString(s3.data["public/qrank-20240501.csv.gz"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "Entity,QRank\nQ662541,3\n"; qrank != want {
+	if want := "Entity,QRank\nQ5296,4\nQ72,3\nQ662541,3\n"; qrank != want {
 		t.Errorf("got %q, want %q", qrank, want)
 	}
-	if _, found := s3.data["public/qrank-stats-20240501.json"]; !found {
-		t.Error("Build() should store public/qrank-stats-20240501.json")
+
+	// Median is the index of the median item in Samples.
+	stats := string(s3.data["public/qrank-stats-20240501.json"])
+	wantStats := `{"Median":1,"Samples":[["Q5296",1,4],["Q72",2,3],["Q662541",3,3]]}`
+	if stats != wantStats {
+		t.Errorf("got stats %s, want %s", stats, wantStats)
+	}
+
+	// A second run on the same inputs should find everything fresh
+	// and leave the stored files exactly as they were.
+	before := make(map[string][]byte, len(s3.data))
+	for path, content := range s3.data {
+		before[path] = content
+	}
+	if err := Build(client, dumps /*numWeeks*/, 2, s3); err != nil {
+		t.Fatal(err)
+	}
+	if !maps.EqualFunc(before, s3.data, bytes.Equal) {
+		for path := range s3.data {
+			if _, found := before[path]; !found {
+				t.Errorf("second Build() added %s", path)
+			} else if !bytes.Equal(before[path], s3.data[path]) {
+				t.Errorf("second Build() changed %s", path)
+			}
+		}
+		for path := range before {
+			if _, found := s3.data[path]; !found {
+				t.Errorf("second Build() removed %s", path)
+			}
+		}
 	}
 }
 
