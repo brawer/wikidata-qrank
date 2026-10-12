@@ -8,6 +8,8 @@ License: CC0-1.0
 
 # release-please's config and manifest are JSON, which cannot carry an SPDX
 # header comment; the manifest is also rewritten by the bot on every release.
-Files: release-please-config.json .release-please-manifest.json
+# CHANGELOG.md is created and maintained by release-please, which puts its
+# first entry above any existing header, so it carries no SPDX header either.
+Files: release-please-config.json .release-please-manifest.json CHANGELOG.md
 Copyright: 2026 Sascha Brawer <sascha@brawer.ch>
 License: MIT
