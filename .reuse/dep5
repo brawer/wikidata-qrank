@@ -5,3 +5,9 @@ Source: https://github.com/brawer/wikidata-qrank
 Files: cmd/qrank-builder/testdata/dumps/*
 Copyright: 2024 Sascha Brawer <sascha@brawer.ch>
 License: CC0-1.0
+
+# release-please's config and manifest are JSON, which cannot carry an SPDX
+# header comment; the manifest is also rewritten by the bot on every release.
+Files: release-please-config.json .release-please-manifest.json
+Copyright: 2026 Sascha Brawer <sascha@brawer.ch>
+License: MIT

@@ -10,19 +10,4 @@ The webserver handles requests for [qrank.toolforge.org](https://qrank.toolforge
 
 ## Release instructions
 
-We should set up an automatic release process, but are blocked on
-[T194332](https://phabricator.wikimedia.org/T194332). Meanwhile,
-here’s how to manually push a new version of the binary to the server.
-
-```bash
-GOOS=linux go build ./cmd/webserver
-scp webserver sascha@bastion.toolforge.org:/data/project/qrank/bin/webserver
-```
-
-To restart the webserver:
-
-```bash
-ssh bastion.toolforge.org
-become qrank
-toolforge webservice bookworm start /data/project/qrank/bin/webserver
-```
+Releases are automated; see [RELEASING.md](../../RELEASING.md).

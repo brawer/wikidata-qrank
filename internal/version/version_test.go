@@ -43,11 +43,11 @@ func TestRevision(t *testing.T) {
 	if rev == "" {
 		return
 	}
-	want := "QRank/v" + Release + "+" + rev[:12]
+	want := "QRank/v" + release() + "+" + rev[:12]
 	if modified {
 		want += "-modified"
 	}
-	if Release == "" {
+	if release() == "" {
 		want = "QRank/git-" + rev[:12]
 		if modified {
 			want += "-modified"
@@ -69,8 +69,8 @@ func TestResolveRealBuild(t *testing.T) {
 	// toolchain that does stamp one, and against Release being cleared.
 	got := Resolve(Base)
 	var re *regexp.Regexp
-	if Release != "" {
-		re = regexp.MustCompile(`^QRank/v` + regexp.QuoteMeta(Release) + `(\+[0-9a-f]{7,12}(-modified)?)?$`)
+	if release() != "" {
+		re = regexp.MustCompile(`^QRank/v` + regexp.QuoteMeta(release()) + `(\+[0-9a-f]{7,12}(-modified)?)?$`)
 	} else {
 		re = regexp.MustCompile(`^QRank(/git-[0-9a-f]{7,12}(-modified)?)?$`)
 	}

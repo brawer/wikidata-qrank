@@ -14,14 +14,22 @@ const Base = "QRank"
 // Resolve returns the identifier to report for v:
 //
 //   - a linker flag that set v at build time (v != Base) is used verbatim;
-//   - otherwise, on a release build ([Release] is set) it returns
+//   - otherwise, on a release build ([Release] is set and not "0.0.0") it returns
 //     "QRank/v<release>", with the source revision appended as
 //     SemVer build metadata when the toolchain recorded one, e.g.
 //     "QRank/v0.1.2+1a2b3c4d5e6f" ("…-modified" if the tree was dirty);
 //   - otherwise it returns "QRank/git-<revision>", or the bare Base
 //     when no revision was recorded (e.g. a `go test` binary).
 func Resolve(v string) string {
-	return resolve(v, Release, revision())
+	return resolve(v, release(), revision())
+}
+
+// release returns [Release], or "" before the first release.
+func release() string {
+	if Release == "0.0.0" {
+		return ""
+	}
+	return Release
 }
 
 func resolve(v, release, rev string) string {
