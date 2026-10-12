@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/brawer/wikidata-qrank/compare/v2.1.0...v2.1.1) (2026-10-12)
+
+
+### 🐞 Fixes
+
+* **builder:** remove the nameless storage key flag ([0ea528e](https://github.com/brawer/wikidata-qrank/commit/0ea528eda94a9359f83b929a13a5462fe3839f3a)), closes [#84](https://github.com/brawer/wikidata-qrank/issues/84)
+
 ## [2.1.0](https://github.com/brawer/wikidata-qrank/compare/v2.0.1...v2.1.0) (2026-10-12)
 
 
