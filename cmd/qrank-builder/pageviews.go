@@ -356,10 +356,12 @@ func buildPageviews(ctx context.Context, dumps string, numWeeks int, s3 S3) ([]s
 	}
 	defer os.RemoveAll(tempDir)
 
+	oldestWeek := ""
 	for i := 0; i < numWeeks; i++ {
 		day := latestSunday.AddDate(0, 0, -7*i)
 		year, week := day.ISOWeek()
 		weekString := fmt.Sprintf("%04d-W%02d", year, week)
+		oldestWeek = weekString
 		fileName := "pageviews-" + weekString + ".zst"
 		destPath := "pageviews/" + fileName
 		result = append(result, destPath)
@@ -373,6 +375,16 @@ func buildPageviews(ctx context.Context, dumps string, numWeeks int, s3 S3) ([]s
 			defer os.Remove(tempFile)
 
 			if err := PutInStorage(ctx, tempFile, s3, "qrank", destPath, "application/zstd"); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Remove weekly files that have fallen out of the time window.
+	for _, weekString := range stored {
+		if weekString < oldestWeek {
+			path := "pageviews/pageviews-" + weekString + ".zst"
+			if err := s3.RemoveObject(ctx, "qrank", path, minio.RemoveObjectOptions{}); err != nil {
 				return nil, err
 			}
 		}

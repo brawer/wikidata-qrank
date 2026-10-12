@@ -173,6 +173,12 @@ func TestBuildPageviews(t *testing.T) {
 	if _, found := s3.data["pageviews/pageviews-2023-W12.zst"]; !found {
 		t.Errorf("buildPageviews() should upload newly computed 2023-W12 file")
 	}
+	if _, found := s3.data["pageviews/pageviews-2011-W51.zst"]; found {
+		t.Errorf("buildPageviews() should remove 2011-W51 file, which is out of the time window")
+	}
+	if _, found := s3.data["pageviews/pageviews-2023-W09.zst"]; !found {
+		t.Errorf("buildPageviews() should keep 2023-W09 file, which is still within the time window")
+	}
 }
 
 func TestStoredPageviews(t *testing.T) {

@@ -241,6 +241,38 @@ func TestStoredItemSignalsVersion(t *testing.T) {
 	}
 }
 
+func TestPruneItemSignals(t *testing.T) {
+	s3 := NewFakeS3()
+	for _, path := range []string{
+		"public/item_signals-20250406.csv.zst",
+		"public/item_signals-20250413.csv.zst",
+		"public/item_signals-20250420.csv.zst",
+		"public/item_signals-20250427.csv.zst",
+		"public/qrank-20240311.csv.gz",
+	} {
+		s3.data[path] = []byte("content")
+	}
+
+	if err := pruneItemSignals(context.Background(), 3, s3); err != nil {
+		t.Fatal(err)
+	}
+
+	got := make([]string, 0, len(s3.data))
+	for path := range s3.data {
+		got = append(got, path)
+	}
+	slices.Sort(got)
+	want := []string{
+		"public/item_signals-20250413.csv.zst",
+		"public/item_signals-20250420.csv.zst",
+		"public/item_signals-20250427.csv.zst",
+		"public/qrank-20240311.csv.gz",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestItemSignalsJoiner(t *testing.T) {
 	ch := make(chan extsort.SortType, 20)
 	joiner := itemSignalsJoiner{out: ch}

@@ -253,3 +253,38 @@ func TestListStoredFiles(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
+
+func TestPruneStoredFiles(t *testing.T) {
+	s3 := NewFakeS3()
+	for _, path := range []string{
+		"foo/rmwiki-20010101-foo.zst",
+		"foo/rmwiki-20020101-foo.zst",
+		"foo/rmwiki-20030101-foo.zst",
+		"foo/rmwiki-20040101-foo.zst",
+		"foo/rmwiki-20050101-foo.zst",
+		"foo/enwiki-20240101-foo.zst",
+		"bar/rmwiki-19990101-bar.zst",
+	} {
+		s3.data[path] = []byte("content")
+	}
+
+	if err := PruneStoredFiles(context.Background(), "foo", 3, s3); err != nil {
+		t.Fatal(err)
+	}
+
+	got := make([]string, 0, len(s3.data))
+	for path := range s3.data {
+		got = append(got, path)
+	}
+	slices.Sort(got)
+	want := []string{
+		"bar/rmwiki-19990101-bar.zst",
+		"foo/enwiki-20240101-foo.zst",
+		"foo/rmwiki-20030101-foo.zst",
+		"foo/rmwiki-20040101-foo.zst",
+		"foo/rmwiki-20050101-foo.zst",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}

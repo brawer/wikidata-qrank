@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -148,6 +149,9 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 		s := stored.Format(time.DateOnly)
 		n := newest.Format(time.DateOnly)
 		logger.Printf("signals in storage are still fresh: stored=%s, newest=%s", s, n)
+		if err := pruneItemSignals(ctx, 3, s3); err != nil {
+			return time.Time{}, err
+		}
 		return stored, nil
 	}
 
@@ -284,6 +288,10 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 		return time.Time{}, err
 	}
 
+	if err := pruneItemSignals(ctx, 3, s3); err != nil {
+		return time.Time{}, err
+	}
+
 	return newest, nil
 }
 
@@ -409,6 +417,30 @@ func ItemSignalsVersion(pageviews []string, sites *WikiSites) time.Time {
 	}
 
 	return date
+}
+
+// PruneItemSignals removes old signals files from storage,
+// keeping only the newest `keep` versions.
+// https://github.com/brawer/wikidata-qrank/issues/39
+func pruneItemSignals(ctx context.Context, keep int, s3 S3) error {
+	re := regexp.MustCompile(`^public/item_signals-(\d{8}).csv.zst$`)
+	paths := make([]string, 0, keep+1)
+	opts := minio.ListObjectsOptions{Prefix: "public/"}
+	for obj := range s3.ListObjects(ctx, "qrank", opts) {
+		if obj.Err != nil {
+			return obj.Err
+		}
+		if re.MatchString(obj.Key) {
+			paths = append(paths, obj.Key)
+		}
+	}
+	sort.Strings(paths)
+	for i := 0; i < len(paths)-keep; i++ {
+		if err := s3.RemoveObject(ctx, "qrank", paths[i], minio.RemoveObjectOptions{}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // StoredItemSignalsVersion returns the version of the signals file in storage.
