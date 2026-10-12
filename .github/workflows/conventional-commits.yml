@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Sascha Brawer <sascha@brawer.ch>
+# SPDX-License-Identifier: MIT
+#
+# PRs are squash-merged, so the PR title becomes the commit subject on main.
+# This checks it follows Conventional Commits (https://www.conventionalcommits.org).
+
+name: Conventional Commits
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        env:
+          # Passed via env, never interpolated into the script: the title is
+          # contributor-controlled text.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          pattern='^(feat|fix|docs|refactor|perf|test|build|chore|ci)(\([a-z0-9._-]+\))?!?: .+'
+          if [[ "$PR_TITLE" =~ $pattern ]]; then
+            echo "OK: $PR_TITLE"
+            exit 0
+          fi
+          cat >&2 <<'EOF'
+          ::error::PR title is not a Conventional Commit. See https://www.conventionalcommits.org.
+
+          Expected:  <type>[(scope)][!]: <description>
+          Types:     feat fix docs refactor perf test build chore ci
+          Examples:
+            fix: handle a missing pageviews dump
+            feat(webserver): report the version in the Server header
+            docs: refresh the release runbook
+          EOF
+          printf '::error::got: %s\n' "$PR_TITLE" >&2
+          exit 1
