@@ -21,7 +21,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
 	"github.com/minio/minio-go/v7"
@@ -53,43 +52,6 @@ func QRankLess(a, b extsort.SortType) bool {
 	} else {
 		return x.Entity < y.Entity
 	}
-}
-
-func buildQRank(date time.Time, qviews string, outDir string, ctx context.Context) (string, error) {
-	qrankPath := filepath.Join(
-		outDir,
-		fmt.Sprintf("qrank-%04d%02d%02d.gz", date.Year(), date.Month(), date.Day()))
-	_, err := os.Stat(qrankPath)
-	if err == nil {
-		return qrankPath, nil // use pre-existing file
-	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-
-	if logger != nil {
-		logger.Printf("building %s", qrankPath)
-	}
-	start := time.Now()
-
-	qviewsFile, err := os.Open(qviews)
-	if err != nil {
-		return "", err
-	}
-	defer qviewsFile.Close()
-
-	read := func(ctx context.Context, ch chan<- extsort.SortType) error {
-		return readQViews(brotli.NewReader(qviewsFile), ch, ctx)
-	}
-	if err := writeQRankFile(ctx, qrankPath, read); err != nil {
-		return "", err
-	}
-
-	if logger != nil {
-		logger.Printf("built %s in %.1fs", qrankPath, time.Since(start).Seconds())
-	}
-
-	return qrankPath, nil
 }
 
 // WriteQRankFile sorts the QRank values sent by `read` by decreasing rank,
@@ -270,37 +232,4 @@ func readItemSignalsPageviews(ctx context.Context, r io.Reader, ch chan<- extsor
 		}
 	}
 	return scanner.Err()
-}
-
-func readQViews(r io.Reader, ch chan<- extsort.SortType, ctx context.Context) error {
-	defer close(ch)
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			return fmt.Errorf("expected 2 columns, got %q", line)
-		}
-		entity := fields[0]
-		if len(entity) < 2 || entity[0] != 'Q' {
-			return fmt.Errorf("expected Q..., got %q", line)
-		}
-		e, err := strconv.ParseInt(entity[1:], 10, 64)
-		if err != nil {
-			return err
-		}
-		c, err := strconv.ParseInt(fields[1], 10, 64)
-		if err != nil {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case ch <- QRank{e, c}:
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-	return nil
 }

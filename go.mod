@@ -14,7 +14,6 @@ go 1.26.9
 // +heroku install ./cmd/qrank-builder ./cmd/webserver
 
 require (
-	github.com/andybalholm/brotli v1.2.6
 	github.com/dsnet/compress v0.0.1
 	github.com/fogleman/gg v1.3.0
 	github.com/klauspost/compress v1.20.3
