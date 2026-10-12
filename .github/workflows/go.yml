@@ -6,6 +6,7 @@ name: CI
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
@@ -30,3 +31,37 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+  # On a release tag (vX.Y.Z, pushed by release-please), ask the Toolforge
+  # components API to rebuild the image and recreate the components
+  # (see toolforge.yaml, RELEASING.md).
+  deploy:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+    - name: Trigger and await the Toolforge deployment
+      env:
+        TOKEN: ${{ secrets.TOOLS_DEPLOY_TOKEN }}
+        TAG: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        api="https://api.svc.toolforge.org/components/v1/tool/qrank/deployment"
+        body=$(jq -n --arg d "release $TAG" '{description: $d}')
+        resp=$(curl --fail-with-body -sS -X POST --json "$body" "$api?token=$TOKEN")
+        echo "$resp" | jq .
+        id=$(echo "$resp" | jq -r '.data.deploy_id')
+        echo "deployment: $id"
+        for _ in $(seq 1 80); do
+          sleep 15
+          status=$(curl --fail-with-body -sS "$api/$id?token=$TOKEN" | jq -r '.data.status')
+          echo "status: $status"
+          case "$status" in
+            pending|running) ;;
+            successful) echo "deployed $TAG"; exit 0 ;;
+            *) echo "deployment $status"; exit 1 ;;
+          esac
+        done
+        echo "gave up waiting for deployment $id"
+        exit 1

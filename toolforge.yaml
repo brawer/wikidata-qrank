@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: 2026 Sascha Brawer <sascha@brawer.ch>
+# SPDX-License-Identifier: MIT
+#
+# Toolforge "components" deployment config.
+# https://wikitech.wikimedia.org/wiki/Help:Toolforge/Deploy_your_tool
+#
+# One buildpack image is built from this repository and run as two
+# components: the public web server (a continuous job, published at
+# https://qrank.toolforge.org/) and the data-processing pipeline
+# (a daily scheduled job). CI redeploys on each release tag with
+#   POST https://api.svc.toolforge.org/components/v1/tool/qrank/deployment
+# See RELEASING.md.
+#
+# Both components read the S3_ENDPOINT, S3_KEY and S3_SECRET environment
+# variables, which are set with `toolforge envvars`.
+
+# yaml-language-server: $schema=https://gitlab.wikimedia.org/repos/cloud/toolforge/components-api/-/raw/main/openapi/tool-config-schema.json
+config_version: v1beta1
+source_url: https://raw.githubusercontent.com/brawer/wikidata-qrank/main/toolforge.yaml
+
+components:
+  webserver:
+    component_type: continuous
+    build:
+      repository: https://github.com/brawer/wikidata-qrank
+      ref: main
+    run:
+      # Absolute path: the buildpack image does not put the binaries on
+      # PATH (Wikimedia T363417), which is also why the Procfile spells
+      # them out.
+      command: /layers/heroku_go/go_target/bin/webserver --port 8000 --workdir /data/project/qrank/webserver-workdir
+      publish: "/" # serves https://qrank.toolforge.org/
+      port: 8000
+      replicas: 1
+      # The webserver caches the files it serves in --workdir on NFS,
+      # as it did when it ran as a Toolforge webservice.
+      mount: all
+      health_check_http: /robots.txt
+      cpu: "1"
+      memory: 512M
+
+  qrank-builder:
+    component_type: scheduled
+    build:
+      reuse_from: webserver
+    run:
+      # qrank-builder changes to $TOOL_DATA_DIR on startup and reads the
+      # Wikimedia dumps from /public/dumps/public, so it needs NFS.
+      command: /layers/heroku_go/go_target/bin/qrank-builder
+      schedule: "@daily"
+      mount: all
+      retry: 0
+      cpu: "3"
+      memory: 3G
+      emails: onfailure
