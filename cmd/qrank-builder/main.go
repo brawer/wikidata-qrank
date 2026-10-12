@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
 
 	"github.com/brawer/wikidata-qrank/v2/internal/version"
 
@@ -120,105 +119,4 @@ func NewStorageClient(keypath string) (*minio.Client, error) {
 
 func computeQRank(dumpsPath string, testRun bool, storage *minio.Client) error {
 	return Build(&http.Client{}, dumpsPath /*numWeeks*/, 52, storage)
-
-	// TODO: Old code starts here, remove after new implementation is done.
-
-	ctx := context.Background()
-	outDir := "cache"
-	if testRun {
-		outDir = "cache-testrun"
-	}
-
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		return err
-	}
-
-	if err := CleanupCache(outDir); err != nil {
-		return err
-	}
-
-	edate, epath, err := findEntitiesDump(dumpsPath)
-	if err != nil {
-		return err
-	}
-
-	pageviews, err := processPageviews(testRun, dumpsPath, edate, outDir, ctx)
-	if err != nil {
-		return err
-	}
-
-	sitelinks, err := processEntities(testRun, epath, edate, outDir, ctx)
-	if err != nil {
-		return err
-	}
-
-	qviews, err := buildQViews(testRun, edate, sitelinks, pageviews, outDir, ctx)
-	if err != nil {
-		return err
-	}
-
-	qrank, err := buildQRank(edate, qviews, outDir, ctx)
-	if err != nil {
-		return err
-	}
-
-	stats, err := buildStats(edate, qrank, 50, 1000, outDir)
-	if err != nil {
-		return err
-	}
-
-	if storage != nil {
-		if err := upload(edate, qrank, stats, storage); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// Upload puts the final output files into an S3-compatible object storage.
-func upload(date time.Time, qrank, stats string, storage *minio.Client) error {
-	ymd := date.Format("20060102")
-	qrankDest := fmt.Sprintf("public/qrank-%s.csv.gz", ymd)
-	if err := uploadFile(qrankDest, qrank, "text/csv", storage); err != nil {
-		return err
-	}
-
-	statsDest := fmt.Sprintf("public/qrank-stats-%s.json", ymd)
-	if err := uploadFile(statsDest, stats, "application/json", storage); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// UploadFile puts one single file into an S3-compatible object storage.
-func uploadFile(dest, src, contentType string, storage *minio.Client) error {
-	ctx := context.Background()
-	bucket := "qrank"
-
-	// Check if the output file already exists in storage.
-	_, err := storage.StatObject(ctx, bucket, dest, minio.StatObjectOptions{})
-	if err == nil {
-		logmsg := fmt.Sprintf("Already in object storage: %s/%s", bucket, dest)
-		fmt.Println(logmsg)
-		if logger != nil {
-			logger.Println(logmsg)
-		}
-		return nil
-	}
-
-	opts := minio.PutObjectOptions{ContentType: contentType}
-	_, err = storage.FPutObject(ctx, bucket, dest, src, opts)
-	if err != nil {
-		return err
-	}
-
-	logmsg := fmt.Sprintf("Uploaded to object storage: %s/%s", bucket, dest)
-	fmt.Println(logmsg)
-	if logger != nil {
-		logger.Println(logmsg)
-	}
-
-	return nil
 }

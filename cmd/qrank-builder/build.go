@@ -52,8 +52,12 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 		return err
 	}
 
-	_, err = buildItemSignals(ctx, pageviews, sites, s3)
+	signalsDate, err := buildItemSignals(ctx, pageviews, sites, s3)
 	if err != nil {
+		return err
+	}
+
+	if err := buildQRankFiles(ctx, signalsDate, s3); err != nil {
 		return err
 	}
 

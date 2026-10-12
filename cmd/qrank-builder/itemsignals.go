@@ -424,6 +424,13 @@ func ItemSignalsVersion(pageviews []string, sites *WikiSites) time.Time {
 // https://github.com/brawer/wikidata-qrank/issues/39
 func pruneItemSignals(ctx context.Context, keep int, s3 S3) error {
 	re := regexp.MustCompile(`^public/item_signals-(\d{8}).csv.zst$`)
+	return prunePublicFiles(ctx, re, keep, s3)
+}
+
+// PrunePublicFiles removes old versions of public files from storage,
+// keeping only the newest `keep` files whose path matches `re`.
+// File names must contain a date, so that they sort by version.
+func prunePublicFiles(ctx context.Context, re *regexp.Regexp, keep int, s3 S3) error {
 	paths := make([]string, 0, keep+1)
 	opts := minio.ListObjectsOptions{Prefix: "public/"}
 	for obj := range s3.ListObjects(ctx, "qrank", opts) {
