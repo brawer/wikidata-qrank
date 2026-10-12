@@ -33,13 +33,10 @@ registry.
 ## Choosing the version number
 
 The Go module path is `github.com/brawer/wikidata-qrank/v2`, so releases are
-`v2.y.z`. The first release is forced to `2.0.0` by `"release-as"` in
-[`release-please-config.json`](release-please-config.json); **remove that line
-after the first release**, or every later release PR will also say 2.0.0.
-History up to `bootstrap-sha` (the commit that introduced the PR title check)
-is not scanned.
+`v2.y.z`. The first release, v2.0.0, was forced with a one-off
+`"release-as"` in [`release-please-config.json`](release-please-config.json).
 
-After that, release-please picks the bump from the commit types since the last
+release-please picks the bump from the commit types since the last
 release: `fix:`/`perf:` → patch, `feat:` → minor, and a `!` after the type or
 a `BREAKING CHANGE:` footer → major.
 
