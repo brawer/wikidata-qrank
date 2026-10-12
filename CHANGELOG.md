@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/brawer/wikidata-qrank/compare/v2.0.0...v2.0.1) (2026-10-12)
+
+
+### 🐞 Fixes
+
+* **builder:** prune old redirects, pageviews and item_signals from storage ([fa92b1a](https://github.com/brawer/wikidata-qrank/commit/fa92b1afc21d21dbe6a024526f475fa2d4d33c08))
+
 ## 2.0.0 (2026-10-12)
 
 
