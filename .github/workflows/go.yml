@@ -9,11 +9,19 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
+  # Weekly, so newly published vulnerabilities (govulncheck) surface even
+  # when nothing is pushed.
+  schedule:
+    - cron: "23 5 * * 1"
+
+permissions: {}
 
 jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
     - uses: actions/checkout@v7
 
@@ -28,6 +36,14 @@ jobs:
     - name: Build
       run: |
         go build -ldflags="-s -w" -v ./cmd/...
+
+    - name: Install govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+
+    # Known vulnerabilities that the code actually calls, in dependencies
+    # and in the standard library of the Go version pinned in go.mod.
+    - name: Check for known vulnerabilities
+      run: govulncheck ./...
 
     - name: Test
       run: go test -v ./...
