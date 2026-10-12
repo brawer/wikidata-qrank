@@ -120,9 +120,9 @@ the next release with no bastion step.
      **secret** `RELEASE_PLEASE_APP_PRIVATE_KEY` (a private key `.pem`
      generated on the App page). Until the variable exists, the
      `release-please` workflow is skipped.
-- **Toolforge deploy token**: create a components API deploy token for the
-  `qrank` tool on the bastion and store it as the `TOOLS_DEPLOY_TOKEN`
-  repository secret.
+- **Toolforge deploy token**: on the bastion, `become qrank` and run
+  `toolforge components deploy-token create`; store the printed token as the
+  `TOOLS_DEPLOY_TOKEN` repository secret.
 - **Switch Toolforge over to components**, once, on the bastion:
 
   ```sh
