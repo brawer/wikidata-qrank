@@ -10,17 +10,31 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/brawer/wikidata-qrank/v2/internal/version"
 	//"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// ServerVersion is returned to HTTP clients as the Server header. main()
+// resolves it via internal/version: a released build reports its version,
+// any other build the source revision. A linker flag
+// (-ldflags "-X main.ServerVersion=…") still overrides it if set.
+var ServerVersion = version.Base
+
 func main() {
+	ServerVersion = version.Resolve(ServerVersion)
 	port := flag.Int("port", 0, "port for serving HTTP requests")
 	workdir := flag.String("workdir", "webserver-workdir", "path to working directory on local disk")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(ServerVersion)
+		return
+	}
 
 	if *port == 0 {
 		*port, _ = strconv.Atoi(os.Getenv("PORT"))
@@ -45,9 +59,20 @@ func main() {
 	http.HandleFunc("/robots.txt", server.HandleRobotsTxt)
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/download/", server.HandleDownload)
-	log.Printf("Listening for HTTP requests on port %d", *port)
-	http.ListenAndServe(":"+strconv.Itoa(*port), nil)
+	log.Printf("%s, built with %s, listening for HTTP requests on port %d",
+		ServerVersion, runtime.Version(), *port)
+	err = http.ListenAndServe(":"+strconv.Itoa(*port), withServerHeader(http.DefaultServeMux))
 	cancel()
+	log.Fatalf("HTTP server stopped: %v", err)
+}
+
+// withServerHeader wraps h so that every response, including errors and
+// /metrics, carries ServerVersion in its Server header.
+func withServerHeader(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", ServerVersion)
+		h.ServeHTTP(w, r)
+	})
 }
 
 type Webserver struct {
