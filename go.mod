@@ -3,9 +3,14 @@
 
 module github.com/brawer/wikidata-qrank/v2
 
-// TODO: Update golang version. However, Wikimedia Toolforge Build Service
-// is still on golang 1.21.5; https://phabricator.wikimedia.org/T363854
-go 1.26.9
+// The Heroku Go Buildpack on Toolforge installs the Go release named in
+// the `go` line, and its list of releases lags behind Go's (heroku/go 2.2.3
+// knows up to 1.26.3). If it does not know the release, the build fails.
+// The toolchain line makes that Go download and build with a newer, patched
+// release; CI's setup-go and govulncheck use it too.
+go 1.26.3
+
+toolchain go1.26.9
 
 // Tell the Heroku Go Buildpack (on Wikimedia Toolforge Build Service)
 // what binaries we want to have installed into the production container.
