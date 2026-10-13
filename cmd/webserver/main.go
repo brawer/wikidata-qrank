@@ -147,6 +147,14 @@ func (ws *Webserver) HandleDownload(w http.ResponseWriter, req *http.Request) {
 		h.Set("ETag", fmt.Sprintf(`"%s"`, c.ETag))
 		h.Set("Content-Type", c.ContentType)
 		h.Set("Access-Control-Allow-Origin", "*")
+		if c.Immutable {
+			h.Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		if c.Canonical != "" {
+			// Tell clients of an undated alias, such as qrank.csv.gz,
+			// which dated version they are getting.
+			h.Set("Link", fmt.Sprintf(`</download/%s>; rel="canonical"`, c.Canonical))
+		}
 		http.ServeContent(w, req, "", c.LastModified, c)
 
 	case http.MethodOptions: // CORS pre-flight

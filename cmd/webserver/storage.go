@@ -6,14 +6,18 @@ package main
 import (
 	"context"
 	"encoding/base32"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/brawer/wikidata-qrank/v2/internal/version"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -32,6 +36,15 @@ type localFile struct {
 	ContentType  string
 	ETag         string
 	LastModified time.Time
+
+	// Canonical is the dated name of the file, such as
+	// "qrank-20261004.csv.gz", if it is served under an undated alias
+	// such as "qrank.csv.gz". Empty for files served under their own name.
+	Canonical string
+
+	// Immutable is true for files served under a dated name, whose
+	// content never changes.
+	Immutable bool
 }
 
 // StorageClient is the subset of minio.Client used in this program.
@@ -60,7 +73,7 @@ func NewStorage(workdir string) (*Storage, error) {
 		return nil, err
 	}
 
-	client.SetAppInfo("QRankWebserver", "0.1")
+	client.SetAppInfo("QRankWebserver", strings.TrimPrefix(ServerVersion, version.Base+"/"))
 	return &Storage{
 		client:  client,
 		workdir: workdir,
@@ -68,70 +81,105 @@ func NewStorage(workdir string) (*Storage, error) {
 	}, nil
 }
 
-var objRegexp = regexp.MustCompile(`public/([a-z_\-]+)\-(2[0-9]{7})\.([a-z0-9\.]+)`)
+var objRegexp = regexp.MustCompile(`^public/([a-z_\-]+)\-(2[0-9]{7})\.([a-z0-9\.]+)$`)
+
+// DatapackageKey is where the pipeline stores the Frictionless data
+// package that describes the current version of the published files.
+const datapackageKey = "public/datapackage.json"
+
+// DatedKinds are the files that get served under their dated name, such
+// as "qrank-20261004.csv.gz", in addition to their undated alias. Other
+// files, such as the (much larger) item signals, are only served under
+// their alias, which saves disk space in the working directory.
+var datedKinds = map[string]bool{
+	"qrank.csv.gz":     true,
+	"qrank-stats.json": true,
+	"qrank.cdx.json":   true,
+}
+
+var isoDateRegexp = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})$`)
 
 // Reload caches public content from remote object storage to local disk.
 // Any old content (which is not live anymore) is deleted from local disk.
+//
+// Each dated object, such as public/qrank-20261004.csv.gz, is served
+// under an undated alias (qrank.csv.gz). The alias points to the version
+// named in public/datapackage.json, so the alias and the data package
+// always agree. If there is no data package, or it does not name a
+// version that exists in storage, the alias points to the most recently
+// modified object. Some kinds of files are also served under their
+// dated name; see datedKinds.
 func (s *Storage) Reload(ctx context.Context) error {
-	// Find the most recent version of each file in storage.
 	objects := s.client.ListObjects(ctx, "qrank", minio.ListObjectsOptions{
 		Prefix:    "public/",
 		Recursive: false,
 	})
-	inStorage := make(map[string]minio.ObjectInfo, 5)
+
+	// Group the dated objects in storage by their undated alias.
+	// For example, inStorage["qrank.csv.gz"]["20261004"] is the
+	// object for public/qrank-20261004.csv.gz.
+	inStorage := make(map[string]map[string]minio.ObjectInfo, 5)
+	var datapackage *minio.ObjectInfo
 	for obj := range objects {
+		if obj.Err != nil {
+			return obj.Err
+		}
+		if obj.Key == datapackageKey {
+			datapackage = &obj
+			continue
+		}
 		if m := objRegexp.FindStringSubmatch(obj.Key); m != nil {
-			filename := fmt.Sprintf("%s.%s", m[1], m[3])
-			info := inStorage[filename]
-			if obj.LastModified.After(info.LastModified) {
-				inStorage[filename] = obj
+			alias := fmt.Sprintf("%s.%s", m[1], m[3])
+			if inStorage[alias] == nil {
+				inStorage[alias] = make(map[string]minio.ObjectInfo, 3)
 			}
+			inStorage[alias][m[2]] = obj
 		}
 	}
 
-	files := make(map[string]*localFile, len(inStorage))
-	for filename, obj := range inStorage {
-		mangled := base32.HexEncoding.EncodeToString([]byte(obj.ETag))
-		path, err := filepath.Abs(filepath.Join(
-			s.workdir,
-			fmt.Sprintf("%s-%s", mangled, filename)))
+	files := make(map[string]*localFile, len(inStorage)*4+1)
+	pkgVersion := ""
+	if datapackage != nil {
+		loc, err := s.fetch(ctx, *datapackage)
 		if err != nil {
 			return err
 		}
-		if _, err := os.Stat(path); err != nil {
-			tmpPath := path + ".tmp"
-			if err := s.client.FGetObject(ctx, "qrank", obj.Key, tmpPath, minio.GetObjectOptions{}); err != nil {
-				return err
-			}
-			if err := os.Chtimes(tmpPath, time.Now(), obj.LastModified); err != nil {
-				return err
-			}
-			if err := os.Rename(tmpPath, path); err != nil {
-				return err
+		files["datapackage.json"] = loc
+		pkgVersion, err = readDatapackageVersion(loc.Path)
+		if err != nil {
+			log.Printf("ignoring %s: %v", datapackageKey, err)
+		}
+	}
+
+	for alias, versions := range inStorage {
+		current, found := versions[pkgVersion]
+		if !found {
+			for _, obj := range versions {
+				if obj.LastModified.After(current.LastModified) {
+					current = obj
+				}
 			}
 		}
 
-		loc := &localFile{
-			LastModified: obj.LastModified.UTC(),
-			ContentType:  "application/octet-stream",
-			ETag:         obj.ETag,
-			Path:         path,
+		for _, obj := range versions {
+			if obj.Key != current.Key && !datedKinds[alias] {
+				continue
+			}
+			loc, err := s.fetch(ctx, obj)
+			if err != nil {
+				return err
+			}
+			name := path.Base(obj.Key)
+			if datedKinds[alias] {
+				dated := *loc
+				dated.Immutable = true
+				files[name] = &dated
+			}
+			if obj.Key == current.Key {
+				loc.Canonical = name
+				files[alias] = loc
+			}
 		}
-
-		switch filepath.Ext(filename) {
-		case ".gz":
-			loc.ContentType = "application/gzip"
-		case ".json":
-			loc.ContentType = "application/json"
-		case ".tiff":
-			loc.ContentType = "image/tiff"
-		case ".txt":
-			loc.ContentType = "text/plain"
-		case ".zst":
-			loc.ContentType = "application/zstd"
-		}
-
-		files[filename] = loc
 	}
 
 	live := make(map[string]bool, len(files))
@@ -172,6 +220,76 @@ func (s *Storage) Reload(ctx context.Context) error {
 	return nil
 }
 
+// Fetch makes sure that a remote object is cached in the working directory,
+// downloading it if necessary.
+func (s *Storage) fetch(ctx context.Context, obj minio.ObjectInfo) (*localFile, error) {
+	name := path.Base(obj.Key)
+	mangled := base32.HexEncoding.EncodeToString([]byte(obj.ETag))
+	p, err := filepath.Abs(filepath.Join(s.workdir, fmt.Sprintf("%s-%s", mangled, name)))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(p); err != nil {
+		tmpPath := p + ".tmp"
+		if err := s.client.FGetObject(ctx, "qrank", obj.Key, tmpPath, minio.GetObjectOptions{}); err != nil {
+			return nil, err
+		}
+		if err := os.Chtimes(tmpPath, time.Now(), obj.LastModified); err != nil {
+			return nil, err
+		}
+		if err := os.Rename(tmpPath, p); err != nil {
+			return nil, err
+		}
+	}
+
+	return &localFile{
+		LastModified: obj.LastModified.UTC(),
+		ContentType:  contentType(name),
+		ETag:         obj.ETag,
+		Path:         p,
+	}, nil
+}
+
+// ContentType returns the media type for a file name.
+func contentType(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".cdx.json"):
+		return "application/vnd.cyclonedx+json"
+	case strings.HasSuffix(name, ".gz"):
+		return "application/gzip"
+	case strings.HasSuffix(name, ".json"):
+		return "application/json"
+	case strings.HasSuffix(name, ".tiff"):
+		return "image/tiff"
+	case strings.HasSuffix(name, ".txt"):
+		return "text/plain"
+	case strings.HasSuffix(name, ".zst"):
+		return "application/zstd"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// ReadDatapackageVersion returns the version of a Frictionless data package
+// as YYYYMMDD, given a file whose "version" is an ISO date (YYYY-MM-DD).
+func readDatapackageVersion(p string) (string, error) {
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return "", err
+	}
+	var dp struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(data, &dp); err != nil {
+		return "", err
+	}
+	m := isoDateRegexp.FindStringSubmatch(dp.Version)
+	if m == nil {
+		return "", fmt.Errorf("version %q is not an ISO date", dp.Version)
+	}
+	return m[1] + m[2] + m[3], nil
+}
+
 func (s *Storage) Watch(ctx context.Context) error {
 	ticker := time.NewTicker(30 * time.Second)
 	for {
@@ -195,6 +313,8 @@ type Content struct {
 	ContentType  string
 	ETag         string
 	LastModified time.Time
+	Canonical    string // dated name if served under an alias, else ""
+	Immutable    bool   // whether served under a dated name
 }
 
 func (c *Content) Read(p []byte) (int, error) {
@@ -228,6 +348,8 @@ func (s *Storage) Retrieve(filename string) (*Content, error) {
 		ContentType:  loc.ContentType,
 		ETag:         loc.ETag,
 		LastModified: loc.LastModified,
+		Canonical:    loc.Canonical,
+		Immutable:    loc.Immutable,
 	}
 	return c, nil
 }
