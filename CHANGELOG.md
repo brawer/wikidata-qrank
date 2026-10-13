@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.2.0](https://github.com/brawer/wikidata-qrank/compare/v2.1.2...v2.2.0) (2026-10-13)
+
+
+### 🆕 Features
+
+* **builder:** publish a Frictionless data package with a CycloneDX BOM ([b93ad83](https://github.com/brawer/wikidata-qrank/commit/b93ad83a1fb6e945c209be2f8a1f251e29474789))
+* **builder:** re-build intermediate files that lack a software stamp ([4ef0996](https://github.com/brawer/wikidata-qrank/commit/4ef09961d5b80bd296c7a84d534ab5345e77646b))
+* **builder:** record the producing version of every stored file ([7a0cfcc](https://github.com/brawer/wikidata-qrank/commit/7a0cfcc265882fddaa99d3bd09ccc5770dc858c8))
+* **webserver:** serve dated download URLs and datapackage.json ([d42a8c4](https://github.com/brawer/wikidata-qrank/commit/d42a8c46199e9c78ec609f89bc1b737f8e72d4df))
+
 ## [2.1.2](https://github.com/brawer/wikidata-qrank/compare/v2.1.1...v2.1.2) (2026-10-13)
 
 
