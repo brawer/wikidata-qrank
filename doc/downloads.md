@@ -153,6 +153,14 @@ record QRank as one of its inputs:
   file's SHA-256 in `hashes`. It holds the full provenance: the Wikimedia
   inputs and the builder versions.
 
+- To point at the QRank file inside our BOM, rather than at the whole
+  document, use a [BOM-Link](https://cyclonedx.org/capabilities/bomlink/):
+  `urn:cdx:<serialNumber>/<version>#<bom-ref>`, with the `serialNumber`
+  (without its `urn:uuid:` prefix) and `version` of our BOM, and the
+  `bom-ref` of its `metadata.component`, such as `qrank-20261004`.
+  A `bom-ref` is only an identifier within one BOM document, so a bare
+  `bom-ref` cannot refer to our BOM from yours.
+
 We keep every BOM indefinitely, so the dated URL keeps working. If your
 provenance needs to outlive this project's hosting, also archive a copy next
 to your output.
