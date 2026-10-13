@@ -109,88 +109,37 @@ have no sitelinks at all), weighing 783.5 MB after compression.
    is the same as the `qviews` file of the previous step, only the sorting
    is different.
 
-5. The build continues by computing some statistics about the
-   ranking, which get stored into a small JSON file. The file holds a
-   sample of the QRank distribution, `Samples`, as `[entity, rank, QRank]`
-   triples, and `Median`, the index of the median item in `Samples`.
-   The statistics are meant for plotting the distribution.
+5. The build finishes by computing some statistics about the output,
+   which get stored into a small JSON file. Currently, this is just
+   the SHA-256 hash of the `qrank` file; the `qrank-webserver`
+   (see below) uses this as an entity tag for conditional HTTP
+   requests. In the future, it would  make sense to compute additional
+   stats, for example histograms on rank distributions, and store them
+   into the same JSON file.
 
-   💾 For example, the file `qrank-stats-20261004.json` holds up to
-   a thousand samples.
-
-6. The build finishes by writing a bill of materials and a data
-   package, described in the next section, and storing all files in
-   this order: `qrank-YYYYMMDD.cdx.json`, `qrank-stats-YYYYMMDD.json`,
-   `qrank-YYYYMMDD.csv.gz`, and finally `datapackage.json`. If a
-   client sees a version in `datapackage.json`, all its files are
-   already in storage. A ranking counts as fresh only if all four files
-   exist and `datapackage.json` names its version.
-
-
-## Detailed design: Provenance
-
-Each published ranking comes with a
-[CycloneDX](https://cyclonedx.org) 1.7 bill of materials (BOM), which
-tells which versions of the inputs went into it, and which versions of
-`qrank-builder` processed them. Because the pipeline reuses intermediate
-files from earlier runs, a single ranking can be the work of several
-releases. For example, the page signals of a wiki that has not been
-dumped again since the last release were written by an older release.
-To record this faithfully, the builder keeps track of provenance in
-storage:
-
-* Every file that `qrank-builder` puts into object storage carries
-  its producing version as user metadata, `X-Amz-Meta-Qrank-Software:
-  QRank/v2.2.0+<revision>`. This happens in `PutInStorage()` in
-  [s3.go](../cmd/qrank-builder/s3.go), so every pipeline stage gets it.
-  Page signals and weekly pageviews without this stamp, written by
-  releases before it existed, are treated as stale and re-built once.
-
-* When the build computes item signals, it reads the stamps of all
-  page signals and weekly pageviews it used, and stores them in
-  `item_signals/item_signals-YYYYMMDD.provenance.json`, together with
-  the newest dump date, the number of wikis, and the range of pageview
-  days. See [provenance.go](../cmd/qrank-builder/provenance.go).
-  Item signals without such a record are re-built.
-
-* When the build ranks the items, it creates the BOM from that record
-  ([bom.go](../cmd/qrank-builder/bom.go)). The BOM names the Wikimedia
-  dumps and pageviews as inputs, and lists every builder version in one
-  "QRank build" workflow. The internal pipeline steps are not part of
-  the BOM. The data package ([datapackage.go](../cmd/qrank-builder/datapackage.go))
-  is a [Frictionless Data Package](https://datapackage.org/) v2 that
-  lists the ranking, the statistics and the BOM with their sizes and
-  SHA-256 digests.
-
-Both JSON documents are written by hand with `encoding/json` instead of
-a library, which keeps the dependencies small and the output
-byte-stable: building the same version again gives the same bytes.
-CI validates golden copies against the CycloneDX and Frictionless
-schemas. For the client's view of these files, see
-[Downloads and provenance](downloads.md).
+   💾 For example, the file `stats-20210215.json` weighs 133 bytes.
 
 
 ## Detailed design: Webserver
 
-The webserver is a small HTTP server. In production, it runs
-on Toolforge.
+The webserver is a trivial HTTP server. In production, it runs
+on the Wikimedia Cloud behind [nginx](https://nginx.org/).
 
-The main serving code is in [main.go](../cmd/webserver/main.go).
+The main serving code is in [main.go](../cmd/qrank-webserver/main.go).
 Requests for the home page are currently handled by returning a static string;
 requests for a file download get handled from the file system.
 
-A background task in [storage.go](../cmd/webserver/storage.go)
-periodically lists the published files in object storage, and copies
-new ones to the local file system. Every retained dated file, such as
-`qrank-20261004.csv.gz`, is served under its own name with a
-`Cache-Control: immutable` header. The long-standing names, such as
-`qrank.csv.gz`, serve the version that `datapackage.json` names, and
-carry a `Link` header with `rel="canonical"` that names the dated file.
-
 Clients can efficiently check for updates to the ranking file
-because the webserver supports
-[conditional requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests). For the `ETag` entity tag, we use the
-entity tag of the file in object storage.
+because `qrank-webserver` supports
+[conditional requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests). For the `ETag` entity tag, we currently use the SHA-256
+hash of the ranking file, computed by the final stage of `qrank-builder`
+and stored in the `stats` file.
+
+A background task of `qrank-webserver` periodically checks the local
+file system. When the server starts up, and whenever new data is
+available, the code in
+[dataloader.go](../cmd/qrank-webserver/dataloader.go) loads the latest
+`stats` file (but not the large ranking file) into memory.
 
 
 ## Performance
