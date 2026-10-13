@@ -21,6 +21,7 @@ toolchain go1.26.9
 require (
 	github.com/dsnet/compress v0.0.1
 	github.com/fogleman/gg v1.3.0
+	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.20.3
 	github.com/lanrat/extsort v1.5.0
 	github.com/minio/minio-go/v7 v7.3.0
@@ -34,7 +35,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect

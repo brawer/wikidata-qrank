@@ -1,0 +1,296 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "serialNumber": "urn:uuid:256355a9-7407-54ae-a9e5-a606634ef440",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-04T00:00:00Z",
+    "lifecycles": [
+      {
+        "phase": "post-build"
+      }
+    ],
+    "supplier": {
+      "name": "Sascha Brawer",
+      "url": [
+        "https://brawer.ch"
+      ]
+    },
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "bom-ref": "qrank-builder-2.2.0",
+          "supplier": {
+            "name": "Sascha Brawer",
+            "url": [
+              "https://brawer.ch"
+            ]
+          },
+          "name": "qrank-builder",
+          "group": "github.com/brawer/wikidata-qrank/v2",
+          "version": "2.2.0",
+          "publisher": "Sascha Brawer",
+          "purl": "pkg:github/brawer/wikidata-qrank@v2.2.0",
+          "licenses": [
+            {
+              "license": {
+                "id": "MIT"
+              }
+            }
+          ],
+          "externalReferences": [
+            {
+              "type": "vcs",
+              "url": "https://github.com/brawer/wikidata-qrank"
+            },
+            {
+              "type": "build-system",
+              "url": "https://github.com/brawer/wikidata-qrank/actions"
+            }
+          ],
+          "properties": [
+            {
+              "name": "qrank:software",
+              "value": "QRank/v2.2.0+12a657d4df6a"
+            }
+          ]
+        },
+        {
+          "type": "application",
+          "bom-ref": "qrank-builder-2.3.0",
+          "supplier": {
+            "name": "Sascha Brawer",
+            "url": [
+              "https://brawer.ch"
+            ]
+          },
+          "name": "qrank-builder",
+          "group": "github.com/brawer/wikidata-qrank/v2",
+          "version": "2.3.0",
+          "publisher": "Sascha Brawer",
+          "purl": "pkg:github/brawer/wikidata-qrank@0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c",
+          "licenses": [
+            {
+              "license": {
+                "id": "MIT"
+              }
+            }
+          ],
+          "externalReferences": [
+            {
+              "type": "vcs",
+              "url": "https://github.com/brawer/wikidata-qrank"
+            },
+            {
+              "type": "build-system",
+              "url": "https://github.com/brawer/wikidata-qrank/actions"
+            }
+          ],
+          "properties": [
+            {
+              "name": "qrank:software",
+              "value": "QRank/v2.3.0+0b1c2d3e4f5a"
+            },
+            {
+              "name": "qrank:vcs:revision",
+              "value": "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c"
+            },
+            {
+              "name": "qrank:vcs:modified",
+              "value": "false"
+            }
+          ]
+        }
+      ]
+    },
+    "component": {
+      "type": "data",
+      "bom-ref": "qrank-20261004",
+      "supplier": {
+        "name": "Sascha Brawer",
+        "url": [
+          "https://brawer.ch"
+        ]
+      },
+      "name": "qrank",
+      "version": "2026-10-04",
+      "description": "Wikidata items ranked by aggregated Wikimedia pageviews (gzip-compressed CSV, columns Entity,QRank).",
+      "purl": "pkg:generic/qrank@2026-10-04?checksum=sha256:dc5164ee8f7655172f8ec0b4200af3c8d90ffef5f86693e217062349b0c03361&download_url=https%3A%2F%2Fqrank.toolforge.org%2Fdownload%2Fqrank-20261004.csv.gz",
+      "licenses": [
+        {
+          "license": {
+            "id": "CC0-1.0"
+          }
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dc5164ee8f7655172f8ec0b4200af3c8d90ffef5f86693e217062349b0c03361"
+        },
+        {
+          "alg": "SHA-512",
+          "content": "c27adac0925cc477fca65c60599881bb1f95c321bf3fdac0270e4f554956745f0aebce1e40e2b9f81f8038075e9ca179b4cb828e0087cb81e60e63c5fdd339ac"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://qrank.toolforge.org/download/qrank-20261004.csv.gz"
+        },
+        {
+          "type": "website",
+          "url": "https://qrank.toolforge.org/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/brawer/wikidata-qrank"
+        }
+      ],
+      "data": [
+        {
+          "bom-ref": "qrank-dataset-20261004",
+          "type": "dataset",
+          "name": "QRank",
+          "classification": "PUBLIC"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "data",
+      "bom-ref": "wikimedia-dumps",
+      "supplier": {
+        "name": "Wikimedia Foundation",
+        "url": [
+          "https://wikimediafoundation.org"
+        ]
+      },
+      "name": "Wikimedia database dumps",
+      "version": "2026-10-01",
+      "description": "Database dumps of all Wikimedia wikis. The version is the newest dump date of any wiki.",
+      "purl": "pkg:generic/wikimedia-dumps@2026-10-01?download_url=https%3A%2F%2Fdumps.wikimedia.org%2F",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://dumps.wikimedia.org/"
+        }
+      ],
+      "properties": [
+        {
+          "name": "qrank:dumps:newest",
+          "value": "2026-10-01"
+        },
+        {
+          "name": "qrank:dumps:wikis",
+          "value": "1012"
+        }
+      ]
+    },
+    {
+      "type": "data",
+      "bom-ref": "wikimedia-pageviews",
+      "supplier": {
+        "name": "Wikimedia Foundation",
+        "url": [
+          "https://wikimediafoundation.org"
+        ]
+      },
+      "name": "Wikimedia pageviews (pageview_complete)",
+      "version": "2026-10-04",
+      "description": "Daily per-article pageview counts for all Wikimedia projects. The version is the last day included.",
+      "purl": "pkg:generic/wikimedia-pageviews@2026-10-04?download_url=https%3A%2F%2Fdumps.wikimedia.org%2Fother%2Fpageview_complete%2F",
+      "licenses": [
+        {
+          "license": {
+            "id": "CC0-1.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://dumps.wikimedia.org/other/pageview_complete/"
+        }
+      ],
+      "properties": [
+        {
+          "name": "qrank:pageviews:firstDay",
+          "value": "2025-10-06"
+        },
+        {
+          "name": "qrank:pageviews:lastDay",
+          "value": "2026-10-04"
+        },
+        {
+          "name": "qrank:pageviews:weeks",
+          "value": "52"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "qrank-20261004",
+      "dependsOn": [
+        "wikimedia-dumps",
+        "wikimedia-pageviews"
+      ]
+    },
+    {
+      "ref": "wikimedia-dumps",
+      "dependsOn": []
+    },
+    {
+      "ref": "wikimedia-pageviews",
+      "dependsOn": []
+    }
+  ],
+  "formulation": [
+    {
+      "bom-ref": "qrank-build-20261004",
+      "workflows": [
+        {
+          "bom-ref": "qrank-workflow-20261004",
+          "uid": "qrank-build-20261004",
+          "name": "QRank build",
+          "description": "Ranks Wikidata items by 52 weeks of Wikimedia pageviews (2025-10-06..2026-10-04). Intermediate files are reused from earlier runs, so more than one builder version can be listed.",
+          "resourceReferences": [
+            {
+              "ref": "qrank-builder-2.2.0"
+            },
+            {
+              "ref": "qrank-builder-2.3.0"
+            }
+          ],
+          "taskTypes": [
+            "build"
+          ],
+          "inputs": [
+            {
+              "resource": {
+                "ref": "wikimedia-dumps"
+              }
+            },
+            {
+              "resource": {
+                "ref": "wikimedia-pageviews"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "type": "artifact",
+              "resource": {
+                "ref": "qrank-20261004"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

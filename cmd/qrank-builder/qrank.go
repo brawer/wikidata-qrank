@@ -24,6 +24,8 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
 	"github.com/minio/minio-go/v7"
+
+	"github.com/brawer/wikidata-qrank/v2/internal/version"
 )
 
 type QRank struct {
@@ -124,14 +126,18 @@ func writeQRankFile(ctx context.Context, qrankPath string, read func(ctx context
 }
 
 // BuildQRankFiles computes the QRank ranking from the item signals
-// of the given date, and puts `public/qrank-YYYYMMDD.csv.gz` and
-// `public/qrank-stats-YYYYMMDD.json` into storage. If both files
-// are already stored, they do not get re-built.
+// of the given date, and puts `public/qrank-YYYYMMDD.cdx.json`,
+// `public/qrank-stats-YYYYMMDD.json`, `public/qrank-YYYYMMDD.csv.gz`
+// and finally `public/datapackage.json` into storage, in this order.
+// A client that sees a version in datapackage.json can therefore
+// fetch all of its files. If all files are already stored, and
+// datapackage.json names this version, nothing gets re-built.
 func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 	ymd := date.Format("20060102")
 	signalsPath := fmt.Sprintf("public/item_signals-%s.csv.zst", ymd)
 	qrankDest := fmt.Sprintf("public/qrank-%s.csv.gz", ymd)
 	statsDest := fmt.Sprintf("public/qrank-stats-%s.json", ymd)
+	bomDest := fmt.Sprintf("public/qrank-%s.cdx.json", ymd)
 
 	stored := make(map[string]bool, 10)
 	for obj := range s3.ListObjects(ctx, "qrank", minio.ListObjectsOptions{Prefix: "public/"}) {
@@ -140,9 +146,20 @@ func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 		}
 		stored[obj.Key] = true
 	}
-	if stored[qrankDest] && stored[statsDest] {
-		logger.Printf("ranking in storage is still fresh: %s", qrankDest)
-		return nil
+	if stored[qrankDest] && stored[statsDest] && stored[bomDest] && stored[datapackagePath] {
+		version, err := storedDatapackageVersion(ctx, s3)
+		if err != nil {
+			return err
+		}
+		if version == date.Format(time.DateOnly) {
+			logger.Printf("ranking in storage is still fresh: %s", qrankDest)
+			return nil
+		}
+	}
+
+	prov, err := readItemSignalsProvenance(ctx, date, s3)
+	if err != nil {
+		return fmt.Errorf("provenance of %s: %w", signalsPath, err)
 	}
 
 	logger.Printf("building %s from %s", qrankDest, signalsPath)
@@ -181,14 +198,27 @@ func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 		return err
 	}
 
-	if err := PutInStorage(ctx, qrankPath, s3, "qrank", qrankDest, "text/csv"); err != nil {
+	bomPath := filepath.Join(tempDir, filepath.Base(bomDest))
+	dpPath := filepath.Join(tempDir, filepath.Base(datapackagePath))
+	if err := writeBOMAndDatapackage(date, prov, qrankPath, statsPath, bomPath, dpPath); err != nil {
 		return err
 	}
-	if err := PutInStorage(ctx, statsPath, s3, "qrank", statsDest, "application/json"); err != nil {
-		return err
-	}
-	logger.Printf("built %s and %s in %.1fs", qrankDest, statsDest, time.Since(start).Seconds())
 
+	uploads := []struct{ src, dest, contentType string }{
+		{bomPath, bomDest, "application/vnd.cyclonedx+json"},
+		{statsPath, statsDest, "application/json"},
+		{qrankPath, qrankDest, "text/csv"},
+		{dpPath, datapackagePath, "application/json"},
+	}
+	for _, u := range uploads {
+		if err := PutInStorage(ctx, u.src, s3, "qrank", u.dest, u.contentType); err != nil {
+			return err
+		}
+	}
+	logger.Printf("built %s, %s and %s in %.1fs", qrankDest, statsDest, bomDest, time.Since(start).Seconds())
+
+	// BOMs are small and kept forever, so that the provenance of
+	// any published QRank file can still be looked up later.
 	for _, re := range []string{`^public/qrank-\d{8}\.csv\.gz$`, `^public/qrank-stats-\d{8}\.json$`} {
 		if err := prunePublicFiles(ctx, regexp.MustCompile(re), 3, s3); err != nil {
 			return err
@@ -196,6 +226,45 @@ func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 	}
 
 	return nil
+}
+
+// WriteBOMAndDatapackage writes the CycloneDX BOM for the QRank file at
+// `qrankPath` to `bomPath`, and then a data package listing the QRank
+// file, the stats file and the BOM to `dpPath`.
+func writeBOMAndDatapackage(date time.Time, prov *ItemSignalsProvenance, qrankPath, statsPath, bomPath, dpPath string) error {
+	qrankSHA256, qrankSHA512, qrankBytes, err := hashFile(qrankPath)
+	if err != nil {
+		return err
+	}
+	revision, modified := version.Revision()
+	bom := bomInputs{
+		Date:       date,
+		SHA256:     qrankSHA256,
+		SHA512:     qrankSHA512,
+		Provenance: prov,
+		Software:   SoftwareVersion,
+		Revision:   revision,
+		Modified:   modified,
+	}
+	if err := writeBOM(bomPath, bom); err != nil {
+		return err
+	}
+
+	statsSHA256, _, statsBytes, err := hashFile(statsPath)
+	if err != nil {
+		return err
+	}
+	bomSHA256, _, bomBytes, err := hashFile(bomPath)
+	if err != nil {
+		return err
+	}
+	dp := datapackageInputs{
+		Date:  date,
+		QRank: datapackageFile{Path: filepath.Base(qrankPath), Bytes: qrankBytes, SHA256: qrankSHA256},
+		Stats: datapackageFile{Path: filepath.Base(statsPath), Bytes: statsBytes, SHA256: statsSHA256},
+		BOM:   datapackageFile{Path: filepath.Base(bomPath), Bytes: bomBytes, SHA256: bomSHA256},
+	}
+	return writeDatapackage(dpPath, dp)
 }
 
 // ReadItemSignalsPageviews reads an item_signals CSV file and sends
