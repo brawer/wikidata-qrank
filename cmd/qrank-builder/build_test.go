@@ -91,6 +91,18 @@ func TestBuild(t *testing.T) {
 		t.Errorf("got stats %s, want %s", stats, wantStats)
 	}
 
+	// The data package should name the built version and list its files.
+	version, err := storedDatapackageVersion(context.Background(), s3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "2024-05-01" {
+		t.Errorf("got data package version %q, want 2024-05-01", version)
+	}
+	if _, found := s3.data["public/qrank-20240501.cdx.json"]; !found {
+		t.Error("Build() should store public/qrank-20240501.cdx.json")
+	}
+
 	// A second run on the same inputs should find everything fresh
 	// and leave the stored files exactly as they were.
 	before := make(map[string][]byte, len(s3.data))

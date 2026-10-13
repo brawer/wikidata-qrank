@@ -1,0 +1,100 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
+  "name": "qrank",
+  "id": "9c4a6a04-c4b3-544b-8866-35e43a2a6817",
+  "title": "QRank — ranking of Wikidata items",
+  "description": "Wikidata items ranked by their aggregated pageviews across Wikipedia, Wikivoyage, Wikibooks and other Wikimedia projects over the past 52 weeks.",
+  "version": "2026-10-04",
+  "created": "2026-10-04T00:00:00Z",
+  "homepage": "https://qrank.toolforge.org/",
+  "licenses": [
+    {
+      "name": "CC0-1.0",
+      "path": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "title": "Creative Commons Zero v1.0 Universal"
+    }
+  ],
+  "sources": [
+    {
+      "title": "Wikimedia database dumps",
+      "path": "https://dumps.wikimedia.org/"
+    },
+    {
+      "title": "Wikimedia pageviews",
+      "path": "https://dumps.wikimedia.org/other/pageview_complete/"
+    }
+  ],
+  "contributors": [
+    {
+      "title": "Sascha Brawer",
+      "path": "https://brawer.ch",
+      "roles": [
+        "author",
+        "publisher"
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "name": "qrank",
+      "type": "table",
+      "path": "qrank-20261004.csv.gz",
+      "title": "QRank",
+      "description": "Wikidata items sorted by decreasing QRank, which is the number of pageviews over the past 52 weeks. Items without pageviews are left out. Gzip-compressed CSV.",
+      "format": "csv",
+      "mediatype": "text/csv",
+      "encoding": "utf-8",
+      "bytes": 112233445,
+      "hash": "sha256:dc5164ee8f7655172f8ec0b4200af3c8d90ffef5f86693e217062349b0c03361",
+      "schema": {
+        "fields": [
+          {
+            "name": "Entity",
+            "type": "string",
+            "description": "Wikidata item ID",
+            "constraints": {
+              "required": true,
+              "unique": true,
+              "pattern": "^Q[1-9][0-9]*$"
+            }
+          },
+          {
+            "name": "QRank",
+            "type": "integer",
+            "description": "Pageviews over the past 52 weeks, summed over all Wikimedia projects",
+            "constraints": {
+              "required": true,
+              "minimum": 1
+            }
+          }
+        ],
+        "primaryKey": [
+          "Entity"
+        ]
+      }
+    },
+    {
+      "name": "stats",
+      "path": "qrank-stats-20261004.json",
+      "title": "QRank statistics",
+      "description": "A sample of the QRank distribution for plotting. Samples holds [Entity, rank, QRank] triples; Median is the index of the median item in Samples.",
+      "format": "json",
+      "mediatype": "application/json",
+      "encoding": "utf-8",
+      "bytes": 41234,
+      "hash": "sha256:4f1e1d9efee168f0f39471fe4129aefd81976d3cb63e963ae1461c81fb35fb8c"
+    },
+    {
+      "name": "bom",
+      "path": "qrank-20261004.cdx.json",
+      "title": "CycloneDX 1.7 bill of materials",
+      "description": "Provenance of the QRank file: the versions of the Wikimedia dumps and pageviews, and of every qrank-builder release that processed them.",
+      "format": "json",
+      "mediatype": "application/vnd.cyclonedx+json; version=1.7",
+      "encoding": "utf-8",
+      "bytes": 5678,
+      "hash": "sha256:e2cb1efb6aa07e5311d54cb07da9ac17e456a61bd2d8a150fbc725bbb19d947d",
+      "describes": "qrank"
+    }
+  ]
+}

@@ -48,6 +48,27 @@ jobs:
     - name: Test
       run: go test -v ./...
 
+    # The golden test files are kept byte-identical to the builder's
+    # output by TestWriteDatapackage_Golden and TestWriteBOM_Golden,
+    # so validating them checks what the builder generates.
+    # check-jsonschema rather than a Go validator, because the profile's
+    # path patterns use ECMAScript lookaheads that Go's regexp package
+    # cannot compile. pipx is preinstalled on GitHub runners.
+    - name: Validate the data package against the Frictionless v2 profile
+      run: |
+        pipx run check-jsonschema==0.38.2 \
+          --schemafile https://datapackage.org/profiles/2.0/datapackage.json \
+          cmd/qrank-builder/testdata/datapackage.golden.json
+
+    - name: Validate the CycloneDX BOM against the specification
+      env:
+        # cyclonedx/cyclonedx-cli:0.33.1
+        CYCLONEDX_CLI: cyclonedx/cyclonedx-cli@sha256:9a37575fb51fcaed3a4c62dddba091c46ffc867712e46bdb6cdf219a7e90a061
+      run: |
+        docker run --rm --volume "$PWD/cmd/qrank-builder/testdata:/bom:ro" \
+          "$CYCLONEDX_CLI" \
+          validate --input-file /bom/bom.golden.cdx.json --fail-on-errors
+
   # On a release tag (vX.Y.Z, pushed by release-please), ask the Toolforge
   # components API to rebuild the image and recreate the components
   # (see toolforge.yaml, RELEASING.md).

@@ -24,6 +24,7 @@ import (
 type FakeS3 struct {
 	data     map[string][]byte
 	metadata map[string]map[string]string
+	puts     []string // paths in the order they were put into storage
 	mutex    sync.RWMutex
 }
 
@@ -178,6 +179,7 @@ func (s3 *FakeS3) FPutObject(ctx context.Context, bucketName, objectName, filePa
 
 	s3.data[objectName] = file
 	s3.metadata[objectName] = maps.Clone(opts.UserMetadata)
+	s3.puts = append(s3.puts, objectName)
 	return info, nil
 }
 
