@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.2](https://github.com/brawer/wikidata-qrank/compare/v2.1.1...v2.1.2) (2026-10-13)
+
+
+### 🐞 Fixes
+
+* **builder:** fall back to older namespace file if latest is broken ([2c6af59](https://github.com/brawer/wikidata-qrank/commit/2c6af59ebaceff0b67c96b80b16ab54cab4cdc61)), closes [#90](https://github.com/brawer/wikidata-qrank/issues/90)
+* **builder:** log why a namespace file is malformed ([634c744](https://github.com/brawer/wikidata-qrank/commit/634c74473f8171d9c770dd4211a600f84c8a80e5)), closes [#90](https://github.com/brawer/wikidata-qrank/issues/90)
+* let the Toolforge build find a Go it knows ([f17f435](https://github.com/brawer/wikidata-qrank/commit/f17f435d1b2b0f07b8c99b5c363a87af1b943136))
+
 ## [2.1.1](https://github.com/brawer/wikidata-qrank/compare/v2.1.0...v2.1.1) (2026-10-12)
 
 
