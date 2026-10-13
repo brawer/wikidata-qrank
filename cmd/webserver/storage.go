@@ -176,7 +176,10 @@ func (s *Storage) Reload(ctx context.Context) error {
 				files[name] = &dated
 			}
 			if obj.Key == current.Key {
-				loc.Canonical = name
+				// Only point clients to a dated name that we also serve.
+				if datedKinds[alias] {
+					loc.Canonical = name
+				}
 				files[alias] = loc
 			}
 		}
