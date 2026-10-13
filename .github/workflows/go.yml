@@ -71,12 +71,18 @@ jobs:
         echo "deployment: $id"
         for _ in $(seq 1 80); do
           sleep 15
-          status=$(curl --fail-with-body -sS "$api/$id?token=$TOKEN" | jq -r '.data.status')
+          resp=$(curl --fail-with-body -sS "$api/$id?token=$TOKEN")
+          status=$(echo "$resp" | jq -r '.data.status')
           echo "status: $status"
           case "$status" in
             pending|running) ;;
             successful) echo "deployed $TAG"; exit 0 ;;
-            *) echo "deployment $status"; exit 1 ;;
+            *)
+              # The full record names the failing component and why
+              # (for example a build error), which the bare status hides.
+              echo "$resp" | jq .
+              echo "::error::Toolforge deployment $id $status; see RELEASING.md"
+              exit 1 ;;
           esac
         done
         echo "gave up waiting for deployment $id"

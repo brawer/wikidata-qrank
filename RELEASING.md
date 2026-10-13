@@ -85,7 +85,18 @@ build before the first release, report `QRank/git-<commit>` instead.
 
 ## If the automatic deploy fails
 
-Deploy from the bastion by hand:
+When a deployment fails, the `deploy` job prints the deployment record,
+which names the component that failed. To see why a build failed, look at
+the build log on the bastion:
+
+```sh
+ssh login.toolforge.org
+become qrank
+toolforge build list
+toolforge build logs
+```
+
+After fixing the cause, deploy from the bastion by hand:
 
 ```sh
 ssh login.toolforge.org
