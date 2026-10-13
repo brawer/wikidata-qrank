@@ -166,6 +166,44 @@ func TestBuildItemSignals(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
+
+	// The inputs were stored without software metadata, as if written
+	// by an older release, so the provenance has an unknown producer.
+	gotProv, err := readItemSignalsProvenance(ctx, date, s3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantProv := &ItemSignalsProvenance{
+		Date:      "2011-12-09",
+		Dumps:     DumpsProvenance{Newest: "2011-12-09", Wikis: 2},
+		Pageviews: PageviewsProvenance{FirstDay: "2011-02-14", LastDay: "2011-02-27", Weeks: 2},
+		Software:  []string{SoftwareVersion, unknownSoftware},
+	}
+	if !reflect.DeepEqual(gotProv, wantProv) {
+		t.Errorf("got provenance %+v, want %+v", gotProv, wantProv)
+	}
+
+	// With a provenance record, the stored signals are fresh.
+	signalsPath := "public/item_signals-20111209.csv.zst"
+	s3.data[signalsPath] = []byte("sentinel")
+	if _, err := buildItemSignals(ctx, pageviews, sites, s3); err != nil {
+		t.Fatal(err)
+	}
+	if string(s3.data[signalsPath]) != "sentinel" {
+		t.Error("buildItemSignals() should not re-build fresh signals")
+	}
+
+	// Signals without a provenance record get re-built once.
+	delete(s3.data, itemSignalsProvenancePath(date))
+	if _, err := buildItemSignals(ctx, pageviews, sites, s3); err != nil {
+		t.Fatal(err)
+	}
+	if string(s3.data[signalsPath]) == "sentinel" {
+		t.Error("buildItemSignals() should re-build signals without provenance")
+	}
+	if _, found := s3.data[itemSignalsProvenancePath(date)]; !found {
+		t.Error("buildItemSignals() should store a provenance record")
+	}
 }
 
 // If the most recent pageview file is newer than the last dump
@@ -249,6 +287,10 @@ func TestPruneItemSignals(t *testing.T) {
 		"public/item_signals-20250420.csv.zst",
 		"public/item_signals-20250427.csv.zst",
 		"public/qrank-20240311.csv.gz",
+		"item_signals/item_signals-20250406.provenance.json",
+		"item_signals/item_signals-20250413.provenance.json",
+		"item_signals/item_signals-20250420.provenance.json",
+		"item_signals/item_signals-20250427.provenance.json",
 	} {
 		s3.data[path] = []byte("content")
 	}
@@ -263,6 +305,9 @@ func TestPruneItemSignals(t *testing.T) {
 	}
 	slices.Sort(got)
 	want := []string{
+		"item_signals/item_signals-20250413.provenance.json",
+		"item_signals/item_signals-20250420.provenance.json",
+		"item_signals/item_signals-20250427.provenance.json",
 		"public/item_signals-20250413.csv.zst",
 		"public/item_signals-20250420.csv.zst",
 		"public/item_signals-20250427.csv.zst",

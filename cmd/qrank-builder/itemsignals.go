@@ -148,11 +148,27 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 	if !newest.After(stored) {
 		s := stored.Format(time.DateOnly)
 		n := newest.Format(time.DateOnly)
-		logger.Printf("signals in storage are still fresh: stored=%s, newest=%s", s, n)
-		if err := pruneItemSignals(ctx, 3, s3); err != nil {
+
+		// Item signals stored by older releases have no provenance
+		// record. In that case, we re-build them once, so that we know
+		// which software produced them.
+		hasProvenance, err := hasItemSignalsProvenance(ctx, stored, s3)
+		if err != nil {
 			return time.Time{}, err
 		}
-		return stored, nil
+		if hasProvenance || !newest.Equal(stored) {
+			logger.Printf("signals in storage are still fresh: stored=%s, newest=%s", s, n)
+			if err := pruneItemSignals(ctx, 3, s3); err != nil {
+				return time.Time{}, err
+			}
+			return stored, nil
+		}
+		logger.Printf("signals in storage have no provenance record, re-building: stored=%s", s)
+	}
+
+	provenance, err := buildItemSignalsProvenance(ctx, newest, pageviews, sites, s3)
+	if err != nil {
+		return time.Time{}, err
 	}
 
 	newestYMD := newest.Format("20060102")
@@ -285,6 +301,12 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 	}
 
 	if err := os.Remove(outFile.Name()); err != nil {
+		return time.Time{}, err
+	}
+
+	// Store the provenance record after the item signals, so that
+	// a crash in between leads to a re-build in the next run.
+	if err := storeItemSignalsProvenance(ctx, provenance, s3); err != nil {
 		return time.Time{}, err
 	}
 
@@ -424,15 +446,25 @@ func ItemSignalsVersion(pageviews []string, sites *WikiSites) time.Time {
 // https://github.com/brawer/wikidata-qrank/issues/39
 func pruneItemSignals(ctx context.Context, keep int, s3 S3) error {
 	re := regexp.MustCompile(`^public/item_signals-(\d{8}).csv.zst$`)
-	return prunePublicFiles(ctx, re, keep, s3)
+	if err := prunePublicFiles(ctx, re, keep, s3); err != nil {
+		return err
+	}
+	return pruneItemSignalsProvenance(ctx, keep, s3)
 }
 
 // PrunePublicFiles removes old versions of public files from storage,
 // keeping only the newest `keep` files whose path matches `re`.
 // File names must contain a date, so that they sort by version.
 func prunePublicFiles(ctx context.Context, re *regexp.Regexp, keep int, s3 S3) error {
+	return pruneFiles(ctx, "public/", re, keep, s3)
+}
+
+// PruneFiles removes old versions of files from storage, keeping only
+// the newest `keep` files under `prefix` whose path matches `re`.
+// File names must contain a date, so that they sort by version.
+func pruneFiles(ctx context.Context, prefix string, re *regexp.Regexp, keep int, s3 S3) error {
 	paths := make([]string, 0, keep+1)
-	opts := minio.ListObjectsOptions{Prefix: "public/"}
+	opts := minio.ListObjectsOptions{Prefix: prefix}
 	for obj := range s3.ListObjects(ctx, "qrank", opts) {
 		if obj.Err != nil {
 			return obj.Err

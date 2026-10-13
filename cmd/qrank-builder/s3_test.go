@@ -8,7 +8,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -20,13 +22,15 @@ import (
 )
 
 type FakeS3 struct {
-	data  map[string][]byte
-	mutex sync.RWMutex
+	data     map[string][]byte
+	metadata map[string]map[string]string
+	mutex    sync.RWMutex
 }
 
 func NewFakeS3() *FakeS3 {
 	fake := &FakeS3{
-		data: make(map[string][]byte, 10),
+		data:     make(map[string][]byte, 10),
+		metadata: make(map[string]map[string]string, 10),
 	}
 	return fake
 }
@@ -124,6 +128,7 @@ func (s3 *FakeS3) RemoveObject(ctx context.Context, bucketName string, objectNam
 		return fmt.Errorf(`file not found: %s`, objectName)
 	}
 	delete(s3.data, objectName)
+	delete(s3.metadata, objectName)
 	return nil
 }
 
@@ -172,7 +177,60 @@ func (s3 *FakeS3) FPutObject(ctx context.Context, bucketName, objectName, filePa
 	}
 
 	s3.data[objectName] = file
+	s3.metadata[objectName] = maps.Clone(opts.UserMetadata)
 	return info, nil
+}
+
+func (s3 *FakeS3) StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error) {
+	s3.mutex.RLock()
+	defer s3.mutex.RUnlock()
+
+	if bucketName != "qrank" {
+		return minio.ObjectInfo{}, fmt.Errorf(`unexpected bucket "%s"`, bucketName)
+	}
+	data, ok := s3.data[objectName]
+	if !ok {
+		return minio.ObjectInfo{}, fmt.Errorf("object not found: %s", objectName)
+	}
+	info := minio.ObjectInfo{
+		Key:          objectName,
+		Size:         int64(len(data)),
+		UserMetadata: maps.Clone(s3.metadata[objectName]),
+	}
+	return info, nil
+}
+
+func TestPutInStorage_Software(t *testing.T) {
+	ctx := context.Background()
+	s3 := NewFakeS3()
+	path := filepath.Join(t.TempDir(), "file.txt")
+	if err := os.WriteFile(path, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := PutInStorage(ctx, path, s3, "qrank", "test/file.txt", "text/plain"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := StoredSoftware(ctx, s3, "qrank", "test/file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != SoftwareVersion {
+		t.Errorf("got %q, want %q", got, SoftwareVersion)
+	}
+
+	// Files written by older releases carry no software metadata.
+	s3.data["test/old.txt"] = []byte("old")
+	got, err = StoredSoftware(ctx, s3, "qrank", "test/old.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != unknownSoftware {
+		t.Errorf("got %q, want %q", got, unknownSoftware)
+	}
+
+	if _, err := StoredSoftware(ctx, s3, "qrank", "test/missing.txt"); err == nil {
+		t.Error("expected error for missing file")
+	}
 }
 
 type testingWriteCloser struct {

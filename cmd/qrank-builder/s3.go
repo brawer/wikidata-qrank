@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/minio/minio-go/v7"
 	//"github.com/minio/minio-go/v7/pkg/credentials"
@@ -25,6 +26,7 @@ type S3 interface {
 	RemoveObject(ctx context.Context, bucketName string, objectName string, opts minio.RemoveObjectOptions) error
 	FGetObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.GetObjectOptions) error
 	FPutObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (minio.UploadInfo, error)
+	StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error)
 }
 
 type tempFileReader struct {
@@ -101,11 +103,44 @@ func NewS3Reader(ctx context.Context, bucket string, path string, s3 S3) (io.Rea
 	return &tempFileReader{temp}, nil
 }
 
-// PutInStorage stores a file in S3 storage.
+// SoftwareMetadataKey is the S3 user metadata key that records which
+// version of qrank-builder produced a stored file. On the wire, it is
+// sent as the X-Amz-Meta-Qrank-Software header.
+const softwareMetadataKey = "Qrank-Software"
+
+// UnknownSoftware stands for the producer of a stored file that carries
+// no software metadata, because it was written by an older release.
+const unknownSoftware = "unknown"
+
+// PutInStorage stores a file in S3 storage. The stored object gets
+// tagged with the version of this program, so that later stages can
+// tell which software version produced their inputs.
 func PutInStorage(ctx context.Context, file string, s3 S3, bucket string, dest string, contentType string) error {
-	options := minio.PutObjectOptions{ContentType: contentType}
+	options := minio.PutObjectOptions{
+		ContentType:  contentType,
+		UserMetadata: map[string]string{softwareMetadataKey: SoftwareVersion},
+	}
 	_, err := s3.FPutObject(ctx, bucket, dest, file, options)
 	return err
+}
+
+// StoredSoftware returns the version of qrank-builder that produced
+// a file in storage, or unknownSoftware if the file carries no such
+// information.
+func StoredSoftware(ctx context.Context, s3 S3, bucket string, path string) (string, error) {
+	info, err := s3.StatObject(ctx, bucket, path, minio.StatObjectOptions{})
+	if err != nil {
+		return "", err
+	}
+	for key, value := range info.UserMetadata {
+		if strings.EqualFold(key, softwareMetadataKey) && value != "" {
+			return value, nil
+		}
+	}
+	if value := info.Metadata.Get("X-Amz-Meta-" + softwareMetadataKey); value != "" {
+		return value, nil
+	}
+	return unknownSoftware, nil
 }
 
 // ListStoredFiles returns what files are available in S3 storage.
