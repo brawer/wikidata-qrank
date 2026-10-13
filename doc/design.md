@@ -196,22 +196,8 @@ item's rank to related items, such as from an author to their
 publications or from a painter to their works, could fill that gap.
 
 **PageRank.** Running [PageRank](https://en.wikipedia.org/wiki/PageRank)
-on Wikidata, or on the links between Wikimedia pages, is an obvious
-next step. It would likely work best on the parts of the graph that
-reflect importance, such as the citation graph of research literature,
-which is still sparse in Wikidata (see
-[Scholia](https://www.wikidata.org/wiki/Wikidata:Scholia)). The
-interwiki links and titles that the pipeline already extracts are
-groundwork for this. There is prior
-[research on Wikipedia PageRank](https://www.aifb.kit.edu/images/e/e5/Wikipedia_pagerank1.pdf).
-
-**Query API.** A
-[SPARQL endpoint](https://www.w3.org/TR/sparql11-overview/) for
-[federated queries](https://www.w3.org/TR/sparql11-federated-query/)
-would integrate QRank with the
-[Wikidata Query Service](https://query.wikidata.org/). One option is a
-separate Java server built on [Apache Jena](https://jena.apache.org/),
-with qrank.toolforge.org proxying to it. Another option is a lean
-SPARQL implementation in Go inside the webserver, which has fewer
-moving parts but is much more work. An ad-hoc query language would be
-cheaper to build, but harder to integrate.
+on the links between Wikimedia pages would be similar to the
+[Danker](https://github.com/athalhammer/danker) project, but would
+offer a downloadable dataset built inside the Wikimedia infrastructure.
+The interwiki links and titles that the pipeline already extracts are
+groundwork for this.
