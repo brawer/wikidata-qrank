@@ -34,7 +34,11 @@ use QRank to display important features more prominently; [this map of Swiss cas
 
 For a **technical description** of the system, see the
 [Design Document](doc/design.md). To **download ranking data**,
-head over to [qrank.toolforge.org](https://qrank.toolforge.org/).
+head over to [qrank.toolforge.org](https://qrank.toolforge.org/);
+[Downloads and provenance](doc/downloads.md) describes the files,
+how to check for updates and verify a download, and the bill of
+materials that tells which inputs and software versions went into
+each version.
 
 
 ## License
