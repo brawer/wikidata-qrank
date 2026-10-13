@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -180,6 +181,40 @@ func TestWebserver_DownloadMethodNotAllowed(t *testing.T) {
 	want := "GET, HEAD, OPTIONS"
 	if got := header.Get("Allow"); got != want {
 		t.Errorf(`expected "Allow: %s", got "%s"`, want, got)
+	}
+}
+
+func TestWebserver_DownloadDated(t *testing.T) {
+	storage := &Storage{
+		client: newMapStorageClient(map[string]string{
+			"public/qrank-20261004.csv.gz": "2026-10-04T10:00:00Z",
+		}),
+		workdir: t.TempDir(),
+	}
+	if err := storage.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ws := &Webserver{storage: storage}
+
+	for _, tc := range []struct{ path, cacheControl, link string }{
+		{"/download/qrank-20261004.csv.gz", "public, max-age=31536000, immutable", ""},
+		{"/download/qrank.csv.gz", "", `</download/qrank-20261004.csv.gz>; rel="canonical"`},
+	} {
+		w := httptest.NewRecorder()
+		ws.HandleDownload(w, httptest.NewRequest("GET", tc.path, nil))
+		res := w.Result()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("GET %s: got status %d", tc.path, res.StatusCode)
+		}
+		if got := res.Header.Get("Cache-Control"); got != tc.cacheControl {
+			t.Errorf(`GET %s: got "Cache-Control: %s", want "%s"`, tc.path, got, tc.cacheControl)
+		}
+		if got := res.Header.Get("Link"); got != tc.link {
+			t.Errorf(`GET %s: got "Link: %s", want "%s"`, tc.path, got, tc.link)
+		}
+		if got := res.Header.Get("Content-Type"); got != "application/gzip" {
+			t.Errorf(`GET %s: got "Content-Type: %s"`, tc.path, got)
+		}
 	}
 }
 
