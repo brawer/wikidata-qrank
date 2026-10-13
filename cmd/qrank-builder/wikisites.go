@@ -315,7 +315,16 @@ func readNamespaces(site *WikiSite, dumps string) error {
 		// deprecated wiki projects such as alswiktionary contain HTML
 		// instead of JSON in their `siteinfo-namespaces.json.gz` file.
 		// https://github.com/brawer/wikidata-qrank/issues/41
-		logger.Printf("malformed namespace file: %s", path)
+		//
+		// We log the parse error and the start of the content, so that
+		// it can be seen from the logs what is wrong with a file.
+		// https://github.com/brawer/wikidata-qrank/issues/90
+		head := data
+		if len(head) > 100 {
+			head = head[:100]
+		}
+		logger.Printf("malformed namespace file: %s, size=%d, error=%q, head=%q",
+			path, len(data), err.Error(), head)
 		return nil
 	}
 

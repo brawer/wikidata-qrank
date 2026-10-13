@@ -158,6 +158,11 @@ func TestReadNamespaces_Bug41(t *testing.T) {
 	if !strings.Contains(gotLog, "alswiktionary") {
 		t.Errorf("log should contain name of malformed Wiki dump, log=%q", gotLog)
 	}
+	for _, want := range []string{"size=", "error=", "head=", "301 Moved Permanently"} {
+		if !strings.Contains(gotLog, want) {
+			t.Errorf("log should contain %q, log=%q", want, gotLog)
+		}
+	}
 }
 
 // https://github.com/brawer/wikidata-qrank/issues/41
