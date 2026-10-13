@@ -167,3 +167,49 @@ func TestBuildSiteFiles(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// Page signals feed into the item signals, whose provenance gets published.
+// Therefore, buildSiteFiles() should re-build any page signals that do not
+// record which software produced them.
+func TestBuildSiteFiles_Unstamped(t *testing.T) {
+	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
+	ctx := context.Background()
+	s3 := NewFakeS3()
+	stamp := map[string]string{softwareMetadataKey: "QRank/v0.0.1"}
+	s3.data["page_signals/itwikibooks-20230101-page_signals.zst"] = []byte("old-2023-01")
+	s3.data["page_signals/itwikibooks-20230201-page_signals.zst"] = []byte("old-2023-02")
+	s3.data["page_signals/itwikibooks-20240301-page_signals.zst"] = []byte("unstamped")
+	s3.data["page_signals/rmwiki-20240301-page_signals.zst"] = []byte("stamped")
+	s3.metadata["page_signals/rmwiki-20240301-page_signals.zst"] = stamp
+
+	dumps := filepath.Join("testdata", "dumps")
+	sites, err := ReadWikiSites(nil, dumps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buildFunc := func(site *WikiSite, ctx context.Context, dumps string, s3 S3) error {
+		path := site.S3Path("page_signals")
+		fake := s3.(*FakeS3)
+		fake.mutex.Lock()
+		defer fake.mutex.Unlock()
+		fake.data[path] = []byte("fresh")
+		fake.metadata[path] = stamp
+		return nil
+	}
+
+	if err := buildSiteFiles(ctx, "page_signals", buildFunc, dumps, sites, s3); err != nil {
+		t.Fatal(err)
+	}
+
+	for path, want := range map[string]string{
+		"page_signals/itwikibooks-20230101-page_signals.zst": "old-2023-01",
+		"page_signals/itwikibooks-20230201-page_signals.zst": "old-2023-02",
+		"page_signals/itwikibooks-20240301-page_signals.zst": "fresh",
+		"page_signals/rmwiki-20240301-page_signals.zst":      "stamped",
+	} {
+		if got, found := s3.data[path]; !found || string(got) != want {
+			t.Errorf("%s: got %q (found=%v), want %q", path, got, found, want)
+		}
+	}
+}

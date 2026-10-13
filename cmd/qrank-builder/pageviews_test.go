@@ -62,6 +62,11 @@ func TestBuildPageviews(t *testing.T) {
 	s3.data["pageviews/pageviews-2023-W09.zst"] = []byte("foo")
 	s3.data["pageviews/pageviews-2023-W10.zst"] = []byte("bar")
 	s3.data["pageviews/pageviews-2023-W11.zst"] = []byte("baz")
+	s3.data["pageviews/pageviews-2023-W12.zst"] = []byte("unstamped")
+	stamp := map[string]string{softwareMetadataKey: "QRank/v0.0.1"}
+	for _, week := range []string{"2023-W09", "2023-W10", "2023-W11"} {
+		s3.metadata["pageviews/pageviews-"+week+".zst"] = stamp
+	}
 	got, err := buildPageviews(ctx, dumps /*numWeeks*/, 4, s3)
 	if err != nil {
 		t.Error(err)
@@ -75,8 +80,13 @@ func TestBuildPageviews(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
-	if _, found := s3.data["pageviews/pageviews-2023-W12.zst"]; !found {
-		t.Errorf("buildPageviews() should upload newly computed 2023-W12 file")
+	// The stored 2023-W12 file has no software metadata, as if it had
+	// been written by an older release, so it should get re-built.
+	if string(s3.data["pageviews/pageviews-2023-W12.zst"]) == "unstamped" {
+		t.Errorf("buildPageviews() should re-build unstamped 2023-W12 file")
+	}
+	if string(s3.data["pageviews/pageviews-2023-W11.zst"]) != "baz" {
+		t.Errorf("buildPageviews() should keep stamped 2023-W11 file")
 	}
 	if _, found := s3.data["pageviews/pageviews-2011-W51.zst"]; found {
 		t.Errorf("buildPageviews() should remove 2011-W51 file, which is out of the time window")

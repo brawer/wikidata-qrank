@@ -64,6 +64,11 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 	return nil
 }
 
+// StampedSiteFiles are the kinds of site-specific files that must record
+// which software produced them, because they feed into the item signals,
+// whose provenance gets published in the CycloneDX bill of materials.
+var stampedSiteFiles = map[string]bool{"page_signals": true}
+
 type SiteFileBuilder func(site *WikiSite, ctx context.Context, dumps string, s3 S3) error
 
 func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilder, dumps string, sites *WikiSites, s3 S3) error {
@@ -93,10 +98,30 @@ func buildSiteFiles(ctx context.Context, filename string, builder SiteFileBuilde
 		})
 	}
 
+	// Files that feed into the item signals must record which software
+	// produced them. Re-build any that were stored by older releases.
+	unstamped := make(map[string]bool)
+	if stampedSiteFiles[filename] {
+		paths := make([]string, 0, len(sites.Sites))
+		for _, site := range sites.Sites {
+			ymd := site.LastDumped.Format("20060102")
+			if slices.Contains(stored[site.Key], ymd) {
+				paths = append(paths, site.S3Path(filename))
+			}
+		}
+		unstamped, err = findUnstampedFiles(ctx, paths, s3)
+		if err != nil {
+			return err
+		}
+		if len(unstamped) > 0 {
+			logger.Printf("re-building %d %s files without software metadata", len(unstamped), filename)
+		}
+	}
+
 	built := make(map[string]string, len(sites.Sites))
 	for _, site := range sites.Sites {
 		ymd := site.LastDumped.Format("20060102")
-		if arr, ok := stored[site.Key]; !ok || !slices.Contains(arr, ymd) {
+		if arr, ok := stored[site.Key]; !ok || !slices.Contains(arr, ymd) || unstamped[site.S3Path(filename)] {
 			tasks <- *site
 			built[site.Key] = ymd
 		}

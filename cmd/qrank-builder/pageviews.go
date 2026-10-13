@@ -117,7 +117,21 @@ func buildPageviews(ctx context.Context, dumps string, numWeeks int, s3 S3) ([]s
 		destPath := "pageviews/" + fileName
 		result = append(result, destPath)
 
-		if _, found := slices.BinarySearch(stored, weekString); !found {
+		_, found := slices.BinarySearch(stored, weekString)
+		if found {
+			// Weekly files stored by older releases do not record which
+			// software produced them. Re-build those, so the provenance
+			// of item signals is complete.
+			sw, err := StoredSoftware(ctx, s3, "qrank", destPath)
+			if err != nil {
+				return nil, err
+			}
+			if sw == unknownSoftware {
+				logger.Printf("re-building %s, which has no software metadata", destPath)
+				found = false
+			}
+		}
+		if !found {
 
 			tempFile := filepath.Join(tempDir, fileName)
 			if err := buildWeeklyPageviews(ctx, dumps, year, week, tempFile); err != nil {
