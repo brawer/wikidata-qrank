@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"testing"
+	"time"
 )
 
 // TestBuild is a large integration test that runs the entire pipeline.
@@ -36,6 +37,19 @@ func TestBuild(t *testing.T) {
 		if _, found := s3.data[path]; !found {
 			t.Errorf("Build() should store %s", path)
 		}
+	}
+
+	// Every input was written by this run, so there is a single producer.
+	date, _ := time.Parse(time.DateOnly, "2024-05-01")
+	prov, err := readItemSignalsProvenance(context.Background(), date, s3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(prov.Software, []string{SoftwareVersion}) {
+		t.Errorf("got provenance software %v, want [%s]", prov.Software, SoftwareVersion)
+	}
+	if prov.Dumps.Newest != "2024-05-01" || prov.Pageviews.Weeks != 2 {
+		t.Errorf("got provenance %+v", prov)
 	}
 
 	got, err := s3.ReadLines("public/item_signals-20240501.csv.zst")
