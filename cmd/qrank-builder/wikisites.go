@@ -270,10 +270,58 @@ func fetchInterwikiMap(client *http.Client) (map[string]string, error) {
 	return result, nil
 }
 
+// ReadNamespaces reads the namespaces of a wiki site from its dumps.
+//
+// Normally, we read the `siteinfo-namespaces.json.gz` file of the dump
+// we’re processing. If that file is missing or malformed, we fall back
+// to the most recent older dump with a usable namespace file. For example,
+// the 20261001 dumps of elwiki and several other wikis contain an HTTP
+// error message instead of JSON, apparently because the dump scripts
+// ran into a timeout when fetching the namespaces from the live site.
+// https://github.com/brawer/wikidata-qrank/issues/90
 func readNamespaces(site *WikiSite, dumps string) error {
 	ymd := site.LastDumped.Format("20060102")
-	filename := fmt.Sprintf("%s-%s-siteinfo-namespaces.json.gz", site.Key, ymd)
-	path := filepath.Join(dumps, site.Key, ymd, filename)
+	path := namespaceFilePath(site.Key, ymd, dumps)
+	namespaces, err := readNamespaceFile(path)
+	if err != nil {
+		return err
+	}
+
+	if namespaces == nil {
+		entries, err := os.ReadDir(filepath.Join(dumps, site.Key))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		for i := len(entries) - 1; i >= 0 && namespaces == nil; i-- {
+			version := entries[i].Name()
+			if _, err := time.Parse("20060102", version); err != nil || version >= ymd {
+				continue
+			}
+			path = namespaceFilePath(site.Key, version, dumps)
+			namespaces, err = readNamespaceFile(path)
+			if err != nil {
+				return err
+			}
+			if namespaces != nil {
+				logger.Printf("using older namespace file: %s", path)
+			}
+		}
+	}
+
+	for key, n := range namespaces {
+		site.Namespaces[key] = n
+	}
+	return nil
+}
+
+func namespaceFilePath(siteKey, version, dumps string) string {
+	filename := fmt.Sprintf("%s-%s-siteinfo-namespaces.json.gz", siteKey, version)
+	return filepath.Join(dumps, siteKey, version, filename)
+}
+
+// ReadNamespaceFile reads a `siteinfo-namespaces.json.gz` file. If the
+// file is missing or malformed, the result is nil and a message is logged.
+func readNamespaceFile(path string) (map[string]*Namespace, error) {
 	file, err := os.Open(path)
 	if os.IsNotExist(err) {
 		// Intentionally logging an error without failing, because some
@@ -281,21 +329,21 @@ func readNamespaces(site *WikiSite, dumps string) error {
 		// any `siteinfo-namespaces.json.gz` file in their dumps.
 		// https://github.com/brawer/wikidata-qrank/issues/42
 		logger.Printf("missing namespace file: %s", path)
-		return nil
+		return nil, nil
 	} else if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
+	var data []byte
 	gz, err := gzip.NewReader(file)
-	if err != nil {
-		return err
+	if err == nil {
+		defer gz.Close()
+		data, err = io.ReadAll(gz)
 	}
-	defer gz.Close()
-
-	data, err := io.ReadAll(gz)
-	if err != nil {
-		return err
+	if err != nil && err != gzip.ErrHeader && err != gzip.ErrChecksum &&
+		err != io.ErrUnexpectedEOF && err != io.EOF {
+		return nil, err
 	}
 
 	type namespace struct {
@@ -310,7 +358,13 @@ func readNamespaces(site *WikiSite, dumps string) error {
 		Query query `json:"query"`
 	}
 	var si siteinfo
-	if err := json.Unmarshal(data, &si); err != nil {
+	if err == nil {
+		err = json.Unmarshal(data, &si)
+	}
+	if err == nil && len(si.Query.Namespaces) == 0 {
+		err = fmt.Errorf("no namespaces")
+	}
+	if err != nil {
 		// Intentionally logging an error without failing, because some
 		// deprecated wiki projects such as alswiktionary contain HTML
 		// instead of JSON in their `siteinfo-namespaces.json.gz` file.
@@ -325,15 +379,15 @@ func readNamespaces(site *WikiSite, dumps string) error {
 		}
 		logger.Printf("malformed namespace file: %s, size=%d, error=%q, head=%q",
 			path, len(data), err.Error(), head)
-		return nil
+		return nil, nil
 	}
 
+	result := make(map[string]*Namespace, len(si.Query.Namespaces)*3)
 	for key, ns := range si.Query.Namespaces {
 		n := &Namespace{ID: ns.ID, Canonical: ns.Canonical, Localized: ns.Localized}
-		site.Namespaces[key] = n
-		site.Namespaces[ns.Canonical] = n
-		site.Namespaces[ns.Localized] = n
+		result[key] = n
+		result[ns.Canonical] = n
+		result[ns.Localized] = n
 	}
-
-	return nil
+	return result, nil
 }

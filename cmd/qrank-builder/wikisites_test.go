@@ -192,3 +192,34 @@ func TestReadNamespaces_Bug42(t *testing.T) {
 		t.Errorf("log should contain name of missing namespace file, log=%q", gotLog)
 	}
 }
+
+// https://github.com/brawer/wikidata-qrank/issues/90
+func TestReadNamespaces_Bug90(t *testing.T) {
+	var buf bytes.Buffer
+	logger = log.New(&buf, "", log.Lshortfile)
+	dumped, _ := time.Parse(time.DateOnly, "2026-10-01")
+	site := &WikiSite{
+		Key:        "elwiki",
+		Domain:     "el.wikipedia.org",
+		LastDumped: dumped,
+		Namespaces: make(map[string]*Namespace, 20),
+	}
+	dumps := filepath.Join("testdata", "bug_90")
+	if err := readNamespaces(site, dumps); err != nil {
+		t.Fatal(err)
+	}
+	if got := site.Namespaces["Χρήστης"]; got == nil || got.ID != 2 || got.Canonical != "User" {
+		t.Errorf("got %v, want namespace 2 from older dump", got)
+	}
+	gotLog := string(buf.Bytes())
+	for _, want := range []string{
+		"malformed namespace file: testdata/bug_90/elwiki/20261001/",
+		"upstream connect error",
+		"malformed namespace file: testdata/bug_90/elwiki/20260920/",
+		"using older namespace file: testdata/bug_90/elwiki/20260901/",
+	} {
+		if !strings.Contains(gotLog, want) {
+			t.Errorf("log should contain %q, log=%q", want, gotLog)
+		}
+	}
+}
