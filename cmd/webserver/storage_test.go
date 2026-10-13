@@ -190,6 +190,12 @@ func TestStorage_ReloadDated(t *testing.T) {
 	if alias.Canonical != "qrank-20261004.csv.gz" || alias.Immutable {
 		t.Errorf("alias: got Canonical=%q Immutable=%v", alias.Canonical, alias.Immutable)
 	}
+	// Item signals have no dated URL, so their alias must not name one.
+	signals, _ := storage.Retrieve("item_signals.csv.zst")
+	defer signals.Close()
+	if signals.Canonical != "" {
+		t.Errorf("item_signals.csv.zst: got Canonical=%q, want none", signals.Canonical)
+	}
 	dated, _ := storage.Retrieve("qrank-20261004.csv.gz")
 	defer dated.Close()
 	if dated.Canonical != "" || !dated.Immutable {
