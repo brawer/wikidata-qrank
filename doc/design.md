@@ -52,62 +52,74 @@ The QRank system consists of two parts. Both run in the
 
 Like all build pipelines, `qrank-builder` reads input, produces
 intermediate files, and does some shuffling to finally build its output.
-At every step of the pipeline, we check whether the output has already
-been computed in a previous run of the pipeline; if so, the step is skipped.
+Intermediate files are kept in object storage. At every step of the
+pipeline, we check whether the output has already been computed in a
+previous run of the pipeline; if so, the step is skipped.
 
-1. The build currently starts with Wikimedia pageviews. From the
-   [Pageview
-   complete](https://dumps.wikimedia.org/other/pageview_complete/readme.html)
+1. The build starts with Wikimedia pageviews. From the
+   [Pageview complete](https://dumps.wikimedia.org/other/pageview_complete/readme.html)
    dataset, [pageviews.go](../cmd/qrank-builder/pageviews.go) aggregates
-   monthly view counts for the past twelve months.  The result gets
-   stored as a sorted and compressed text file.
+   daily view counts into one file per
+   [ISO week](https://en.wikipedia.org/wiki/ISO_week_date), keyed by wiki
+   and page ID. The build keeps the 52 most recent weeks; a new week is
+   added when its daily dumps are available, and the oldest one is
+   dropped. The result gets stored as a sorted, zstd-compressed CSV file.
 
-   💾 For example, the file `pageviews-2021-02.br` contains a line
-`en.wikipedia/seabird 8204`, which means that the English Wikipedia
-article for [Seabird](https://en.wikipedia.org/wiki/Seabird) has been
-viewed 8204 times in February 2021. In total, the monthly file for
-February 2021 contains 118.2 million such lines.  After compression,
-it weighs 8.9 MB in storage.
+   💾 For example, the file `pageviews/pageviews-2026-W40.zst` could
+   contain a line `en.wikipedia,3422,7`, which means that the page
+   [https://en.wikipedia.org/?curid=3422](https://en.wikipedia.org/?curid=3422)
+   has been viewed 7 times during that week.
 
-2. The build continues by extracting Wikimedia site links from latest
-   [Wikidata database dump](https://www.wikidata.org/wiki/Wikidata:Database_download),
-   and associating them with the corresponding Wikidata entity ID. Again,
-   the result gets stored as a sorted and compressed text file.
+2. The build continues by extracting page signals from the
+   [database dumps](https://dumps.wikimedia.org/) of every Wikimedia
+   wiki, about a thousand of them. For each wiki,
+   [pagesignals.go](../cmd/qrank-builder/pagesignals.go) reads the `page`
+   and `page_props` tables, and writes one line per page that is about a
+   Wikidata item: the page ID, the item ID, and the page's size in bytes
+   of wikitext. For pages of Wikidata itself, the line also has the
+   number of claims, identifiers and sitelinks of the item. A wiki's file
+   only gets re-built when that wiki has a new dump, so most runs re-use
+   most page signals from earlier runs.
 
-   💾 For example, the file `sitelinks-2021-02-15.br` contains a line
-`en.wikipedia/seabird Q55808`, which means that this page of the English
-Wikipedia is about entity [Q55808](https://www.wikidata.org/wiki/Q55808).
-In total, the sitelinks file extracted from the Wikidata dump of February
-15, 2021 contains 76.7 million such lines (because lots of Wikidata entities
-have no sitelinks at all), weighing 783.5 MB after compression.
+   💾 For example, the file `page_signals/rmwiki-20261001-page_signals.zst`
+   holds the page signals of the Romansh Wikipedia, built from its dump
+   of October 1, 2026.
 
-3. The build continues by joining `pageviews` for the previous twelve
-   months, which were computed in step 1, with `sitelinks` from step 2.
-   Because all inputs to this step use the same key, and because the
-   input files are sorted by that key, we can do a simple
-   linear scan without reshuffling. The logic for merging the thirteen
-   input files is in [linemerger.go](../cmd/qrank-builder/linemerger.go),
-   using a [min heap](https://en.wikipedia.org/wiki/Heap_(data_structure)).
-   The intermediate output is a long series of (entity, count)
-   pairs. They get sorted by entity ID into a temporary file, and read back
-   in order. At this time, all view counts for the same entity will appear
-   grouped together, so we can easily (in linear time) compute the sum.
+   In the same way, the build also extracts page titles, redirects,
+   interwiki links and the mapping from pages to items for every wiki.
+   These are not used for the ranking yet; they are groundwork for
+   computing [PageRank](#pagerank).
 
-   💾 For example, the file `qviews-2021-02-15.br` contains a line
-   `Q55808 329861`. This means that from February 2020 to January 2021,
-   Wikimedia pages about [Q55808](https://www.wikidata.org/wiki/Q55808)
-   (Seabird) have been viewed 329861 times, aggregated over all languages
-   and Wikimedia projects for the entire year. In total, the file contains
-   27.3 million such lines, weighing 103.9 MB after compression.
+3. The build continues by joining the weekly pageviews from step 1 with
+   the page signals from step 2. Because all inputs to this step are
+   sorted by the same key, wiki and page ID, a single linear scan
+   suffices. The logic for merging the inputs is in
+   [linemerger.go](../cmd/qrank-builder/linemerger.go), using a
+   [min heap](https://en.wikipedia.org/wiki/Heap_(data_structure)).
+   The intermediate output is a long series of per-page signals keyed by
+   item. They get sorted by item ID with an external sort, and read back
+   in order. At this time, all signals for the same item appear grouped
+   together, so we can sum them in linear time. See
+   [itemsignals.go](../cmd/qrank-builder/itemsignals.go).
 
-4. The build continues by sorting the view counts by decreasing popularity.
-   If the pages about two entities were viewed equally often,
-   the entity ID is used as secondary key. The comparison function is
-   `QRankLess()` in [qrank.go](../cmd/qrank-builder/qrank.go).
+   💾 The result is published as `item_signals-YYYYMMDD.csv.zst`, with
+   the columns `item`, `pageviews_52w`, `wikitext_bytes`, `claims`,
+   `identifiers` and `sitelinks`. For example, the row for
+   [Q72](https://www.wikidata.org/wiki/Q72) (Zürich) sums the pageviews
+   of the articles about Zürich in all languages and Wikimedia projects
+   over the past 52 weeks. The date in the file name is the newest date
+   of any input, either a dump or the last day of the latest pageviews
+   week.
 
-   💾 The file format, content and approximate size of `qrank-2021-02-15.br`
-   is the same as the `qviews` file of the previous step, only the sorting
-   is different.
+4. The build continues by ranking the items by their pageviews over
+   the past 52 weeks, which is the QRank. Items without any pageviews
+   are left out. If two items have the same QRank, the item ID is used
+   as secondary key. The comparison function is `QRankLess()` in
+   [qrank.go](../cmd/qrank-builder/qrank.go).
+
+   💾 The result is stored as a gzip-compressed CSV file
+   `qrank-YYYYMMDD.csv.gz` with the columns `Entity` and `QRank`,
+   sorted by decreasing QRank.
 
 5. The build finishes by computing some statistics about the output,
    which get stored into a small JSON file. Currently, this is just
