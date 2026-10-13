@@ -129,6 +129,34 @@ func buildItemSignalsProvenance(ctx context.Context, date time.Time, pageviews [
 	return p, nil
 }
 
+// FindUnstampedFiles returns those files in storage that do not record
+// which software produced them, because they were stored by an older
+// release of qrank-builder.
+func findUnstampedFiles(ctx context.Context, paths []string, s3 S3) (map[string]bool, error) {
+	result := make(map[string]bool)
+	var mutex sync.Mutex
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(16)
+	for _, path := range paths {
+		group.Go(func() error {
+			sw, err := StoredSoftware(groupCtx, s3, "qrank", path)
+			if err != nil {
+				return fmt.Errorf("%s: %w", path, err)
+			}
+			if sw == unknownSoftware {
+				mutex.Lock()
+				result[path] = true
+				mutex.Unlock()
+			}
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // StoreItemSignalsProvenance puts a provenance record into storage.
 func storeItemSignalsProvenance(ctx context.Context, p *ItemSignalsProvenance, s3 S3) error {
 	date, err := time.Parse(time.DateOnly, p.Date)
