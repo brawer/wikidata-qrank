@@ -44,7 +44,8 @@ as two components of one image, configured in
   of the published files.
 
 Files under `public/` in the bucket are published; everything else is
-internal to the pipeline.
+internal to the pipeline. [Downloads and provenance](downloads.md)
+describes the published files for the people who use them.
 
 
 ## Build pipeline
@@ -146,6 +147,10 @@ rather than with a library. This keeps dependencies small and the output
 byte-stable: building the same version again gives the same bytes. CI
 validates golden copies with `cyclonedx-cli` and against the Frictionless
 v2 schema.
+
+[Downloads and provenance](downloads.md) explains how to verify a
+download against the data package and the BOM, and how to cite QRank
+in your own BOM.
 
 
 ## Webserver
