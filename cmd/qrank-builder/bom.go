@@ -22,9 +22,10 @@ import (
 )
 
 // This file produces a CycloneDX 1.7 Bill of Materials for one dated QRank
-// file: the exact bytes that were produced (SHA-256 and SHA-512), which
-// versions of the Wikimedia dumps and pageviews went into it, and which
-// versions of qrank-builder processed them. The builder stores it as
+// file: the exact bytes that were produced (SHA-256 and SHA-512), the item
+// signals it was computed from, which versions of the Wikimedia dumps and
+// pageviews went into those, and which versions of qrank-builder processed
+// them. The builder stores it as
 // public/qrank-YYYYMMDD.cdx.json, before the QRank file itself.
 //
 // QRank reuses intermediate files from earlier runs, so a single QRank file
@@ -75,13 +76,15 @@ var bomNamespace = uuid.MustParse("4f0d2c6e-8b1a-4e57-9c3d-2a6b7e8f9d10")
 // bomInputs is everything writeBOM needs about one build. Every field is
 // deterministic; nothing is read from the wall clock.
 type bomInputs struct {
-	Date       time.Time              // date of the item signals; the version identity
-	SHA256     string                 // lower-case hex digest of the QRank file
-	SHA512     string                 // lower-case hex digest of the QRank file
-	Provenance *ItemSignalsProvenance // inputs and producers of the item signals
-	Software   string                 // this build, e.g. "QRank/v2.2.0+1a2b3c4d5e6f"
-	Revision   string                 // full VCS revision of this build, or ""
-	Modified   bool                   // whether this build's working tree was dirty
+	Date          time.Time              // date of the item signals; the version identity
+	SHA256        string                 // lower-case hex digest of the QRank file
+	SHA512        string                 // lower-case hex digest of the QRank file
+	SignalsSHA256 string                 // lower-case hex digest of the item signals file
+	SignalsSHA512 string                 // lower-case hex digest of the item signals file
+	Provenance    *ItemSignalsProvenance // inputs and producers of the item signals
+	Software      string                 // this build, e.g. "QRank/v2.2.0+1a2b3c4d5e6f"
+	Revision      string                 // full VCS revision of this build, or ""
+	Modified      bool                   // whether this build's working tree was dirty
 }
 
 // hashFile returns the lower-case hex SHA-256 and SHA-512 digests of the file
@@ -212,6 +215,18 @@ func (in bomInputs) dataPURL() string {
 		in.Date.UTC().Format(time.DateOnly), in.SHA256, url.QueryEscape(in.downloadURL()))
 }
 
+// signalsDownloadURL is where this build's item signals are published
+// under their dated name, likewise retained for three builds only.
+func (in bomInputs) signalsDownloadURL() string {
+	return fmt.Sprintf("%sitem_signals-%s.parquet", bomDownloadURL, in.Date.UTC().Format("20060102"))
+}
+
+// signalsPURL is the Package-URL of the item signals file.
+func (in bomInputs) signalsPURL() string {
+	return fmt.Sprintf("pkg:generic/item_signals@%s?checksum=sha256:%s&download_url=%s",
+		in.Date.UTC().Format(time.DateOnly), in.SignalsSHA256, url.QueryEscape(in.signalsDownloadURL()))
+}
+
 func bomSupplier() *cdxOrgEntity {
 	return &cdxOrgEntity{Name: bomSupplierName, URL: []string{bomSupplierURL}}
 }
@@ -253,6 +268,7 @@ func buildBOM(in bomInputs) *cdxBOM {
 	date := in.Date.UTC().Format(time.DateOnly)
 	ymd := in.Date.UTC().Format("20060102")
 	dataRef := "qrank-" + ymd
+	signalsRef := "item_signals-" + ymd
 	prov := in.Provenance
 
 	// The pipeline is a tool that produced the QRank file, not a component
@@ -288,6 +304,34 @@ func buildBOM(in bomInputs) *cdxBOM {
 			BOMRef:         "qrank-dataset-" + ymd,
 			Type:           "dataset",
 			Name:           "QRank",
+			Classification: "PUBLIC",
+		}},
+	}
+
+	// The QRank file is computed from the item signals, which
+	// are published alongside it.
+	signals := cdxComponent{
+		Type:        "data",
+		BOMRef:      signalsRef,
+		Supplier:    bomSupplier(),
+		Name:        "item_signals",
+		Version:     date,
+		Description: "Ranking signals for Wikidata items (Apache Parquet, columns item, pageviews_52w, wikitext_bytes, statement_count, identifier_count, sitelink_count).",
+		PURL:        in.signalsPURL(),
+		Licenses:    []cdxLicenseChoice{{License: cdxLicense{ID: "CC0-1.0"}}},
+		Hashes: []cdxHash{
+			{Alg: "SHA-256", Content: in.SignalsSHA256},
+			{Alg: "SHA-512", Content: in.SignalsSHA512},
+		},
+		ExternalReferences: []cdxExternalRef{
+			{Type: "distribution", URL: in.signalsDownloadURL()},
+			{Type: "website", URL: bomWebsiteURL},
+			{Type: "vcs", URL: bomVCSURL},
+		},
+		Data: []cdxComponentData{{
+			BOMRef:         "item_signals-dataset-" + ymd,
+			Type:           "dataset",
+			Name:           "Item signals",
 			Classification: "PUBLIC",
 		}},
 	}
@@ -347,10 +391,10 @@ func buildBOM(in bomInputs) *cdxBOM {
 			{Resource: &cdxResourceRef{Ref: bomDumpsRef}},
 			{Resource: &cdxResourceRef{Ref: bomPageviewsRef}},
 		},
-		Outputs: []cdxWorkflowIO{{
-			Type:     "artifact",
-			Resource: &cdxResourceRef{Ref: dataRef},
-		}},
+		Outputs: []cdxWorkflowIO{
+			{Type: "artifact", Resource: &cdxResourceRef{Ref: signalsRef}},
+			{Type: "artifact", Resource: &cdxResourceRef{Ref: dataRef}},
+		},
 	}
 
 	return &cdxBOM{
@@ -366,9 +410,10 @@ func buildBOM(in bomInputs) *cdxBOM {
 			Tools:      cdxTools{Components: tools},
 			Component:  data,
 		},
-		Components: []cdxComponent{dumps, pageviews},
+		Components: []cdxComponent{signals, dumps, pageviews},
 		Dependencies: []cdxDependency{
-			{Ref: dataRef, DependsOn: []string{bomDumpsRef, bomPageviewsRef}},
+			{Ref: dataRef, DependsOn: []string{signalsRef}},
+			{Ref: signalsRef, DependsOn: []string{bomDumpsRef, bomPageviewsRef}},
 			{Ref: bomDumpsRef, DependsOn: []string{}},
 			{Ref: bomPageviewsRef, DependsOn: []string{}},
 		},

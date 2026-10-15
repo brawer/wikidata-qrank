@@ -23,13 +23,13 @@ func TestBuildQRankFiles(t *testing.T) {
 	ctx := context.Background()
 	s3 := NewFakeS3()
 	signals := []string{
-		"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks",
-		"Q1,7,0,0,0,0",
-		"Q2,0,100,3,1,2",
-		"Q3,42,0,0,0,0",
-		"Q4,7,0,0,0,0",
+		itemSignalsHeader,
+		"1,7,0,0,0,0",
+		"2,0,100,3,1,2",
+		"3,42,0,0,0,0",
+		"4,7,0,0,0,0",
 	}
-	if err := s3.WriteLines(signals, "public/item_signals-20261011.csv.zst"); err != nil {
+	if err := s3.WriteLines(signals, "public/item_signals-20261011.parquet"); err != nil {
 		t.Fatal(err)
 	}
 	date, _ := time.Parse(time.DateOnly, "2026-10-11")
@@ -91,7 +91,11 @@ func TestBuildQRankFiles(t *testing.T) {
 	if got := bom.Metadata.Component.Hashes[0].Content; got != qrankSHA256 {
 		t.Errorf("BOM has SHA-256 %s, want %s", got, qrankSHA256)
 	}
-	if got := bom.Components[0].Version; got != "2026-10-01" {
+	signalsSHA256 := fmt.Sprintf("%x", sha256.Sum256(s3.data["public/item_signals-20261011.parquet"]))
+	if got := bom.Components[0].Hashes[0].Content; got != signalsSHA256 {
+		t.Errorf("BOM has item signals SHA-256 %s, want %s", got, signalsSHA256)
+	}
+	if got := bom.Components[1].Version; got != "2026-10-01" {
 		t.Errorf("BOM has dumps version %q, want 2026-10-01", got)
 	}
 
@@ -142,6 +146,17 @@ func TestBuildQRankFiles(t *testing.T) {
 		t.Errorf("buildQRankFiles() should not rebuild a stored ranking")
 	}
 
+	// Data packages of earlier releases did not list the item signals.
+	// They should get re-built, so that they list them.
+	s3.data[datapackagePath] = []byte(`{"version": "2026-10-11", "resources": [{"path": "qrank-20261011.csv.gz"}]}`)
+	if err := buildQRankFiles(ctx, date, s3); err != nil {
+		t.Fatal(err)
+	}
+	if string(s3.data["public/qrank-20261011.csv.gz"]) == "unchanged" {
+		t.Errorf("buildQRankFiles() should rebuild when the data package lacks item signals")
+	}
+	s3.data["public/qrank-20261011.csv.gz"] = []byte("unchanged")
+
 	// If the data package names another version, everything should get
 	// re-built, as after a crash before the data package was stored.
 	s3.data[datapackagePath] = []byte(`{"version": "2026-10-04"}`)
@@ -159,8 +174,8 @@ func TestBuildQRankFiles_MissingBOM(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	s3 := NewFakeS3()
-	signals := []string{"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks", "Q1,7,0,0,0,0"}
-	if err := s3.WriteLines(signals, "public/item_signals-20261011.csv.zst"); err != nil {
+	signals := []string{itemSignalsHeader, "1,7,0,0,0,0"}
+	if err := s3.WriteLines(signals, "public/item_signals-20261011.parquet"); err != nil {
 		t.Fatal(err)
 	}
 	date, _ := time.Parse(time.DateOnly, "2026-10-11")

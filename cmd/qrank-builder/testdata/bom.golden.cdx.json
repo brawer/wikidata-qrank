@@ -162,6 +162,59 @@
   "components": [
     {
       "type": "data",
+      "bom-ref": "item_signals-20261004",
+      "supplier": {
+        "name": "Sascha Brawer",
+        "url": [
+          "https://brawer.ch"
+        ]
+      },
+      "name": "item_signals",
+      "version": "2026-10-04",
+      "description": "Ranking signals for Wikidata items (Apache Parquet, columns item, pageviews_52w, wikitext_bytes, statement_count, identifier_count, sitelink_count).",
+      "purl": "pkg:generic/item_signals@2026-10-04?checksum=sha256:5c220f1fa4f05b324656b50391125d371df5d28ad7a9714bb1e7ec6035f8d700&download_url=https%3A%2F%2Fqrank.toolforge.org%2Fdownload%2Fitem_signals-20261004.parquet",
+      "licenses": [
+        {
+          "license": {
+            "id": "CC0-1.0"
+          }
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5c220f1fa4f05b324656b50391125d371df5d28ad7a9714bb1e7ec6035f8d700"
+        },
+        {
+          "alg": "SHA-512",
+          "content": "02829ab588ab85f256b1cdc4f46ecb049ea08943372f8138177f5951f2ff91bfa12ce00c112d22d2d6f4c6824fe4138d082484615a93641b5bd371bbefac09b8"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://qrank.toolforge.org/download/item_signals-20261004.parquet"
+        },
+        {
+          "type": "website",
+          "url": "https://qrank.toolforge.org/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/brawer/wikidata-qrank"
+        }
+      ],
+      "data": [
+        {
+          "bom-ref": "item_signals-dataset-20261004",
+          "type": "dataset",
+          "name": "Item signals",
+          "classification": "PUBLIC"
+        }
+      ]
+    },
+    {
+      "type": "data",
       "bom-ref": "wikimedia-dumps",
       "supplier": {
         "name": "Wikimedia Foundation",
@@ -236,6 +289,12 @@
     {
       "ref": "qrank-20261004",
       "dependsOn": [
+        "item_signals-20261004"
+      ]
+    },
+    {
+      "ref": "item_signals-20261004",
+      "dependsOn": [
         "wikimedia-dumps",
         "wikimedia-pageviews"
       ]
@@ -282,6 +341,12 @@
             }
           ],
           "outputs": [
+            {
+              "type": "artifact",
+              "resource": {
+                "ref": "item_signals-20261004"
+              }
+            },
             {
               "type": "artifact",
               "resource": {

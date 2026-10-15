@@ -5,10 +5,62 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/parquet-go/parquet-go"
 )
+
+// ItemSignalsHeader is the header line that itemSignalsToLines emits,
+// and itemSignalsFromLines expects. It lists the Parquet column names.
+const itemSignalsHeader = "item,pageviews_52w,wikitext_bytes,statement_count,identifier_count,sitelink_count"
+
+// ItemSignalsToLines converts a Parquet file of item signals to CSV lines,
+// for comparing against expectations in tests.
+func itemSignalsToLines(data []byte) ([]string, error) {
+	lines := []string{itemSignalsHeader}
+	err := readItemSignalsFile(bytes.NewReader(data), func(row itemSignalsRow) error {
+		lines = append(lines, fmt.Sprintf("%d,%d,%d,%d,%d,%d",
+			row.Item, row.Pageviews52w, row.WikitextBytes,
+			row.StatementCount, row.IdentifierCount, row.SitelinkCount))
+		return nil
+	})
+	return lines, err
+}
+
+// ItemSignalsFromLines converts CSV lines, as emitted by itemSignalsToLines,
+// to a Parquet file of item signals, for setting up test inputs.
+func itemSignalsFromLines(lines []string) ([]byte, error) {
+	var buf bytes.Buffer
+	w := NewItemSignalsWriter(NopWriteCloser(&buf))
+	for _, line := range lines {
+		if line == itemSignalsHeader {
+			continue
+		}
+		var v [6]int64
+		cols := strings.Split(line, ",")
+		if len(cols) != len(v) {
+			return nil, fmt.Errorf("bad item signals line: %q", line)
+		}
+		for i, c := range cols {
+			n, err := strconv.ParseInt(c, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			v[i] = n
+		}
+		if err := w.Write(ItemSignals{v[0], v[1], v[2], v[3], v[4], v[5]}); err != nil {
+			return nil, err
+		}
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
 
 func TestItemSignalsWriter(t *testing.T) {
 	var buf bytes.Buffer
@@ -33,14 +85,58 @@ func TestItemSignalsWriter(t *testing.T) {
 		t.Error("ItemSignalsWriter.Close() should close its output writer")
 	}
 
-	got := strings.Split(strings.TrimSuffix(string(buf.Bytes()), "\n"), "\n")
+	got, err := itemSignalsToLines(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []string{
-		"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks",
-		"Q72,4,5,6,7,8",
-		"Q99,9,8,7,6,5",
+		itemSignalsHeader,
+		"72,4,5,6,7,8",
+		"99,9,8,7,6,5",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// The column names and types are part of the published format,
+// documented in doc/downloads.md and the data package.
+func TestItemSignalsWriter_Schema(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewItemSignalsWriter(NopWriteCloser(&buf))
+	if err := w.Write(ItemSignals{72, 1, 2, 3, 4, 5}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := parquet.OpenFile(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, field := range f.Schema().Fields() {
+		got = append(got, fmt.Sprintf("%s:%s", field.Name(), field.Type()))
+	}
+	want := []string{
+		"item:INT(64,true)",
+		"pageviews_52w:INT(64,true)",
+		"wikitext_bytes:INT(64,true)",
+		"statement_count:INT(64,true)",
+		"identifier_count:INT(64,true)",
+		"sitelink_count:INT(64,true)",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got schema %v, want %v", got, want)
+	}
+
+	md := f.Metadata()
+	if len(md.RowGroups) != 1 || len(md.RowGroups[0].SortingColumns) != 1 {
+		t.Fatalf("got row groups %+v, want one sorted by item", md.RowGroups)
+	}
+	if sc := md.RowGroups[0].SortingColumns[0]; sc.ColumnIdx != 0 || sc.Descending {
+		t.Errorf("got sorting column %+v, want ascending item", sc)
 	}
 }
 
@@ -50,9 +146,12 @@ func TestItemSignalsWriter_Empty(t *testing.T) {
 	if err := w.Close(); err != nil {
 		t.Error(err)
 	}
-	got := string(buf.Bytes())
-	if got != "" {
-		t.Errorf(`got "%s", want ""`, got)
+	got, err := itemSignalsToLines(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{itemSignalsHeader}; !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

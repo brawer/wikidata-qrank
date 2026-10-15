@@ -152,8 +152,10 @@ func TestStorage_ReloadDated(t *testing.T) {
 		"public/qrank-20261004.csv.gz":         "2026-10-04T10:00:00Z",
 		"public/qrank-stats-20261004.json":     "2026-10-04T10:00:00Z",
 		"public/qrank-20261004.cdx.json":       "2026-10-04T10:00:00Z",
-		"public/item_signals-20260927.csv.zst": "2026-09-27T09:00:00Z",
-		"public/item_signals-20261004.csv.zst": "2026-10-04T09:00:00Z",
+		"public/item_signals-20260927.parquet": "2026-09-27T09:00:00Z",
+		"public/item_signals-20261004.parquet": "2026-10-04T09:00:00Z",
+		"public/hello-20260927.txt":            "2026-09-27T09:00:00Z",
+		"public/hello-20261004.txt":            "2026-10-04T09:00:00Z",
 	})
 	storage := &Storage{client: client, workdir: t.TempDir()}
 	if err := storage.Reload(context.Background()); err != nil {
@@ -162,27 +164,30 @@ func TestStorage_ReloadDated(t *testing.T) {
 
 	// Without a data package, aliases point to the newest object.
 	for name, want := range map[string]string{
-		"qrank.csv.gz":              "public/qrank-20261004.csv.gz",
-		"qrank-20260927.csv.gz":     "public/qrank-20260927.csv.gz",
-		"qrank-20261004.csv.gz":     "public/qrank-20261004.csv.gz",
-		"qrank-stats.json":          "public/qrank-stats-20261004.json",
-		"qrank-stats-20261004.json": "public/qrank-stats-20261004.json",
-		"qrank.cdx.json":            "public/qrank-20261004.cdx.json",
-		"qrank-20261004.cdx.json":   "public/qrank-20261004.cdx.json",
-		"item_signals.csv.zst":      "public/item_signals-20261004.csv.zst",
+		"qrank.csv.gz":                  "public/qrank-20261004.csv.gz",
+		"qrank-20260927.csv.gz":         "public/qrank-20260927.csv.gz",
+		"qrank-20261004.csv.gz":         "public/qrank-20261004.csv.gz",
+		"qrank-stats.json":              "public/qrank-stats-20261004.json",
+		"qrank-stats-20261004.json":     "public/qrank-stats-20261004.json",
+		"qrank.cdx.json":                "public/qrank-20261004.cdx.json",
+		"qrank-20261004.cdx.json":       "public/qrank-20261004.cdx.json",
+		"item_signals.parquet":          "public/item_signals-20261004.parquet",
+		"item_signals-20260927.parquet": "public/item_signals-20260927.parquet",
+		"item_signals-20261004.parquet": "public/item_signals-20261004.parquet",
+		"hello.txt":                     "public/hello-20261004.txt",
 	} {
 		checkStorageContent(t, storage, name, want)
 	}
 
-	// Item signals are only served under their alias, and the older
-	// version is not even downloaded.
-	for _, name := range []string{"item_signals-20260927.csv.zst", "item_signals-20261004.csv.zst", "datapackage.json"} {
+	// Kinds of files that are not in datedKinds are only served under
+	// their alias, and the older version is not even downloaded.
+	for _, name := range []string{"hello-20260927.txt", "hello-20261004.txt", "datapackage.json"} {
 		if _, err := storage.Retrieve(name); err == nil {
 			t.Errorf("Retrieve(%q) should fail", name)
 		}
 	}
-	if client.fetched["public/item_signals-20260927.csv.zst"] {
-		t.Error("old item signals should not have been downloaded")
+	if client.fetched["public/hello-20260927.txt"] {
+		t.Error("old hello.txt should not have been downloaded")
 	}
 
 	alias, _ := storage.Retrieve("qrank.csv.gz")
@@ -190,11 +195,19 @@ func TestStorage_ReloadDated(t *testing.T) {
 	if alias.Canonical != "qrank-20261004.csv.gz" || alias.Immutable {
 		t.Errorf("alias: got Canonical=%q Immutable=%v", alias.Canonical, alias.Immutable)
 	}
-	// Item signals have no dated URL, so their alias must not name one.
-	signals, _ := storage.Retrieve("item_signals.csv.zst")
+	// Files without a dated URL must not name one in their alias.
+	hello, _ := storage.Retrieve("hello.txt")
+	defer hello.Close()
+	if hello.Canonical != "" {
+		t.Errorf("hello.txt: got Canonical=%q, want none", hello.Canonical)
+	}
+	signals, _ := storage.Retrieve("item_signals.parquet")
 	defer signals.Close()
-	if signals.Canonical != "" {
-		t.Errorf("item_signals.csv.zst: got Canonical=%q, want none", signals.Canonical)
+	if signals.Canonical != "item_signals-20261004.parquet" || signals.Immutable {
+		t.Errorf("item_signals.parquet: got Canonical=%q Immutable=%v", signals.Canonical, signals.Immutable)
+	}
+	if signals.ContentType != "application/vnd.apache.parquet" {
+		t.Errorf("got ContentType=%q, want application/vnd.apache.parquet", signals.ContentType)
 	}
 	dated, _ := storage.Retrieve("qrank-20261004.csv.gz")
 	defer dated.Close()
@@ -215,8 +228,8 @@ func TestStorage_ReloadDated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 5 {
-		t.Errorf("got %d files in workdir, want 5", len(entries))
+	if len(entries) != 7 {
+		t.Errorf("got %d files in workdir, want 7", len(entries))
 	}
 }
 

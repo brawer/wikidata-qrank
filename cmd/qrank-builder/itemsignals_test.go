@@ -151,17 +151,17 @@ func TestBuildItemSignals(t *testing.T) {
 		t.Errorf("got %s, want %s", gotDate, wantDate)
 	}
 
-	got, err := s3.ReadLines("public/item_signals-20111209.csv.zst")
+	got, err := s3.ReadLines("public/item_signals-20111209.parquet")
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
-		"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks",
-		"Q72,5585,3142,550,85,186",
-		"Q5296,314159267,2872,0,0,0",
-		"Q662541,5,4973,32,9,15",
-		"Q5649951,0,0,1,0,20",
-		"Q107661323,0,3470,0,0,0",
+		itemSignalsHeader,
+		"72,5585,3142,550,85,186",
+		"5296,314159267,2872,0,0,0",
+		"662541,5,4973,32,9,15",
+		"5649951,0,0,1,0,20",
+		"107661323,0,3470,0,0,0",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -184,7 +184,7 @@ func TestBuildItemSignals(t *testing.T) {
 	}
 
 	// With a provenance record, the stored signals are fresh.
-	signalsPath := "public/item_signals-20111209.csv.zst"
+	signalsPath := "public/item_signals-20111209.parquet"
 	s3.data[signalsPath] = []byte("sentinel")
 	if _, err := buildItemSignals(ctx, pageviews, sites, s3); err != nil {
 		t.Fatal(err)
@@ -267,8 +267,8 @@ func TestStoredItemSignalsVersion(t *testing.T) {
 	if !got.IsZero() {
 		t.Errorf("got %s, want zero", got.Format(time.DateOnly))
 	}
-	s3.data["public/item_signals-20230815.csv.zst"] = []byte("foo")
-	s3.data["public/item_signals-20240131.csv.zst"] = []byte("bar")
+	s3.data["public/item_signals-20230815.parquet"] = []byte("foo")
+	s3.data["public/item_signals-20240131.parquet"] = []byte("bar")
 	got, err = StoredItemSignalsVersion(context.Background(), s3)
 	if err != nil {
 		t.Error(err)
@@ -282,10 +282,11 @@ func TestStoredItemSignalsVersion(t *testing.T) {
 func TestPruneItemSignals(t *testing.T) {
 	s3 := NewFakeS3()
 	for _, path := range []string{
-		"public/item_signals-20250406.csv.zst",
-		"public/item_signals-20250413.csv.zst",
-		"public/item_signals-20250420.csv.zst",
-		"public/item_signals-20250427.csv.zst",
+		"public/item_signals-20250406.parquet",
+		"public/item_signals-20250413.parquet",
+		"public/item_signals-20250420.parquet",
+		"public/item_signals-20250427.parquet",
+		"public/item_signals-20250420.csv.zst", // stored by earlier releases
 		"public/qrank-20240311.csv.gz",
 		"item_signals/item_signals-20250406.provenance.json",
 		"item_signals/item_signals-20250413.provenance.json",
@@ -308,9 +309,9 @@ func TestPruneItemSignals(t *testing.T) {
 		"item_signals/item_signals-20250413.provenance.json",
 		"item_signals/item_signals-20250420.provenance.json",
 		"item_signals/item_signals-20250427.provenance.json",
-		"public/item_signals-20250413.csv.zst",
-		"public/item_signals-20250420.csv.zst",
-		"public/item_signals-20250427.csv.zst",
+		"public/item_signals-20250413.parquet",
+		"public/item_signals-20250420.parquet",
+		"public/item_signals-20250427.parquet",
 		"public/qrank-20240311.csv.gz",
 	}
 	if !slices.Equal(got, want) {

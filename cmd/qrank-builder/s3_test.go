@@ -45,6 +45,10 @@ func (s3 *FakeS3) ReadLines(path string) ([]string, error) {
 		return nil, fmt.Errorf("file not found: %s", path)
 	}
 
+	if strings.HasSuffix(path, ".parquet") {
+		return itemSignalsToLines(data)
+	}
+
 	var buf bytes.Buffer
 	if strings.HasSuffix(path, ".zst") {
 		decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
@@ -68,6 +72,15 @@ func (s3 *FakeS3) ReadLines(path string) ([]string, error) {
 func (s3 *FakeS3) WriteLines(lines []string, path string) error {
 	s3.mutex.Lock()
 	defer s3.mutex.Unlock()
+
+	if strings.HasSuffix(path, ".parquet") {
+		data, err := itemSignalsFromLines(lines)
+		if err != nil {
+			return err
+		}
+		s3.data[path] = data
+		return nil
+	}
 
 	var buf bytes.Buffer
 	var writer io.WriteCloser

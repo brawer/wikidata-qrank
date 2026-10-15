@@ -13,8 +13,8 @@ import (
 
 // datapackage.go emits public/datapackage.json, a Frictionless Data Package
 // v2 descriptor that the webserver serves at /download/datapackage.json.
-// It tells clients the current version and lists each file (QRank, stats,
-// BOM) by relative path, byte size and SHA-256. The builder uploads it last,
+// It tells clients the current version and lists each file (QRank, item
+// signals, stats, BOM) by relative path, byte size and SHA-256. The builder uploads it last,
 // so every file it names is already in storage.
 //
 // Like the BOM, it is hand-written and deterministic: encoding/json emits
@@ -49,10 +49,11 @@ type datapackageFile struct {
 // datapackageInputs is everything writeDatapackage needs that is not constant.
 // Every field is derived from the build, nothing from the wall clock.
 type datapackageInputs struct {
-	Date  time.Time
-	QRank datapackageFile
-	Stats datapackageFile
-	BOM   datapackageFile
+	Date    time.Time
+	QRank   datapackageFile
+	Signals datapackageFile
+	Stats   datapackageFile
+	BOM     datapackageFile
 }
 
 func buildDatapackage(in datapackageInputs) *fdPackage {
@@ -117,6 +118,62 @@ func buildDatapackage(in datapackageInputs) *fdPackage {
 				},
 			},
 			{
+				Name:        "item_signals",
+				Type:        "table",
+				Path:        in.Signals.Path,
+				Title:       "Item signals",
+				Description: "Ranking signals for Wikidata items, one row per item sorted by item ID, including items without pageviews. Apache Parquet with zstd compression.",
+				Format:      "parquet",
+				Mediatype:   "application/vnd.apache.parquet",
+				Bytes:       in.Signals.Bytes,
+				Hash:        "sha256:" + in.Signals.SHA256,
+				Schema: &fdTableSchema{
+					Fields: []fdField{
+						{
+							Name:        "item",
+							Type:        "integer",
+							Description: "Wikidata item ID without its Q prefix, such as 42 for Q42",
+							Constraints: &fdConstraints{
+								Required: true,
+								Unique:   true,
+								Minimum:  1,
+							},
+						},
+						{
+							Name:        "pageviews_52w",
+							Type:        "integer",
+							Description: "Pageviews over the past 52 weeks of all pages linked to the item, summed over all Wikimedia projects",
+							Constraints: &fdConstraints{Required: true},
+						},
+						{
+							Name:        "wikitext_bytes",
+							Type:        "integer",
+							Description: "Size in bytes of the wikitext of all pages linked to the item, summed over all Wikimedia projects",
+							Constraints: &fdConstraints{Required: true},
+						},
+						{
+							Name:        "statement_count",
+							Type:        "integer",
+							Description: "Number of statements on the item in Wikidata",
+							Constraints: &fdConstraints{Required: true},
+						},
+						{
+							Name:        "identifier_count",
+							Type:        "integer",
+							Description: "Number of statements on the item whose property is an external identifier",
+							Constraints: &fdConstraints{Required: true},
+						},
+						{
+							Name:        "sitelink_count",
+							Type:        "integer",
+							Description: "Number of sitelinks of the item, such as links to Wikipedia articles",
+							Constraints: &fdConstraints{Required: true},
+						},
+					},
+					PrimaryKey: []string{"item"},
+				},
+			},
+			{
 				Name:        "stats",
 				Path:        in.Stats.Path,
 				Title:       "QRank statistics",
@@ -131,7 +188,7 @@ func buildDatapackage(in datapackageInputs) *fdPackage {
 				Name:        "bom",
 				Path:        in.BOM.Path,
 				Title:       "CycloneDX 1.7 bill of materials",
-				Description: "Provenance of the QRank file: the versions of the Wikimedia dumps and pageviews, and of every qrank-builder release that processed them.",
+				Description: "Provenance of the QRank file and the item signals: the versions of the Wikimedia dumps and pageviews, and of every qrank-builder release that processed them.",
 				Format:      "json",
 				Mediatype:   "application/vnd.cyclonedx+json; version=1.7",
 				Encoding:    "utf-8",
@@ -148,19 +205,45 @@ func writeDatapackage(path string, in datapackageInputs) error {
 	return writeJSON(path, buildDatapackage(in))
 }
 
-// StoredDatapackageVersion returns the version of the data package
-// in storage, or the empty string if there is no data package yet.
-func storedDatapackageVersion(ctx context.Context, s3 S3) (string, error) {
+// StoredDatapackage is the part of a stored data package
+// that the builder needs to decide whether it is fresh.
+type storedDatapackage struct {
+	Version   string `json:"version"`
+	Resources []struct {
+		Path string `json:"path"`
+	} `json:"resources"`
+}
+
+// Lists returns whether the data package has a resource at `path`.
+func (dp *storedDatapackage) lists(path string) bool {
+	for _, r := range dp.Resources {
+		if r.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+// ReadStoredDatapackage reads the data package in storage.
+func readStoredDatapackage(ctx context.Context, s3 S3) (*storedDatapackage, error) {
 	r, err := NewS3Reader(ctx, "qrank", datapackagePath, s3)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer r.Close()
 
-	var dp struct {
-		Version string `json:"version"`
-	}
+	var dp storedDatapackage
 	if err := json.NewDecoder(r).Decode(&dp); err != nil {
+		return nil, err
+	}
+	return &dp, nil
+}
+
+// StoredDatapackageVersion returns the version of the data package
+// in storage, or the empty string if there is no data package yet.
+func storedDatapackageVersion(ctx context.Context, s3 S3) (string, error) {
+	dp, err := readStoredDatapackage(ctx, s3)
+	if err != nil {
 		return "", err
 	}
 	return dp.Version, nil
@@ -209,7 +292,7 @@ type fdResource struct {
 	Description string         `json:"description"`
 	Format      string         `json:"format"`
 	Mediatype   string         `json:"mediatype"`
-	Encoding    string         `json:"encoding"`
+	Encoding    string         `json:"encoding,omitempty"`
 	Bytes       int64          `json:"bytes"`
 	Hash        string         `json:"hash"`
 	Describes   string         `json:"describes,omitempty"`

@@ -35,6 +35,9 @@ func bomTestInputs() bomInputs {
 		Date:   time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC),
 		SHA256: digest256("qrank golden CSV fixture"),
 		SHA512: digest512("qrank golden CSV fixture"),
+
+		SignalsSHA256: digest256("item signals golden Parquet fixture"),
+		SignalsSHA512: digest512("item signals golden Parquet fixture"),
 		Provenance: &ItemSignalsProvenance{
 			Date:      "2026-10-04",
 			Dumps:     DumpsProvenance{Newest: "2026-10-01", Wikis: 1012},
@@ -193,16 +196,20 @@ func TestBuildBOM_NTIASupplier(t *testing.T) {
 	}
 }
 
-// The QRank file should depend only on its source data, while the
-// builder is modelled as a tool in the formulation, never as a dependency.
+// The QRank file should depend only on the item signals, which depend
+// on the source data, while the builder is modelled as a tool in the
+// formulation, never as a dependency.
 func TestBuildBOM_Provenance(t *testing.T) {
 	bom := buildBOM(bomTestInputs())
 	deps := map[string][]string{}
 	for _, d := range bom.Dependencies {
 		deps[d.Ref] = d.DependsOn
 	}
-	if got, want := deps["qrank-20261004"], []string{"wikimedia-dumps", "wikimedia-pageviews"}; !slices.Equal(got, want) {
+	if got, want := deps["qrank-20261004"], []string{"item_signals-20261004"}; !slices.Equal(got, want) {
 		t.Errorf("qrank dependsOn %v, want %v", got, want)
+	}
+	if got, want := deps["item_signals-20261004"], []string{"wikimedia-dumps", "wikimedia-pageviews"}; !slices.Equal(got, want) {
+		t.Errorf("item_signals dependsOn %v, want %v", got, want)
 	}
 	if len(bom.Formulation) != 1 || len(bom.Formulation[0].Workflows) != 1 {
 		t.Fatalf("formulation = %+v, want one workflow", bom.Formulation)
@@ -211,7 +218,11 @@ func TestBuildBOM_Provenance(t *testing.T) {
 	if len(wf.ResourceReferences) != len(bom.Metadata.Tools.Components) {
 		t.Errorf("workflow references %d tools, want %d", len(wf.ResourceReferences), len(bom.Metadata.Tools.Components))
 	}
-	if len(wf.Outputs) != 1 || wf.Outputs[0].Resource.Ref != "qrank-20261004" {
-		t.Errorf("workflow outputs = %+v, want the QRank file", wf.Outputs)
+	var outputs []string
+	for _, o := range wf.Outputs {
+		outputs = append(outputs, o.Resource.Ref)
+	}
+	if want := []string{"item_signals-20261004", "qrank-20261004"}; !slices.Equal(outputs, want) {
+		t.Errorf("workflow outputs = %v, want %v", outputs, want)
 	}
 }
