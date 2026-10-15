@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/brawer/wikidata-qrank/compare/v2.2.1...v2.3.0) (2026-10-15)
+
+
+### 🆕 Features
+
+* **builder:** publish item signals as Parquet ([#107](https://github.com/brawer/wikidata-qrank/issues/107)) ([5d0c429](https://github.com/brawer/wikidata-qrank/commit/5d0c429a87fdd1a7289d90cd66c7df50f70d88d5)), closes [#106](https://github.com/brawer/wikidata-qrank/issues/106)
+
 ## [2.2.1](https://github.com/brawer/wikidata-qrank/compare/v2.2.0...v2.2.1) (2026-10-15)
 
 
