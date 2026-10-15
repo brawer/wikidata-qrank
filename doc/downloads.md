@@ -29,7 +29,7 @@ The long-standing URLs keep working, and always serve the version that
 | `/download/qrank.cdx.json` | the current `qrank-<YYYYMMDD>.cdx.json` |
 
 These responses carry a `Link` header with `rel="canonical"` that names the
-dated file, such as `</download/qrank-20261004.csv.gz>`, so you can tell which
+dated file, such as `</download/qrank-20261011.csv.gz>`, so you can tell which
 version you received. They
 also support [conditional
 requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests)
@@ -45,14 +45,14 @@ every file by relative path, byte size and SHA-256:
 {
   "$schema": "https://datapackage.org/profiles/2.0/datapackage.json",
   "name": "qrank",
-  "version": "2026-10-04",
+  "version": "2026-10-11",
   "resources": [
-    { "name": "qrank", "path": "qrank-20261004.csv.gz",
-      "bytes": 112233445, "hash": "sha256:dc51…", "schema": { … } },
-    { "name": "stats", "path": "qrank-stats-20261004.json",
-      "bytes": 41234, "hash": "sha256:4f1e…" },
-    { "name": "bom", "path": "qrank-20261004.cdx.json",
-      "bytes": 5678, "hash": "sha256:e2cb…", "describes": "qrank" }
+    { "name": "qrank", "path": "qrank-20261011.csv.gz",
+      "bytes": 125991450, "hash": "sha256:944676da…", "schema": { … } },
+    { "name": "stats", "path": "qrank-stats-20261011.json",
+      "bytes": 10101, "hash": "sha256:b2216c49…" },
+    { "name": "bom", "path": "qrank-20261011.cdx.json",
+      "bytes": 6860, "hash": "sha256:7a2b3739…", "describes": "qrank" }
   ]
 }
 ```
@@ -157,7 +157,7 @@ record QRank as one of its inputs:
   document, use a [BOM-Link](https://cyclonedx.org/capabilities/bomlink/):
   `urn:cdx:<serialNumber>/<version>#<bom-ref>`, with the `serialNumber`
   (without its `urn:uuid:` prefix) and `version` of our BOM, and the
-  `bom-ref` of its `metadata.component`, such as `qrank-20261004`.
+  `bom-ref` of its `metadata.component`, such as `qrank-20261011`.
   A `bom-ref` is only an identifier within one BOM document, so a bare
   `bom-ref` cannot refer to our BOM from yours.
 
