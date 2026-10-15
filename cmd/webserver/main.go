@@ -110,6 +110,11 @@ and other Wikimedia projects. For an introduction, see the <a href="https://gith
 here</a>.  The file gets updated periodically; use
 <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests"
 >conditional requests</a> to check for updates.
+Every version is also listed in a <a href="/download/datapackage.json">data
+package</a>, together with a bill of materials that tells which inputs and
+software versions went into it; see
+<a href="https://github.com/brawer/wikidata-qrank/blob/main/doc/downloads.md">Downloads
+and provenance</a>.
 The QRank data is dedicated to the <b>Public Domain</b> via <a
 href="https://creativecommons.org/publicdomain/zero/1.0/">Creative
 Commons Zero 1.0</a>. To the extent possible under law, we have waived
