@@ -89,12 +89,13 @@ const datapackageKey = "public/datapackage.json"
 
 // DatedKinds are the files that get served under their dated name, such
 // as "qrank-20261004.csv.gz", in addition to their undated alias. Other
-// files, such as the (much larger) item signals, are only served under
-// their alias, which saves disk space in the working directory.
+// files are only served under their alias, which saves disk space in
+// the working directory.
 var datedKinds = map[string]bool{
-	"qrank.csv.gz":     true,
-	"qrank-stats.json": true,
-	"qrank.cdx.json":   true,
+	"qrank.csv.gz":         true,
+	"qrank-stats.json":     true,
+	"qrank.cdx.json":       true,
+	"item_signals.parquet": true,
 }
 
 var isoDateRegexp = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})$`)
@@ -262,6 +263,8 @@ func contentType(name string) string {
 		return "application/gzip"
 	case strings.HasSuffix(name, ".json"):
 		return "application/json"
+	case strings.HasSuffix(name, ".parquet"):
+		return "application/vnd.apache.parquet"
 	case strings.HasSuffix(name, ".tiff"):
 		return "image/tiff"
 	case strings.HasSuffix(name, ".txt"):

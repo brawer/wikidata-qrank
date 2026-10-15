@@ -56,7 +56,7 @@ bucket, and a later run only re-builds what is missing or out of date:
 |---|---|---|
 | 1. weekly pageviews | `pageviews/pageviews-YYYY-Www.zst` | a new week becomes available |
 | 2. page signals, per wiki | `page_signals/<wiki>-<dumpdate>-page_signals.zst` | that wiki gets a new dump |
-| 3. item signals | `public/item_signals-YYYYMMDD.csv.zst` | any input is newer |
+| 3. item signals | `public/item_signals-YYYYMMDD.parquet` | any input is newer |
 | 4. ranking and statistics | `public/qrank-YYYYMMDD.csv.gz`, `public/qrank-stats-YYYYMMDD.json` | new item signals |
 | 5. bill of materials and data package | `public/qrank-YYYYMMDD.cdx.json`, `public/datapackage.json` | together with stage 4 |
 
@@ -90,9 +90,14 @@ All intermediate files are sorted and zstd-compressed.
    [min heap](https://en.wikipedia.org/wiki/Heap_(data_structure)). The
    resulting per-page records are sorted by item ID and summed, giving
    one row per item with the columns `item`, `pageviews_52w`,
-   `wikitext_bytes`, `claims`, `identifiers` and `sitelinks`. The date
-   in the file name is the newest date of any input: a dump date, or the
-   last day of the latest pageviews week.
+   `wikitext_bytes`, `statement_count`, `identifier_count` and
+   `sitelink_count`. [item_signals_writer.go](../cmd/qrank-builder/item_signals_writer.go)
+   writes them as [Apache Parquet](https://parquet.apache.org/) with
+   zstd compression, in row groups of about a million items, so the
+   writer needs little memory and readers can skip ranges of items.
+   The file is published; see [Downloads](downloads.md#item-signals).
+   The date in the file name is the newest date of any input: a dump
+   date, or the last day of the latest pageviews week.
 
 4. **Ranking and statistics.** [qrank.go](../cmd/qrank-builder/qrank.go)
    sorts the items by `pageviews_52w`, which is their QRank, in
@@ -103,15 +108,17 @@ All intermediate files are sorted and zstd-compressed.
    the top 50 items, the median, and a sample of the rest.
 
 5. **Bill of materials and data package.** The build describes the
-   ranking in a [CycloneDX](https://cyclonedx.org) 1.7 bill of materials
-   ([bom.go](../cmd/qrank-builder/bom.go)), and lists the ranking, the
-   statistics and the BOM with their sizes and SHA-256 digests in a
+   ranking and the item signals in a [CycloneDX](https://cyclonedx.org)
+   1.7 bill of materials ([bom.go](../cmd/qrank-builder/bom.go)), and
+   lists the ranking, the item signals, the statistics and the BOM with
+   their sizes and SHA-256 digests in a
    [Frictionless Data Package](https://datapackage.org/) v2
    ([datapackage.go](../cmd/qrank-builder/datapackage.go)). It uploads
    the BOM, the statistics, the ranking and finally `datapackage.json`,
    so a version named in `datapackage.json` is always complete. A
    ranking counts as fresh only if all four files exist and
-   `datapackage.json` names its version.
+   `datapackage.json` names its version and lists its item signals.
+   The item signals are already in storage from stage 3.
 
 The bucket keeps the three newest versions of each wiki's files, of the
 item signals, and of the ranking and statistics. BOMs are kept forever,
@@ -157,11 +164,12 @@ directory. [main.go](../cmd/webserver/main.go) serves them under
 
 * Each retained dated file, such as `qrank-20261004.csv.gz`, is served
   under its own name with `Cache-Control: immutable`.
-* The long-standing names `qrank.csv.gz`, `qrank-stats.json`,
-  `qrank.cdx.json` and `item_signals.csv.zst` serve the version that
-  `datapackage.json` names. The first three carry a `Link` header with
-  `rel="canonical"` that names the dated file. Item signals are large,
-  so they are only served under the long-standing name.
+* The undated names `qrank.csv.gz`, `qrank-stats.json`,
+  `qrank.cdx.json` and `item_signals.parquet` serve the version that
+  `datapackage.json` names, with a `Link` header with
+  `rel="canonical"` that names the dated file.
+* Downloads support HTTP range requests, which Parquet readers such
+  as DuckDB use to fetch only the columns and row groups they need.
 * All downloads support
   [conditional requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests),
   using the object's entity tag from storage as `ETag`.

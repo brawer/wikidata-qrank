@@ -171,23 +171,15 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 		return time.Time{}, err
 	}
 
-	newestYMD := newest.Format("20060102")
-	destPath := fmt.Sprintf("public/item_signals-%s.csv.zst", newestYMD)
+	destPath := itemSignalsPath(newest)
 	logger.Printf("building %s", destPath)
-	outFile, err := os.CreateTemp("", "*-item_signals.csv.zst")
+	outFile, err := os.CreateTemp("", "*-item_signals.parquet")
 	if err != nil {
 		return time.Time{}, err
 	}
 	defer outFile.Close()
 	defer os.Remove(outFile.Name())
-
-	zstdLevel := zstd.WithEncoderLevel(zstd.SpeedBestCompression)
-	compressor, err := zstd.NewWriter(outFile, zstdLevel)
-	if err != nil {
-		return time.Time{}, err
-	}
-	defer compressor.Close()
-	writer := NewItemSignalsWriter(compressor)
+	writer := NewItemSignalsWriter(outFile)
 
 	// Download all pageview files from S3 storage to local disk, to work
 	// around an apparent flakiness in Wikimedia's storage infrastructure.
@@ -296,7 +288,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 		}
 	}
 
-	if err := PutInStorage(ctx, outFile.Name(), s3, "qrank", destPath, "application/zstd"); err != nil {
+	if err := PutInStorage(ctx, outFile.Name(), s3, "qrank", destPath, parquetMediaType); err != nil {
 		return time.Time{}, err
 	}
 
@@ -441,12 +433,26 @@ func ItemSignalsVersion(pageviews []string, sites *WikiSites) time.Time {
 	return date
 }
 
+// ParquetMediaType is the IANA media type for Apache Parquet files.
+const parquetMediaType = "application/vnd.apache.parquet"
+
+// ItemSignalsPath returns the storage path of the item signals for a date.
+func itemSignalsPath(date time.Time) string {
+	return fmt.Sprintf("public/item_signals-%s.parquet", date.Format("20060102"))
+}
+
+var itemSignalsPathRegexp = regexp.MustCompile(`^public/item_signals-(\d{8})\.parquet$`)
+
 // PruneItemSignals removes old signals files from storage,
-// keeping only the newest `keep` versions.
+// keeping only the newest `keep` versions. Item signals stored as CSV
+// by earlier releases get removed entirely.
 // https://github.com/brawer/wikidata-qrank/issues/39
 func pruneItemSignals(ctx context.Context, keep int, s3 S3) error {
-	re := regexp.MustCompile(`^public/item_signals-(\d{8}).csv.zst$`)
-	if err := prunePublicFiles(ctx, re, keep, s3); err != nil {
+	if err := prunePublicFiles(ctx, itemSignalsPathRegexp, keep, s3); err != nil {
+		return err
+	}
+	csv := regexp.MustCompile(`^public/item_signals-\d{8}\.csv\.zst$`)
+	if err := prunePublicFiles(ctx, csv, 0, s3); err != nil {
 		return err
 	}
 	return pruneItemSignalsProvenance(ctx, keep, s3)
@@ -485,7 +491,7 @@ func pruneFiles(ctx context.Context, prefix string, re *regexp.Regexp, keep int,
 // StoredItemSignalsVersion returns the version of the signals file in storage.
 // If there is no such file, the result is the zero time.Time without error.
 func StoredItemSignalsVersion(ctx context.Context, s3 S3) (time.Time, error) {
-	re := regexp.MustCompile(`^public/item_signals-(\d{8}).csv.zst$`)
+	re := itemSignalsPathRegexp
 	var result time.Time
 	opts := minio.ListObjectsOptions{Prefix: "public/"}
 	for obj := range s3.ListObjects(ctx, "qrank", opts) {

@@ -74,6 +74,74 @@
       }
     },
     {
+      "name": "item_signals",
+      "type": "table",
+      "path": "item_signals-20261004.parquet",
+      "title": "Item signals",
+      "description": "Ranking signals for Wikidata items, one row per item sorted by item ID, including items without pageviews. Apache Parquet with zstd compression.",
+      "format": "parquet",
+      "mediatype": "application/vnd.apache.parquet",
+      "bytes": 334455667,
+      "hash": "sha256:5c220f1fa4f05b324656b50391125d371df5d28ad7a9714bb1e7ec6035f8d700",
+      "schema": {
+        "fields": [
+          {
+            "name": "item",
+            "type": "integer",
+            "description": "Wikidata item ID without its Q prefix, such as 42 for Q42",
+            "constraints": {
+              "required": true,
+              "unique": true,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageviews_52w",
+            "type": "integer",
+            "description": "Pageviews over the past 52 weeks of all pages linked to the item, summed over all Wikimedia projects",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "wikitext_bytes",
+            "type": "integer",
+            "description": "Size in bytes of the wikitext of all pages linked to the item, summed over all Wikimedia projects",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "statement_count",
+            "type": "integer",
+            "description": "Number of statements on the item in Wikidata",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "identifier_count",
+            "type": "integer",
+            "description": "Number of statements on the item whose property is an external identifier",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "sitelink_count",
+            "type": "integer",
+            "description": "Number of sitelinks of the item, such as links to Wikipedia articles",
+            "constraints": {
+              "required": true
+            }
+          }
+        ],
+        "primaryKey": [
+          "item"
+        ]
+      }
+    },
+    {
       "name": "stats",
       "path": "qrank-stats-20261004.json",
       "title": "QRank statistics",
@@ -88,7 +156,7 @@
       "name": "bom",
       "path": "qrank-20261004.cdx.json",
       "title": "CycloneDX 1.7 bill of materials",
-      "description": "Provenance of the QRank file: the versions of the Wikimedia dumps and pageviews, and of every qrank-builder release that processed them.",
+      "description": "Provenance of the QRank file and the item signals: the versions of the Wikimedia dumps and pageviews, and of every qrank-builder release that processed them.",
       "format": "json",
       "mediatype": "application/vnd.cyclonedx+json; version=1.7",
       "encoding": "utf-8",

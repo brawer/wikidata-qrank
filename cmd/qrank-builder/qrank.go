@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -16,12 +15,10 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/lanrat/extsort"
 	"github.com/minio/minio-go/v7"
 
@@ -134,7 +131,7 @@ func writeQRankFile(ctx context.Context, qrankPath string, read func(ctx context
 // datapackage.json names this version, nothing gets re-built.
 func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 	ymd := date.Format("20060102")
-	signalsPath := fmt.Sprintf("public/item_signals-%s.csv.zst", ymd)
+	signalsPath := itemSignalsPath(date)
 	qrankDest := fmt.Sprintf("public/qrank-%s.csv.gz", ymd)
 	statsDest := fmt.Sprintf("public/qrank-stats-%s.json", ymd)
 	bomDest := fmt.Sprintf("public/qrank-%s.cdx.json", ymd)
@@ -147,11 +144,12 @@ func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 		stored[obj.Key] = true
 	}
 	if stored[qrankDest] && stored[statsDest] && stored[bomDest] && stored[datapackagePath] {
-		version, err := storedDatapackageVersion(ctx, s3)
+		dp, err := readStoredDatapackage(ctx, s3)
 		if err != nil {
 			return err
 		}
-		if version == date.Format(time.DateOnly) {
+		// Data packages of earlier releases did not list the item signals.
+		if dp.Version == date.Format(time.DateOnly) && dp.lists(filepath.Base(signalsPath)) {
 			logger.Printf("ranking in storage is still fresh: %s", qrankDest)
 			return nil
 		}
@@ -179,15 +177,10 @@ func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 		return err
 	}
 	defer signals.Close()
-	decompressor, err := zstd.NewReader(signals)
-	if err != nil {
-		return err
-	}
-	defer decompressor.Close()
 
 	qrankPath := filepath.Join(tempDir, filepath.Base(qrankDest))
 	read := func(ctx context.Context, ch chan<- extsort.SortType) error {
-		return readItemSignalsPageviews(ctx, decompressor, ch)
+		return readItemSignalsPageviews(ctx, signals, ch)
 	}
 	if err := writeQRankFile(ctx, qrankPath, read); err != nil {
 		return err
@@ -200,7 +193,7 @@ func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 
 	bomPath := filepath.Join(tempDir, filepath.Base(bomDest))
 	dpPath := filepath.Join(tempDir, filepath.Base(datapackagePath))
-	if err := writeBOMAndDatapackage(date, prov, qrankPath, statsPath, bomPath, dpPath); err != nil {
+	if err := writeBOMAndDatapackage(date, prov, qrankPath, signalsFile, statsPath, bomPath, dpPath); err != nil {
 		return err
 	}
 
@@ -229,22 +222,29 @@ func buildQRankFiles(ctx context.Context, date time.Time, s3 S3) error {
 }
 
 // WriteBOMAndDatapackage writes the CycloneDX BOM for the QRank file at
-// `qrankPath` to `bomPath`, and then a data package listing the QRank
-// file, the stats file and the BOM to `dpPath`.
-func writeBOMAndDatapackage(date time.Time, prov *ItemSignalsProvenance, qrankPath, statsPath, bomPath, dpPath string) error {
+// `qrankPath` and the item signals at `signalsPath` to `bomPath`, and
+// then a data package listing the QRank file, the item signals, the
+// stats file and the BOM to `dpPath`.
+func writeBOMAndDatapackage(date time.Time, prov *ItemSignalsProvenance, qrankPath, signalsPath, statsPath, bomPath, dpPath string) error {
 	qrankSHA256, qrankSHA512, qrankBytes, err := hashFile(qrankPath)
+	if err != nil {
+		return err
+	}
+	signalsSHA256, signalsSHA512, signalsBytes, err := hashFile(signalsPath)
 	if err != nil {
 		return err
 	}
 	revision, modified := version.Revision()
 	bom := bomInputs{
-		Date:       date,
-		SHA256:     qrankSHA256,
-		SHA512:     qrankSHA512,
-		Provenance: prov,
-		Software:   SoftwareVersion,
-		Revision:   revision,
-		Modified:   modified,
+		Date:          date,
+		SHA256:        qrankSHA256,
+		SHA512:        qrankSHA512,
+		SignalsSHA256: signalsSHA256,
+		SignalsSHA512: signalsSHA512,
+		Provenance:    prov,
+		Software:      SoftwareVersion,
+		Revision:      revision,
+		Modified:      modified,
 	}
 	if err := writeBOM(bomPath, bom); err != nil {
 		return err
@@ -259,46 +259,30 @@ func writeBOMAndDatapackage(date time.Time, prov *ItemSignalsProvenance, qrankPa
 		return err
 	}
 	dp := datapackageInputs{
-		Date:  date,
-		QRank: datapackageFile{Path: filepath.Base(qrankPath), Bytes: qrankBytes, SHA256: qrankSHA256},
-		Stats: datapackageFile{Path: filepath.Base(statsPath), Bytes: statsBytes, SHA256: statsSHA256},
-		BOM:   datapackageFile{Path: filepath.Base(bomPath), Bytes: bomBytes, SHA256: bomSHA256},
+		Date:    date,
+		QRank:   datapackageFile{Path: filepath.Base(qrankPath), Bytes: qrankBytes, SHA256: qrankSHA256},
+		Signals: datapackageFile{Path: filepath.Base(signalsPath), Bytes: signalsBytes, SHA256: signalsSHA256},
+		Stats:   datapackageFile{Path: filepath.Base(statsPath), Bytes: statsBytes, SHA256: statsSHA256},
+		BOM:     datapackageFile{Path: filepath.Base(bomPath), Bytes: bomBytes, SHA256: bomSHA256},
 	}
 	return writeDatapackage(dpPath, dp)
 }
 
-// ReadItemSignalsPageviews reads an item_signals CSV file and sends
+// ReadItemSignalsPageviews reads an item_signals Parquet file and sends
 // the 52-week pageviews of each item as QRank to a channel, before
 // closing that channel. Items without any pageviews are skipped,
 // as in the rankings computed before item signals existed.
-func readItemSignalsPageviews(ctx context.Context, r io.Reader, ch chan<- extsort.SortType) error {
+func readItemSignalsPageviews(ctx context.Context, r io.ReaderAt, ch chan<- extsort.SortType) error {
 	defer close(ch)
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "item,") {
-			continue // CSV header
-		}
-		cols := strings.SplitN(line, ",", 3)
-		if len(cols) < 2 || len(cols[0]) < 2 || cols[0][0] != 'Q' {
-			return fmt.Errorf("expected Q...,pageviews,..., got %q", line)
-		}
-		entity, err := strconv.ParseInt(cols[0][1:], 10, 64)
-		if err != nil {
-			return err
-		}
-		pageviews, err := strconv.ParseInt(cols[1], 10, 64)
-		if err != nil {
-			return err
-		}
-		if pageviews <= 0 {
-			continue
+	return readItemSignalsFile(r, func(row itemSignalsRow) error {
+		if row.Pageviews52w <= 0 {
+			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case ch <- QRank{entity, pageviews}:
+		case ch <- QRank{row.Item, row.Pageviews52w}:
+			return nil
 		}
-	}
-	return scanner.Err()
+	})
 }

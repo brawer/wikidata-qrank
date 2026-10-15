@@ -24,10 +24,11 @@ func datapackageTestInputs() datapackageInputs {
 		return hex.EncodeToString(h[:])
 	}
 	return datapackageInputs{
-		Date:  time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC),
-		QRank: datapackageFile{Path: "qrank-20261004.csv.gz", Bytes: 112233445, SHA256: digest("qrank golden CSV fixture")},
-		Stats: datapackageFile{Path: "qrank-stats-20261004.json", Bytes: 41234, SHA256: digest("qrank golden stats fixture")},
-		BOM:   datapackageFile{Path: "qrank-20261004.cdx.json", Bytes: 5678, SHA256: digest("qrank golden BOM fixture")},
+		Date:    time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC),
+		QRank:   datapackageFile{Path: "qrank-20261004.csv.gz", Bytes: 112233445, SHA256: digest("qrank golden CSV fixture")},
+		Signals: datapackageFile{Path: "item_signals-20261004.parquet", Bytes: 334455667, SHA256: digest("item signals golden Parquet fixture")},
+		Stats:   datapackageFile{Path: "qrank-stats-20261004.json", Bytes: 41234, SHA256: digest("qrank golden stats fixture")},
+		BOM:     datapackageFile{Path: "qrank-20261004.cdx.json", Bytes: 5678, SHA256: digest("qrank golden BOM fixture")},
 	}
 }
 
@@ -74,8 +75,8 @@ func TestWriteDatapackage_Golden(t *testing.T) {
 	if doc.Name != "qrank" || doc.Version != "2026-10-04" {
 		t.Errorf("name/version = %q/%q, want qrank/2026-10-04", doc.Name, doc.Version)
 	}
-	if len(doc.Resources) != 3 {
-		t.Fatalf("got %d resources, want 3", len(doc.Resources))
+	if len(doc.Resources) != 4 {
+		t.Fatalf("got %d resources, want 4", len(doc.Resources))
 	}
 	for _, r := range doc.Resources {
 		if !strings.HasPrefix(r.Hash, "sha256:") || len(r.Hash) != len("sha256:")+64 {

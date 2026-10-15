@@ -52,22 +52,22 @@ func TestBuild(t *testing.T) {
 		t.Errorf("got provenance %+v", prov)
 	}
 
-	got, err := s3.ReadLines("public/item_signals-20240501.csv.zst")
+	got, err := s3.ReadLines("public/item_signals-20240501.parquet")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := []string{
-		"item,pageviews_52w,wikitext_bytes,claims,identifiers,sitelinks",
-		"Q72,3,3142,550,85,186",
-		"Q5296,4,2872,0,0,0",
-		"Q54321,0,23,0,0,0",
-		"Q54322,0,24,0,0,0",
-		"Q662541,3,4973,32,9,15",
-		"Q4847311,0,0,0,0,0",
-		"Q5649951,0,0,1,0,20",
-		"Q8681970,0,5678,0,0,0",
-		"Q107661323,0,3470,0,0,0",
+		itemSignalsHeader,
+		"72,3,3142,550,85,186",
+		"5296,4,2872,0,0,0",
+		"54321,0,23,0,0,0",
+		"54322,0,24,0,0,0",
+		"662541,3,4973,32,9,15",
+		"4847311,0,0,0,0,0",
+		"5649951,0,0,1,0,20",
+		"8681970,0,5678,0,0,0",
+		"107661323,0,3470,0,0,0",
 	}
 
 	if !slices.Equal(got, want) {
