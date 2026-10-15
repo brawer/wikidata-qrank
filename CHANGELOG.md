@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/brawer/wikidata-qrank/compare/v2.2.0...v2.2.1) (2026-10-15)
+
+
+### 🐞 Fixes
+
+* **webserver:** don't send a canonical link for item signals ([a52fe50](https://github.com/brawer/wikidata-qrank/commit/a52fe50d20e19f2fbc89927bbf81b785e78580a0))
+
 ## [2.2.0](https://github.com/brawer/wikidata-qrank/compare/v2.1.2...v2.2.0) (2026-10-13)
 
 
