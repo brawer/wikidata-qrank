@@ -28,6 +28,7 @@ type ItemSignalsProvenance struct {
 	Date      string              `json:"date"` // YYYY-MM-DD
 	Dumps     DumpsProvenance     `json:"dumps"`
 	Pageviews PageviewsProvenance `json:"pageviews"`
+	OSMViews  *OSMViewsProvenance `json:"osmviews,omitempty"`
 	Software  []string            `json:"software"`
 }
 
@@ -55,12 +56,17 @@ func itemSignalsProvenancePath(date time.Time) string {
 }
 
 // BuildItemSignalsProvenance computes the provenance of the item signals
-// for `date`, which get built from the page signals of `sites` and the
-// weekly `pageviews` files in storage.
-func buildItemSignalsProvenance(ctx context.Context, date time.Time, pageviews []string, sites *WikiSites, s3 S3) (*ItemSignalsProvenance, error) {
-	p := &ItemSignalsProvenance{Date: date.Format(time.DateOnly)}
+// for `date`, which get built from the page signals of `sites`, the
+// weekly `pageviews` files and the `coordinates` of Wikidata items in
+// storage, and the OSMViews GeoTIFF described by `osmviews`.
+// If there are no coordinates in storage, `coordinates` is empty.
+func buildItemSignalsProvenance(ctx context.Context, date time.Time, pageviews []string, sites *WikiSites, coordinates string, osmviews *OSMViewsProvenance, s3 S3) (*ItemSignalsProvenance, error) {
+	p := &ItemSignalsProvenance{Date: date.Format(time.DateOnly), OSMViews: osmviews}
 
-	inputs := make([]string, 0, len(sites.Sites)+len(pageviews))
+	inputs := make([]string, 0, len(sites.Sites)+len(pageviews)+1)
+	if coordinates != "" {
+		inputs = append(inputs, coordinates)
+	}
 	var newestDump time.Time
 	for _, site := range sites.Sites {
 		if site.LastDumped.After(newestDump) {
@@ -214,6 +220,22 @@ func hasItemSignalsProvenance(ctx context.Context, date time.Time, s3 S3) (bool,
 		}
 	}
 	return false, nil
+}
+
+// IsItemSignalsProvenanceComplete reports whether storage has a provenance
+// record for the item signals of a given date, and whether that record
+// names the OSMViews GeoTIFF. Item signals stored by releases before the
+// osmviews_score column have no such record, or one without OSMViews.
+func isItemSignalsProvenanceComplete(ctx context.Context, date time.Time, s3 S3) (bool, error) {
+	has, err := hasItemSignalsProvenance(ctx, date, s3)
+	if err != nil || !has {
+		return false, err
+	}
+	p, err := readItemSignalsProvenance(ctx, date, s3)
+	if err != nil {
+		return false, err
+	}
+	return p.OSMViews != nil, nil
 }
 
 // PruneItemSignalsProvenance removes old provenance records from

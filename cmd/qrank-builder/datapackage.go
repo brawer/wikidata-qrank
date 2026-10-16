@@ -74,6 +74,7 @@ func buildDatapackage(in datapackageInputs) *fdPackage {
 		Sources: []fdSource{
 			{Title: "Wikimedia database dumps", Path: bomDumpsURL},
 			{Title: "Wikimedia pageviews", Path: bomPageviewsURL},
+			{Title: "OSMViews", Path: bomOSMViewsURL},
 		},
 		Contributors: []fdContributor{{
 			Title: bomSupplierName,
@@ -110,7 +111,7 @@ func buildDatapackage(in datapackageInputs) *fdPackage {
 							Description: "Pageviews over the past 52 weeks, summed over all Wikimedia projects",
 							Constraints: &fdConstraints{
 								Required: true,
-								Minimum:  1,
+								Minimum:  ptr(1.0),
 							},
 						},
 					},
@@ -136,7 +137,7 @@ func buildDatapackage(in datapackageInputs) *fdPackage {
 							Constraints: &fdConstraints{
 								Required: true,
 								Unique:   true,
-								Minimum:  1,
+								Minimum:  ptr(1.0),
 							},
 						},
 						{
@@ -169,6 +170,12 @@ func buildDatapackage(in datapackageInputs) *fdPackage {
 							Description: "Number of sitelinks of the item, such as links to Wikipedia articles",
 							Constraints: &fdConstraints{Required: true},
 						},
+						{
+							Name:        "osmviews_score",
+							Type:        "number",
+							Description: "How much people look at the item's location on OpenStreetMap-based maps, from 0 to 1, taken from OSMViews; the highest value over all coordinates of the item. Null if the item has no coordinates on Earth.",
+							Constraints: &fdConstraints{Minimum: ptr(0.0), Maximum: ptr(1.0)},
+						},
 					},
 					PrimaryKey: []string{"item"},
 				},
@@ -188,7 +195,7 @@ func buildDatapackage(in datapackageInputs) *fdPackage {
 				Name:        "bom",
 				Path:        in.BOM.Path,
 				Title:       "CycloneDX 1.7 bill of materials",
-				Description: "Provenance of the QRank file and the item signals: the versions of the Wikimedia dumps and pageviews, and of every qrank-builder release that processed them.",
+				Description: "Provenance of the QRank file and the item signals: the versions of the Wikimedia dumps, pageviews and OSMViews, and of every qrank-builder release that processed them.",
 				Format:      "json",
 				Mediatype:   "application/vnd.cyclonedx+json; version=1.7",
 				Encoding:    "utf-8",
@@ -312,8 +319,11 @@ type fdField struct {
 }
 
 type fdConstraints struct {
-	Required bool   `json:"required,omitempty"`
-	Unique   bool   `json:"unique,omitempty"`
-	Pattern  string `json:"pattern,omitempty"`
-	Minimum  int64  `json:"minimum,omitempty"`
+	Required bool     `json:"required,omitempty"`
+	Unique   bool     `json:"unique,omitempty"`
+	Pattern  string   `json:"pattern,omitempty"`
+	Minimum  *float64 `json:"minimum,omitempty"`
+	Maximum  *float64 `json:"maximum,omitempty"`
 }
+
+func ptr[T any](v T) *T { return &v }

@@ -171,7 +171,7 @@
       },
       "name": "item_signals",
       "version": "2026-10-04",
-      "description": "Ranking signals for Wikidata items (Apache Parquet, columns item, pageviews_52w, wikitext_bytes, statement_count, identifier_count, sitelink_count).",
+      "description": "Ranking signals for Wikidata items (Apache Parquet, columns item, pageviews_52w, wikitext_bytes, statement_count, identifier_count, sitelink_count, osmviews_score).",
       "purl": "pkg:generic/item_signals@2026-10-04?checksum=sha256:5c220f1fa4f05b324656b50391125d371df5d28ad7a9714bb1e7ec6035f8d700&download_url=https%3A%2F%2Fqrank.toolforge.org%2Fdownload%2Fitem_signals-20261004.parquet",
       "licenses": [
         {
@@ -283,6 +283,57 @@
           "value": "52"
         }
       ]
+    },
+    {
+      "type": "data",
+      "bom-ref": "osmviews",
+      "supplier": {
+        "name": "Sascha Brawer",
+        "url": [
+          "https://brawer.ch"
+        ]
+      },
+      "name": "osmviews",
+      "version": "2026-09-27",
+      "description": "OSMViews: how often each place on Earth is viewed on OpenStreetMap-based maps (Cloud-Optimized GeoTIFF). Source of the osmviews_score column.",
+      "purl": "pkg:generic/osmviews@2026-09-27?checksum=sha256:98c9734da0a3370f9efc164535ee72d03d91289956117853a158839fcc88da13&download_url=https://osmviews.brawer.ch/data/osmviews-20260927.tiff",
+      "licenses": [
+        {
+          "license": {
+            "id": "CC0-1.0"
+          }
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "98c9734da0a3370f9efc164535ee72d03d91289956117853a158839fcc88da13"
+        },
+        {
+          "alg": "SHA-512",
+          "content": "9751b7d917c9eda6848cf27961fd7ae65385b4d43e856c4787d740a9a6694cda57775664457df60004222c9907c39ab818f2e0ae4da6c61cf72246aaebf48855"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://osmviews.brawer.ch/data/osmviews-20260927.tiff"
+        },
+        {
+          "type": "website",
+          "url": "https://osmviews.brawer.ch"
+        },
+        {
+          "type": "bom",
+          "url": "https://osmviews.brawer.ch/data/osmviews-20260927.cdx.json",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "45bbade72a992d3dabc4dac1bcf13e4eec85dda9b2ad5393a6910f3e014c02d9"
+            }
+          ]
+        }
+      ]
     }
   ],
   "dependencies": [
@@ -296,7 +347,8 @@
       "ref": "item_signals-20261004",
       "dependsOn": [
         "wikimedia-dumps",
-        "wikimedia-pageviews"
+        "wikimedia-pageviews",
+        "osmviews"
       ]
     },
     {
@@ -305,6 +357,10 @@
     },
     {
       "ref": "wikimedia-pageviews",
+      "dependsOn": []
+    },
+    {
+      "ref": "osmviews",
       "dependsOn": []
     }
   ],
@@ -337,6 +393,11 @@
             {
               "resource": {
                 "ref": "wikimedia-pageviews"
+              }
+            },
+            {
+              "resource": {
+                "ref": "osmviews"
               }
             }
           ],

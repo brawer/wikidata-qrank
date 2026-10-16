@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"net/http"
 	"reflect"
 	"slices"
 	"testing"
@@ -141,7 +142,19 @@ func TestBuildItemSignals(t *testing.T) {
 		Domains: map[string]*WikiSite{"rm.wikipedia.org": rmwikiSite, "www.wikidata.org": wikidatawikiSite},
 	}
 
-	date, err := buildItemSignals(ctx, pageviews, sites, s3)
+	// Store fake item coordinates in fake S3 storage. Q72 has two
+	// coordinates, and gets the higher score. Q5649951 lies beyond
+	// the Web Mercator range, so nobody views it on maps.
+	coordinates := []string{
+		"662541,46.51,8.31",
+		"72,47.37444444,8.54111111",
+		"72,47.28,8.4",
+		"5649951,89.9,0",
+	}
+	s3.WriteLines(coordinates, "item_coordinates/wikidatawiki-20110403-item_coordinates.zst")
+
+	client := &http.Client{Transport: &FakeWikiSite{}}
+	date, err := buildItemSignals(ctx, client, pageviews, sites, s3)
 	if err != nil {
 		t.Error(err)
 	}
@@ -157,11 +170,11 @@ func TestBuildItemSignals(t *testing.T) {
 	}
 	want := []string{
 		itemSignalsHeader,
-		"72,5585,3142,550,85,186",
-		"5296,314159267,2872,0,0,0",
-		"662541,5,4973,32,9,15",
-		"5649951,0,0,1,0,20",
-		"107661323,0,3470,0,0,0",
+		"72,5585,3142,550,85,186,1",
+		"5296,314159267,2872,0,0,0,",
+		"662541,5,4973,32,9,15,0.30179042",
+		"5649951,0,0,1,0,20,0",
+		"107661323,0,3470,0,0,0,",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -177,6 +190,7 @@ func TestBuildItemSignals(t *testing.T) {
 		Date:      "2011-12-09",
 		Dumps:     DumpsProvenance{Newest: "2011-12-09", Wikis: 2},
 		Pageviews: PageviewsProvenance{FirstDay: "2011-02-14", LastDay: "2011-02-27", Weeks: 2},
+		OSMViews:  testOSMViewsProvenance,
 		Software:  []string{SoftwareVersion, unknownSoftware},
 	}
 	if !reflect.DeepEqual(gotProv, wantProv) {
@@ -186,7 +200,7 @@ func TestBuildItemSignals(t *testing.T) {
 	// With a provenance record, the stored signals are fresh.
 	signalsPath := "public/item_signals-20111209.parquet"
 	s3.data[signalsPath] = []byte("sentinel")
-	if _, err := buildItemSignals(ctx, pageviews, sites, s3); err != nil {
+	if _, err := buildItemSignals(ctx, client, pageviews, sites, s3); err != nil {
 		t.Fatal(err)
 	}
 	if string(s3.data[signalsPath]) != "sentinel" {
@@ -195,7 +209,7 @@ func TestBuildItemSignals(t *testing.T) {
 
 	// Signals without a provenance record get re-built once.
 	delete(s3.data, itemSignalsProvenancePath(date))
-	if _, err := buildItemSignals(ctx, pageviews, sites, s3); err != nil {
+	if _, err := buildItemSignals(ctx, client, pageviews, sites, s3); err != nil {
 		t.Fatal(err)
 	}
 	if string(s3.data[signalsPath]) == "sentinel" {
@@ -203,6 +217,21 @@ func TestBuildItemSignals(t *testing.T) {
 	}
 	if _, found := s3.data[itemSignalsProvenancePath(date)]; !found {
 		t.Error("buildItemSignals() should store a provenance record")
+	}
+
+	// Signals built before the osmviews_score column have a provenance
+	// record without OSMViews. They also get re-built once.
+	oldProv := *wantProv
+	oldProv.OSMViews = nil
+	if err := storeItemSignalsProvenance(ctx, &oldProv, s3); err != nil {
+		t.Fatal(err)
+	}
+	s3.data[signalsPath] = []byte("sentinel")
+	if _, err := buildItemSignals(ctx, client, pageviews, sites, s3); err != nil {
+		t.Fatal(err)
+	}
+	if string(s3.data[signalsPath]) == "sentinel" {
+		t.Error("buildItemSignals() should re-build signals without osmviews_score")
 	}
 }
 

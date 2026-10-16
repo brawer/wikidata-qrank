@@ -22,6 +22,10 @@
     {
       "title": "Wikimedia pageviews",
       "path": "https://dumps.wikimedia.org/other/pageview_complete/"
+    },
+    {
+      "title": "OSMViews",
+      "path": "https://osmviews.brawer.ch"
     }
   ],
   "contributors": [
@@ -134,6 +138,15 @@
             "constraints": {
               "required": true
             }
+          },
+          {
+            "name": "osmviews_score",
+            "type": "number",
+            "description": "How much people look at the item's location on OpenStreetMap-based maps, from 0 to 1, taken from OSMViews; the highest value over all coordinates of the item. Null if the item has no coordinates on Earth.",
+            "constraints": {
+              "minimum": 0,
+              "maximum": 1
+            }
           }
         ],
         "primaryKey": [
@@ -156,7 +169,7 @@
       "name": "bom",
       "path": "qrank-20261004.cdx.json",
       "title": "CycloneDX 1.7 bill of materials",
-      "description": "Provenance of the QRank file and the item signals: the versions of the Wikimedia dumps and pageviews, and of every qrank-builder release that processed them.",
+      "description": "Provenance of the QRank file and the item signals: the versions of the Wikimedia dumps, pageviews and OSMViews, and of every qrank-builder release that processed them.",
       "format": "json",
       "mediatype": "application/vnd.cyclonedx+json; version=1.7",
       "encoding": "utf-8",

@@ -206,3 +206,25 @@ func lex(s string) string {
 		}
 	}
 }
+
+// Column types such as decimal(11,8) have commas inside parentheses,
+// which must not end the column definition.
+func TestSQLReader_DecimalColumns(t *testing.T) {
+	columns, table, err := readSQL(filepath.Join(
+		"testdata", "dumps", "wikidatawiki", "20240401", "wikidatawiki-20240401-geo_tags.sql.gz",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantColumns := []string{
+		"gt_id", "gt_page_id", "gt_globe", "gt_primary", "gt_lat", "gt_lon",
+		"gt_dim", "gt_type", "gt_name", "gt_country", "gt_region",
+		"gt_lat_int", "gt_lon_int",
+	}
+	if !slices.Equal(columns, wantColumns) {
+		t.Errorf("got %v, want %v", columns, wantColumns)
+	}
+	if len(table) != 7 || !strings.HasPrefix(table[0], "1|200|earth|1|47.37444444|8.54111111|") {
+		t.Errorf("got %v", table)
+	}
+}

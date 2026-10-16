@@ -57,7 +57,8 @@ bucket, and a later run only re-builds what is missing or out of date:
 |---|---|---|
 | 1. weekly pageviews | `pageviews/pageviews-YYYY-Www.zst` | a new week becomes available |
 | 2. page signals, per wiki | `page_signals/<wiki>-<dumpdate>-page_signals.zst` | that wiki gets a new dump |
-| 3. item signals | `public/item_signals-YYYYMMDD.parquet` | any input is newer |
+| 3a. item coordinates | `item_coordinates/wikidatawiki-<dumpdate>-item_coordinates.zst` | Wikidata gets a new dump |
+| 3b. item signals | `public/item_signals-YYYYMMDD.parquet` | any input is newer |
 | 4. ranking and statistics | `public/qrank-YYYYMMDD.csv.gz`, `public/qrank-stats-YYYYMMDD.json` | new item signals |
 | 5. bill of materials and data package | `public/qrank-YYYYMMDD.cdx.json`, `public/datapackage.json` | together with stage 4 |
 
@@ -84,15 +85,36 @@ All intermediate files are sorted and zstd-compressed.
    these are not used for the ranking yet, but prepare for
    [PageRank](#future-work).
 
-3. **Item signals.** [itemsignals.go](../cmd/qrank-builder/itemsignals.go)
+3. **Item coordinates.** [coordinates.go](../cmd/qrank-builder/coordinates.go)
+   reads the `geo_tags` table of the Wikidata dump, keeps all
+   coordinates on Earth, and maps their page IDs to item IDs with the
+   Wikidata page signals. It writes lines such as `72,47.37,8.54`,
+   sorted by zoom-10 Web Mercator tile rather than by item. This lets
+   the next step look them up in the OSMViews GeoTIFF in spatial order,
+   which keeps its tile cache warm: for the 12 million coordinates in
+   Wikidata, this takes about 15 seconds instead of more than ten
+   minutes in item order.
+
+   **Item signals.** [itemsignals.go](../cmd/qrank-builder/itemsignals.go)
    joins the pageviews with the page signals. Both are sorted by wiki
    and page ID, so [linemerger.go](../cmd/qrank-builder/linemerger.go)
    merges them in one linear scan, using a
    [min heap](https://en.wikipedia.org/wiki/Heap_(data_structure)). The
    resulting per-page records are sorted by item ID and summed, giving
    one row per item with the columns `item`, `pageviews_52w`,
-   `wikitext_bytes`, `statement_count`, `identifier_count` and
-   `sitelink_count`. [item_signals_writer.go](../cmd/qrank-builder/item_signals_writer.go)
+   `wikitext_bytes`, `statement_count`, `identifier_count`,
+   `sitelink_count` and `osmviews_score`. For the latter,
+   [osmviews.go](../cmd/qrank-builder/osmviews.go) looks up the item
+   coordinates in the current [OSMViews](https://osmviews.brawer.ch)
+   GeoTIFF with [osmviews-go](https://github.com/brawer/osmviews-go),
+   and keeps the highest score per item. The GeoTIFF is about 600 MB.
+   The bucket keeps the two newest versions under
+   `osmviews/osmviews-YYYYMMDD.tiff`, next to their bill of materials,
+   so the build does not download it again while the upstream version
+   is unchanged, and falls back to the newest cached version if
+   osmviews.brawer.ch is unreachable. A new OSMViews version alone does
+   not trigger a new build; it gets picked up with the next new dump or
+   pageviews week. [item_signals_writer.go](../cmd/qrank-builder/item_signals_writer.go)
    writes them as [Apache Parquet](https://parquet.apache.org/) with
    zstd compression, in row groups of about a million items, so the
    writer needs little memory and readers can skip ranges of items.
@@ -143,10 +165,12 @@ software wrote each file:
   `item_signals/item_signals-YYYYMMDD.provenance.json`
   ([provenance.go](../cmd/qrank-builder/provenance.go)). It records the
   newest dump date, the number of wikis, the pageviews date range, and
-  the stamps of all page signals and pageviews that were read. Item
-  signals without such a record are re-built.
-* The BOM is built from that record. It names the Wikimedia dumps and
-  pageviews as inputs, and lists every builder version in a single
+  the stamps of all page signals, pageviews and item coordinates that
+  were read, and the OSMViews version with its hashes. Item signals
+  without such a record, or with a record that does not name OSMViews,
+  are re-built.
+* The BOM is built from that record. It names the Wikimedia dumps,
+  pageviews and OSMViews as inputs, and lists every builder version in a single
   "QRank build" workflow. Internal pipeline steps are not part of the BOM.
 
 The BOM and data package are written by hand with `encoding/json`

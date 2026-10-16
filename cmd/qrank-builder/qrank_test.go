@@ -24,10 +24,10 @@ func TestBuildQRankFiles(t *testing.T) {
 	s3 := NewFakeS3()
 	signals := []string{
 		itemSignalsHeader,
-		"1,7,0,0,0,0",
-		"2,0,100,3,1,2",
-		"3,42,0,0,0,0",
-		"4,7,0,0,0,0",
+		"1,7,0,0,0,0,",
+		"2,0,100,3,1,2,",
+		"3,42,0,0,0,0,",
+		"4,7,0,0,0,0,",
 	}
 	if err := s3.WriteLines(signals, "public/item_signals-20261011.parquet"); err != nil {
 		t.Fatal(err)
@@ -174,7 +174,7 @@ func TestBuildQRankFiles_MissingBOM(t *testing.T) {
 	logger = log.New(&bytes.Buffer{}, "", log.Lshortfile)
 	ctx := context.Background()
 	s3 := NewFakeS3()
-	signals := []string{itemSignalsHeader, "1,7,0,0,0,0"}
+	signals := []string{itemSignalsHeader, "1,7,0,0,0,0,"}
 	if err := s3.WriteLines(signals, "public/item_signals-20261011.parquet"); err != nil {
 		t.Fatal(err)
 	}

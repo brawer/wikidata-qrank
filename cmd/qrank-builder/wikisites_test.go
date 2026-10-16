@@ -114,11 +114,13 @@ func TestReadWikiSites_BadPath(t *testing.T) {
 
 // A fake HTTP transport that simulates a Wikimedia site for testing.
 type FakeWikiSite struct {
-	Broken bool
+	Broken   bool
+	Requests []string // URLs in the order they were requested
 }
 
 func (f *FakeWikiSite) RoundTrip(req *http.Request) (*http.Response, error) {
 	header := make(http.Header)
+	f.Requests = append(f.Requests, req.URL.String())
 
 	if f.Broken {
 		header.Add("Content-Type", "text/plain")
@@ -129,6 +131,15 @@ func (f *FakeWikiSite) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL.String() == "https://noc.wikimedia.org/conf/interwiki.php.txt" {
 		path := filepath.Join("testdata", "interwikimap.php.txt")
 		body, _ := os.Open(path)
+		return &http.Response{StatusCode: 200, Body: body, Header: header}, nil
+	}
+
+	if name, ok := strings.CutPrefix(req.URL.String(), "https://osmviews.brawer.ch/data/"); ok {
+		body, err := os.Open(filepath.Join("testdata", "osmviews", name))
+		if err != nil {
+			body := io.NopCloser(bytes.NewBufferString("Not Found"))
+			return &http.Response{StatusCode: 404, Body: body, Header: header}, nil
+		}
 		return &http.Response{StatusCode: 200, Body: body, Header: header}, nil
 	}
 
