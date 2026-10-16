@@ -19,6 +19,7 @@ toolchain go1.26.9
 // +heroku install ./cmd/qrank-builder ./cmd/webserver
 
 require (
+	github.com/brawer/osmviews-go v0.1.0
 	github.com/dsnet/compress v0.0.1
 	github.com/fogleman/gg v1.3.0
 	github.com/google/uuid v1.6.0

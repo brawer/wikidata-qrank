@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -138,7 +139,7 @@ func ItemSignalsLess(a, b extsort.SortType) bool {
 
 // BuildItemSignals builds per-item signals and puts them in storage.
 // If the signals file is already in storage, it does not get re-built.
-func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites, s3 S3) (time.Time, error) {
+func buildItemSignals(ctx context.Context, client *http.Client, pageviews []string, sites *WikiSites, s3 S3) (time.Time, error) {
 	stored, err := StoredItemSignalsVersion(ctx, s3)
 	if err != nil {
 		return time.Time{}, err
@@ -150,24 +151,55 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 		n := newest.Format(time.DateOnly)
 
 		// Item signals stored by older releases have no provenance
-		// record. In that case, we re-build them once, so that we know
-		// which software produced them.
-		hasProvenance, err := hasItemSignalsProvenance(ctx, stored, s3)
+		// record, or no osmviews_score column. In that case, we re-build
+		// them once, so that we know which software produced them.
+		complete, err := isItemSignalsProvenanceComplete(ctx, stored, s3)
 		if err != nil {
 			return time.Time{}, err
 		}
-		if hasProvenance || !newest.Equal(stored) {
+		if complete || !newest.Equal(stored) {
 			logger.Printf("signals in storage are still fresh: stored=%s, newest=%s", s, n)
 			if err := pruneItemSignals(ctx, 3, s3); err != nil {
 				return time.Time{}, err
 			}
 			return stored, nil
 		}
-		logger.Printf("signals in storage have no provenance record, re-building: stored=%s", s)
+		logger.Printf("signals in storage have no complete provenance record, re-building: stored=%s", s)
 	}
 
-	provenance, err := buildItemSignalsProvenance(ctx, newest, pageviews, sites, s3)
+	raster, osmviewsProv, err := fetchOSMViews(ctx, client, s3)
 	if err != nil {
+		return time.Time{}, err
+	}
+	defer os.Remove(raster)
+
+	coordinates, err := storedItemCoordinates(ctx, sites, s3)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	provenance, err := buildItemSignalsProvenance(ctx, newest, pageviews, sites, coordinates, osmviewsProv, s3)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	var scores *osmviewsScores
+	if coordinates != "" {
+		scoresPath, err := scoreItemCoordinates(ctx, raster, coordinates, s3)
+		if err != nil {
+			return time.Time{}, err
+		}
+		defer os.Remove(scoresPath)
+		scoresFile, err := os.Open(scoresPath)
+		if err != nil {
+			return time.Time{}, err
+		}
+		defer scoresFile.Close()
+		scores = newOSMViewsScores(scoresFile)
+	} else {
+		logger.Printf("no item coordinates in storage, so no osmviews_score")
+	}
+	if err := os.Remove(raster); err != nil {
 		return time.Time{}, err
 	}
 
@@ -180,6 +212,7 @@ func buildItemSignals(ctx context.Context, pageviews []string, sites *WikiSites,
 	defer outFile.Close()
 	defer os.Remove(outFile.Name())
 	writer := NewItemSignalsWriter(outFile)
+	writer.SetOSMViewsScores(scores)
 
 	// Download all pageview files from S3 storage to local disk, to work
 	// around an apparent flakiness in Wikimedia's storage infrastructure.

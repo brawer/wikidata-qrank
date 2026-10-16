@@ -42,7 +42,16 @@ func bomTestInputs() bomInputs {
 			Date:      "2026-10-04",
 			Dumps:     DumpsProvenance{Newest: "2026-10-01", Wikis: 1012},
 			Pageviews: PageviewsProvenance{FirstDay: "2025-10-06", LastDay: "2026-10-04", Weeks: 52},
-			Software:  []string{"QRank/v2.2.0+12a657d4df6a", "QRank/v2.3.0+0b1c2d3e4f5a"},
+			OSMViews: &OSMViewsProvenance{
+				Version:   "2026-09-27",
+				URL:       "https://osmviews.brawer.ch/data/osmviews-20260927.tiff",
+				PURL:      "pkg:generic/osmviews@2026-09-27?checksum=sha256:" + digest256("osmviews golden GeoTIFF fixture") + "&download_url=https://osmviews.brawer.ch/data/osmviews-20260927.tiff",
+				SHA256:    digest256("osmviews golden GeoTIFF fixture"),
+				SHA512:    digest512("osmviews golden GeoTIFF fixture"),
+				BOMURL:    "https://osmviews.brawer.ch/data/osmviews-20260927.cdx.json",
+				BOMSHA256: digest256("osmviews golden BOM fixture"),
+			},
+			Software: []string{"QRank/v2.2.0+12a657d4df6a", "QRank/v2.3.0+0b1c2d3e4f5a"},
 		},
 		Software: "QRank/v2.3.0+0b1c2d3e4f5a",
 		Revision: "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c",
@@ -208,8 +217,23 @@ func TestBuildBOM_Provenance(t *testing.T) {
 	if got, want := deps["qrank-20261004"], []string{"item_signals-20261004"}; !slices.Equal(got, want) {
 		t.Errorf("qrank dependsOn %v, want %v", got, want)
 	}
-	if got, want := deps["item_signals-20261004"], []string{"wikimedia-dumps", "wikimedia-pageviews"}; !slices.Equal(got, want) {
+	if got, want := deps["item_signals-20261004"], []string{"wikimedia-dumps", "wikimedia-pageviews", "osmviews"}; !slices.Equal(got, want) {
 		t.Errorf("item_signals dependsOn %v, want %v", got, want)
+	}
+
+	// Item signals built by releases before the osmviews_score column
+	// do not depend on OSMViews.
+	in := bomTestInputs()
+	in.Provenance.OSMViews = nil
+	deps = map[string][]string{}
+	for _, d := range buildBOM(in).Dependencies {
+		deps[d.Ref] = d.DependsOn
+	}
+	if got, want := deps["item_signals-20261004"], []string{"wikimedia-dumps", "wikimedia-pageviews"}; !slices.Equal(got, want) {
+		t.Errorf("without OSMViews, item_signals dependsOn %v, want %v", got, want)
+	}
+	if _, found := deps["osmviews"]; found {
+		t.Error("without OSMViews, the BOM should not list it")
 	}
 	if len(bom.Formulation) != 1 || len(bom.Formulation[0].Workflows) != 1 {
 		t.Fatalf("formulation = %+v, want one workflow", bom.Formulation)

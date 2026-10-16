@@ -48,6 +48,9 @@ func TestBuild(t *testing.T) {
 	if !slices.Equal(prov.Software, []string{SoftwareVersion}) {
 		t.Errorf("got provenance software %v, want [%s]", prov.Software, SoftwareVersion)
 	}
+	if !reflect.DeepEqual(prov.OSMViews, testOSMViewsProvenance) {
+		t.Errorf("got provenance OSMViews %+v, want %+v", prov.OSMViews, testOSMViewsProvenance)
+	}
 	if prov.Dumps.Newest != "2024-05-01" || prov.Pageviews.Weeks != 2 {
 		t.Errorf("got provenance %+v", prov)
 	}
@@ -59,15 +62,15 @@ func TestBuild(t *testing.T) {
 
 	want := []string{
 		itemSignalsHeader,
-		"72,3,3142,550,85,186",
-		"5296,4,2872,0,0,0",
-		"54321,0,23,0,0,0",
-		"54322,0,24,0,0,0",
-		"662541,3,4973,32,9,15",
-		"4847311,0,0,0,0,0",
-		"5649951,0,0,1,0,20",
-		"8681970,0,5678,0,0,0",
-		"107661323,0,3470,0,0,0",
+		"72,3,3142,550,85,186,1",
+		"5296,4,2872,0,0,0,",
+		"54321,0,23,0,0,0,",
+		"54322,0,24,0,0,0,",
+		"662541,3,4973,32,9,15,0.30179042",
+		"4847311,0,0,0,0,0,",
+		"5649951,0,0,1,0,20,0",
+		"8681970,0,5678,0,0,0,",
+		"107661323,0,3470,0,0,0,",
 	}
 
 	if !slices.Equal(got, want) {

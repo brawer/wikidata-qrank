@@ -1,0 +1,18 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2021-11-29T00:00:00Z",
+    "component": {
+      "type": "data",
+      "name": "osmviews",
+      "version": "2021-11-28",
+      "purl": "pkg:generic/osmviews@2021-11-28?checksum=sha256:959f2273e0e6eb11cf4d4233617906f2e72690bc2328b4180b5d17c55eb51569&download_url=https://osmviews.brawer.ch/data/osmviews-20211128.tiff",
+      "hashes": [
+        {"alg": "SHA-256", "content": "959f2273e0e6eb11cf4d4233617906f2e72690bc2328b4180b5d17c55eb51569"},
+        {"alg": "SHA-512", "content": "269ff52890972bf3c45b9b52a3fd39121ba3c978553c5f02769a54bedd9e8b8778b843651c16cc68128d4bf3d65cf8eaa552cb3e6e1b00a6960b2adb37bb0744"}
+      ]
+    }
+  }
+}

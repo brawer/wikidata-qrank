@@ -23,9 +23,9 @@ import (
 
 // This file produces a CycloneDX 1.7 Bill of Materials for one dated QRank
 // file: the exact bytes that were produced (SHA-256 and SHA-512), the item
-// signals it was computed from, which versions of the Wikimedia dumps and
-// pageviews went into those, and which versions of qrank-builder processed
-// them. The builder stores it as
+// signals it was computed from, which versions of the Wikimedia dumps,
+// pageviews and OSMViews went into those, and which versions of
+// qrank-builder processed them. The builder stores it as
 // public/qrank-YYYYMMDD.cdx.json, before the QRank file itself.
 //
 // QRank reuses intermediate files from earlier runs, so a single QRank file
@@ -66,6 +66,8 @@ const (
 
 	bomDumpsRef     = "wikimedia-dumps"
 	bomPageviewsRef = "wikimedia-pageviews"
+	bomOSMViewsRef  = "osmviews"
+	bomOSMViewsURL  = "https://osmviews.brawer.ch"
 )
 
 // bomNamespace is a fixed, arbitrary UUID. The BOM's serialNumber is a
@@ -316,7 +318,7 @@ func buildBOM(in bomInputs) *cdxBOM {
 		Supplier:    bomSupplier(),
 		Name:        "item_signals",
 		Version:     date,
-		Description: "Ranking signals for Wikidata items (Apache Parquet, columns item, pageviews_52w, wikitext_bytes, statement_count, identifier_count, sitelink_count).",
+		Description: "Ranking signals for Wikidata items (Apache Parquet, columns item, pageviews_52w, wikitext_bytes, statement_count, identifier_count, sitelink_count, osmviews_score).",
 		PURL:        in.signalsPURL(),
 		Licenses:    []cdxLicenseChoice{{License: cdxLicense{ID: "CC0-1.0"}}},
 		Hashes: []cdxHash{
@@ -377,6 +379,47 @@ func buildBOM(in bomInputs) *cdxBOM {
 		},
 	}
 
+	components := []cdxComponent{signals, dumps, pageviews}
+	inputs := []cdxWorkflowIO{
+		{Resource: &cdxResourceRef{Ref: bomDumpsRef}},
+		{Resource: &cdxResourceRef{Ref: bomPageviewsRef}},
+	}
+	signalsDeps := []string{bomDumpsRef, bomPageviewsRef}
+	dependencies := []cdxDependency{
+		{Ref: dataRef, DependsOn: []string{signalsRef}},
+		{Ref: signalsRef, DependsOn: signalsDeps},
+		{Ref: bomDumpsRef, DependsOn: []string{}},
+		{Ref: bomPageviewsRef, DependsOn: []string{}},
+	}
+
+	// Item signals built by releases before the osmviews_score column
+	// have no OSMViews in their provenance record.
+	if ov := prov.OSMViews; ov != nil {
+		hashes := []cdxHash{{Alg: "SHA-256", Content: ov.SHA256}}
+		if ov.SHA512 != "" {
+			hashes = append(hashes, cdxHash{Alg: "SHA-512", Content: ov.SHA512})
+		}
+		components = append(components, cdxComponent{
+			Type:        "data",
+			BOMRef:      bomOSMViewsRef,
+			Supplier:    bomSupplier(),
+			Name:        "osmviews",
+			Version:     ov.Version,
+			Description: "OSMViews: how often each place on Earth is viewed on OpenStreetMap-based maps (Cloud-Optimized GeoTIFF). Source of the osmviews_score column.",
+			PURL:        ov.PURL,
+			Licenses:    []cdxLicenseChoice{{License: cdxLicense{ID: "CC0-1.0"}}},
+			Hashes:      hashes,
+			ExternalReferences: []cdxExternalRef{
+				{Type: "distribution", URL: ov.URL},
+				{Type: "website", URL: bomOSMViewsURL},
+				{Type: "bom", URL: ov.BOMURL, Hashes: []cdxHash{{Alg: "SHA-256", Content: ov.BOMSHA256}}},
+			},
+		})
+		inputs = append(inputs, cdxWorkflowIO{Resource: &cdxResourceRef{Ref: bomOSMViewsRef}})
+		dependencies[1].DependsOn = append(signalsDeps, bomOSMViewsRef)
+		dependencies = append(dependencies, cdxDependency{Ref: bomOSMViewsRef, DependsOn: []string{}})
+	}
+
 	workflow := cdxWorkflow{
 		BOMRef: "qrank-workflow-" + ymd,
 		UID:    "qrank-build-" + ymd,
@@ -387,10 +430,7 @@ func buildBOM(in bomInputs) *cdxBOM {
 			prov.Pageviews.Weeks, prov.Pageviews.FirstDay, prov.Pageviews.LastDay),
 		ResourceReferences: toolRefs,
 		TaskTypes:          []string{"build"},
-		Inputs: []cdxWorkflowIO{
-			{Resource: &cdxResourceRef{Ref: bomDumpsRef}},
-			{Resource: &cdxResourceRef{Ref: bomPageviewsRef}},
-		},
+		Inputs:             inputs,
 		Outputs: []cdxWorkflowIO{
 			{Type: "artifact", Resource: &cdxResourceRef{Ref: signalsRef}},
 			{Type: "artifact", Resource: &cdxResourceRef{Ref: dataRef}},
@@ -410,13 +450,8 @@ func buildBOM(in bomInputs) *cdxBOM {
 			Tools:      cdxTools{Components: tools},
 			Component:  data,
 		},
-		Components: []cdxComponent{signals, dumps, pageviews},
-		Dependencies: []cdxDependency{
-			{Ref: dataRef, DependsOn: []string{signalsRef}},
-			{Ref: signalsRef, DependsOn: []string{bomDumpsRef, bomPageviewsRef}},
-			{Ref: bomDumpsRef, DependsOn: []string{}},
-			{Ref: bomPageviewsRef, DependsOn: []string{}},
-		},
+		Components:   components,
+		Dependencies: dependencies,
 		Formulation: []cdxFormulation{{
 			BOMRef:    "qrank-build-" + ymd,
 			Workflows: []cdxWorkflow{workflow},
@@ -491,8 +526,9 @@ type cdxHash struct {
 }
 
 type cdxExternalRef struct {
-	Type string `json:"type"`
-	URL  string `json:"url"`
+	Type   string    `json:"type"`
+	URL    string    `json:"url"`
+	Hashes []cdxHash `json:"hashes,omitempty"`
 }
 
 type cdxComponentData struct {

@@ -160,7 +160,7 @@ func (r *SQLReader) skipUntilEither(t1 sqlToken, t2 sqlToken) error {
 			parenDepth -= 1
 			continue
 		}
-		if tok == t1 || tok == t2 {
+		if parenDepth == 0 && (tok == t1 || tok == t2) {
 			return nil
 		}
 	}

@@ -89,11 +89,22 @@ pageviews of their own.
 | `statement_count` | int64 | number of statements on the item in Wikidata |
 | `identifier_count` | int64 | number of statements on the item whose property is an external identifier |
 | `sitelink_count` | int64 | number of sitelinks of the item, such as links to Wikipedia articles |
+| `osmviews_score` | float, nullable | how much people look at the item's location on OpenStreetMap-based maps, from 0 to 1; see below |
 
 The counts of statements, identifiers and sitelinks come from the
 `wb-claims`, `wb-identifiers` and `wb-sitelinks` page properties in the
 Wikidata database dump. Rows are sorted by `item`, and the file records
 this sort order. Columns are zstd-compressed.
+
+`osmviews_score` comes from [OSMViews](https://osmviews.brawer.ch), a
+weekly GeoTIFF of how often each place on Earth is viewed on
+OpenStreetMap-based maps. The builder looks up every coordinate of the
+item on Earth, as listed in the `geo_tags` table of the Wikidata dump,
+and takes the highest value. A score of 0 means that the item has
+coordinates, but nobody looks there; this includes coordinates near the
+poles, beyond the ±85.05° latitude that web maps show. The score is null
+if the item has no coordinates on Earth. The BOM names the OSMViews
+version that was used.
 
 Parquet readers can query the file directly over HTTP, and only fetch the
 parts they need. For example, with [DuckDB](https://duckdb.org/):
@@ -165,7 +176,7 @@ from:
   - **Item signals**, the `item_signals-<YYYYMMDD>.parquet` file of the same
     build, with its SHA-256 and SHA-512 and a
     `pkg:generic/item_signals@<date>` Package-URL. The QRank file depends on
-    the item signals, which depend on the dumps and pageviews below.
+    the item signals, which depend on the dumps, pageviews and OSMViews below.
   - **Wikimedia database dumps**, as one component. Its version is the newest
     dump date of any wiki, and the `qrank:dumps:wikis` property gives the
     number of wikis. Some archived wikis have not been dumped in years but
@@ -174,14 +185,19 @@ from:
     [`pageview_complete`](https://dumps.wikimedia.org/other/pageview_complete/).
     Its version is the last day included, and properties give the first day
     and the number of weeks.
+  - **OSMViews**, the GeoTIFF that `osmviews_score` comes from. Its version
+    is the date of the GeoTIFF. The `purl` and `hashes` are copied from
+    the GeoTIFF's own bill of materials, which an `externalReference` of
+    type `bom` points to, with its SHA-256. Item signals built before the
+    `osmviews_score` column existed have no such component.
 - `metadata.tools` lists every version of `qrank-builder` that wrote a file
   used in the build, each with a `pkg:github/brawer/wikidata-qrank` Package-URL.
   QRank reuses intermediate files from earlier runs, such as the page signals
   of a wiki that has not been dumped again, so a single build can involve more
   than one release. The version that ran the final step points at its exact
   commit, and earlier versions point at their release tag.
-- `formulation` has one workflow, "QRank build", that takes the dumps and
-  pageviews as inputs, produces the item signals and the QRank file, and
+- `formulation` has one workflow, "QRank build", that takes the dumps,
+  pageviews and OSMViews as inputs, produces the item signals and the QRank file, and
   references every builder
   version listed in `metadata.tools`. The internal steps of the pipeline are
   not part of the BOM.

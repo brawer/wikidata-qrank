@@ -1,0 +1,19 @@
+{
+  "name": "osmviews",
+  "version": "2021-11-28",
+  "resources": [
+    {
+      "name": "osmviews",
+      "path": "osmviews-20211128.tiff",
+      "mediatype": "image/tiff",
+      "bytes": 64872,
+      "hash": "sha256:959f2273e0e6eb11cf4d4233617906f2e72690bc2328b4180b5d17c55eb51569"
+    },
+    {
+      "name": "bom",
+      "path": "osmviews-20211128.cdx.json",
+      "mediatype": "application/vnd.cyclonedx+json",
+      "hash": "sha256:963d721b013cf4f938ae571cf56f041e70ace453f7b3c3b93325a7d9088093d2"
+    }
+  ]
+}

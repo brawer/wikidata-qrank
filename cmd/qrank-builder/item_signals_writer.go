@@ -23,6 +23,9 @@ type itemSignalsRow struct {
 	StatementCount  int64 `parquet:"statement_count,delta"`
 	IdentifierCount int64 `parquet:"identifier_count,delta"`
 	SitelinkCount   int64 `parquet:"sitelink_count,delta"`
+
+	// OSMViewsScore is null for items without coordinates on Earth.
+	OSMViewsScore *float32 `parquet:"osmviews_score,optional"`
 }
 
 // ItemSignalsRowGroupSize is the number of rows per Parquet row group.
@@ -37,10 +40,12 @@ const itemSignalsBatchSize = 4096
 // ItemSignalsWriter writes item signals, sorted by item ID, as Parquet.
 // Consecutive signals for the same item get summed up into one row.
 type ItemSignalsWriter struct {
-	signals ItemSignals
-	out     io.WriteCloser
-	writer  *parquet.GenericWriter[itemSignalsRow]
-	batch   []itemSignalsRow
+	signals   ItemSignals
+	out       io.WriteCloser
+	writer    *parquet.GenericWriter[itemSignalsRow]
+	batch     []itemSignalsRow
+	scores    *osmviewsScores
+	numScored int64
 }
 
 func NewItemSignalsWriter(w io.WriteCloser) *ItemSignalsWriter {
@@ -59,6 +64,12 @@ func NewItemSignalsWriter(w io.WriteCloser) *ItemSignalsWriter {
 		writer: writer,
 		batch:  make([]itemSignalsRow, 0, itemSignalsBatchSize),
 	}
+}
+
+// SetOSMViewsScores makes the writer fill the osmviews_score column
+// from `scores`. Without it, the column is null for every item.
+func (w *ItemSignalsWriter) SetOSMViewsScores(scores *osmviewsScores) {
+	w.scores = scores
 }
 
 func (w *ItemSignalsWriter) Write(s ItemSignals) error {
@@ -87,6 +98,9 @@ func (w *ItemSignalsWriter) Close() error {
 	if err := w.writer.Close(); err != nil {
 		return err
 	}
+	if w.scores != nil {
+		logger.Printf("ItemSignalsWriter: %d items have an osmviews_score", w.numScored)
+	}
 	return w.out.Close()
 }
 
@@ -95,14 +109,25 @@ func (w *ItemSignalsWriter) flush() error {
 		return nil
 	}
 
-	w.batch = append(w.batch, itemSignalsRow{
+	row := itemSignalsRow{
 		Item:            w.signals.item,
 		Pageviews52w:    w.signals.pageviews,
 		WikitextBytes:   w.signals.wikitextBytes,
 		StatementCount:  w.signals.claims,
 		IdentifierCount: w.signals.identifiers,
 		SitelinkCount:   w.signals.sitelinks,
-	})
+	}
+	if w.scores != nil {
+		score, ok, err := w.scores.Lookup(row.Item)
+		if err != nil {
+			return err
+		}
+		if ok {
+			row.OSMViewsScore = &score
+			w.numScored++
+		}
+	}
+	w.batch = append(w.batch, row)
 	w.signals = ItemSignals{}
 	if len(w.batch) == cap(w.batch) {
 		return w.writeBatch()

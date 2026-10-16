@@ -52,7 +52,11 @@ func Build(client *http.Client, dumps string, numWeeks int, s3 S3) error {
 		return err
 	}
 
-	signalsDate, err := buildItemSignals(ctx, pageviews, sites, s3)
+	if err := buildItemCoordinates(ctx, dumps, sites, s3); err != nil {
+		return err
+	}
+
+	signalsDate, err := buildItemSignals(ctx, client, pageviews, sites, s3)
 	if err != nil {
 		return err
 	}
