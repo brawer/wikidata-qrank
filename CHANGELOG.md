@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.0](https://github.com/brawer/wikidata-qrank/compare/v2.3.0...v2.4.0) (2026-10-16)
+
+
+### 🆕 Features
+
+* **builder:** add osmviews_score to item signals ([#109](https://github.com/brawer/wikidata-qrank/issues/109)) ([a33bd85](https://github.com/brawer/wikidata-qrank/commit/a33bd85e08c48d634be045de134518647e0a7baf))
+
 ## [2.3.0](https://github.com/brawer/wikidata-qrank/compare/v2.2.1...v2.3.0) (2026-10-15)
 
 
