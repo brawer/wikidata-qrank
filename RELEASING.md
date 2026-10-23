@@ -121,7 +121,7 @@ answers `no healthy upstream`, look at the pod:
 ssh login.toolforge.org
 become qrank
 kubectl get pods                       # Running? CrashLoopBackOff? Pending?
-kubectl describe pod -l app.kubernetes.io/name=webserver | tail -30
+kubectl describe pods | tail -30          # recent events
 kubectl logs deployment/webserver --previous   # why the last run died
 ```
 
