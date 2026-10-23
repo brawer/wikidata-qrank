@@ -20,6 +20,7 @@ func TestStorage_Reload(t *testing.T) {
 		client:  &fakeStorageClient{},
 		workdir: t.TempDir(),
 		files:   make(map[string]*localFile, 10),
+		ready:   true,
 	}
 
 	old := filepath.Join(storage.workdir, "obsolete")
@@ -69,6 +70,7 @@ func TestStorage_Retrieve(t *testing.T) {
 		client:  &fakeStorageClient{},
 		workdir: t.TempDir(),
 		files:   make(map[string]*localFile, 10),
+		ready:   true,
 	}
 
 	path := filepath.Join(storage.workdir, "c.txt")
@@ -374,4 +376,48 @@ func TestStorage_objRegexp(t *testing.T) {
 			t.Errorf("should not match but does: %v", s)
 		}
 	}
+}
+
+// FailingStorageClient simulates object storage that is unreachable,
+// as it may be right after a Toolforge restart.
+type failingStorageClient struct {
+	storageClient
+}
+
+func (s *failingStorageClient) ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	ch := make(chan minio.ObjectInfo, 1)
+	ch <- minio.ObjectInfo{Err: fmt.Errorf("connection refused")}
+	close(ch)
+	return ch
+}
+
+func TestStorage_RetrieveBeforeReload(t *testing.T) {
+	storage := &Storage{client: &failingStorageClient{}, workdir: t.TempDir()}
+	if err := storage.Reload(context.Background()); err == nil {
+		t.Fatal("want Reload to fail")
+	}
+	if _, err := storage.Retrieve("qrank.csv.gz"); err != errNotReady {
+		t.Errorf("got %v, want errNotReady", err)
+	}
+}
+
+func TestStorage_WatchLoadsImmediately(t *testing.T) {
+	storage := &Storage{client: &fakeStorageClient{}, workdir: t.TempDir()}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() { done <- storage.Watch(ctx) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		c, err := storage.Retrieve("hello.txt")
+		if err == nil {
+			c.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Watch did not load content: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
 }
