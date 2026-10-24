@@ -108,6 +108,33 @@ toolforge components deployment create --description "release vX.Y.Z"
 `toolforge components config create toolforge.yaml` re-registers it from a
 local copy of the file if it has drifted.
 
+## If the site is down
+
+The `webserver` component is a continuous job, so Kubernetes restarts it
+on its own after a crash or a Toolforge maintenance. The webserver starts
+listening right away and loads its files from object storage in the
+background, retrying every 30 seconds; until that succeeds, downloads
+answer `503 Service Unavailable`. If https://qrank.toolforge.org/ still
+answers `no healthy upstream`, look at the pod:
+
+```sh
+ssh login.toolforge.org
+become qrank
+kubectl get pods                       # Running? CrashLoopBackOff? Pending?
+kubectl describe pods | tail -30          # recent events
+kubectl logs deployment/webserver --previous   # why the last run died
+```
+
+To start it again, redeploy (this also rebuilds from `main`):
+
+```sh
+toolforge components deployment create --description "restart after outage"
+```
+
+A pod stuck in `Pending` or `ContainerCreating` usually means NFS or the
+cluster is not back yet; check the Toolforge status and ask in
+`#wikimedia-cloud` rather than redeploying in a loop.
+
 ## Changing the deployment shape
 
 Component resources, the schedule, the health check, and so on live in

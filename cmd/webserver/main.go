@@ -48,10 +48,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := storage.Reload(context.Background()); err != nil {
-		log.Fatal(err)
-	}
-
+	// Start serving right away and load the content in the background.
+	// After a Toolforge restart, object storage or NFS may be slow or
+	// briefly unavailable; if we waited for them before listening, the
+	// health check would fail and Kubernetes would keep killing the pod.
+	// Until the first load succeeds, downloads get 503 Service Unavailable.
 	ctx, cancel := context.WithCancel(context.Background())
 	go storage.Watch(ctx)
 	server := &Webserver{storage: storage}
@@ -136,6 +137,11 @@ func (ws *Webserver) HandleDownload(w http.ResponseWriter, req *http.Request) {
 
 	path := strings.TrimPrefix(req.URL.Path, "/download/")
 	c, err := ws.storage.Retrieve(path)
+	if err == errNotReady {
+		w.Header().Set("Retry-After", "30")
+		http.Error(w, "QRank is starting up, please retry shortly", http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		http.NotFound(w, req)
 		return

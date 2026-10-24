@@ -10,7 +10,7 @@ module github.com/brawer/wikidata-qrank/v2
 // release; CI's setup-go and govulncheck use it too.
 go 1.26.3
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 // Tell the Heroku Go Buildpack (on Wikimedia Toolforge Build Service)
 // what binaries we want to have installed into the production container.

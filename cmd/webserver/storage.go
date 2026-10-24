@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base32"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -27,7 +28,11 @@ type Storage struct {
 	workdir string
 	mutex   sync.RWMutex
 	files   map[string]*localFile
+	ready   bool // whether Reload has succeeded at least once
 }
+
+// ErrNotReady is returned by Retrieve before the first successful Reload.
+var errNotReady = errors.New("storage not loaded yet")
 
 // LocalFile represents a file in the local working directory,
 // which is a cached copy of a servable file in remote storage.
@@ -193,6 +198,7 @@ func (s *Storage) Reload(ctx context.Context) error {
 
 	s.mutex.Lock()
 	s.files = files
+	s.ready = true
 	s.mutex.Unlock()
 
 	// Clean up workdir so it only contains live files. If we have a new
@@ -296,8 +302,17 @@ func readDatapackageVersion(p string) (string, error) {
 	return m[1] + m[2] + m[3], nil
 }
 
+// Watch loads the content from remote storage, and then keeps reloading
+// it every 30 seconds. Errors are logged and retried, so a temporary
+// outage of object storage does not take down the webserver.
 func (s *Storage) Watch(ctx context.Context) error {
+	if err := s.Reload(ctx); err != nil {
+		log.Printf("initial load failed, will retry: %v", err)
+	} else {
+		log.Println("initial load done")
+	}
 	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -339,6 +354,9 @@ func (s *Storage) Retrieve(filename string) (*Content, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	if !s.ready {
+		return nil, errNotReady
+	}
 	loc, found := s.files[filename]
 	if !found {
 		return nil, fmt.Errorf("not found")

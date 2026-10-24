@@ -225,6 +225,7 @@ func makeTestWebserver() *Webserver {
 		client:  &fakeStorageClient{},
 		workdir: os.TempDir(),
 		files:   make(map[string]*localFile, 10),
+		ready:   true,
 	}
 
 	path := filepath.Join(storage.workdir, "c.txt")
@@ -249,5 +250,17 @@ func TestWebserver_ServerHeader(t *testing.T) {
 	handler.ServeHTTP(w, httptest.NewRequest("GET", "/robots.txt", nil))
 	if got := w.Result().Header.Get("Server"); got == "" || got != ServerVersion {
 		t.Errorf(`want "Server: %s", got "%s"`, ServerVersion, got)
+	}
+}
+
+func TestWebserver_DownloadNotReady(t *testing.T) {
+	ws := &Webserver{storage: &Storage{workdir: t.TempDir()}}
+	w := httptest.NewRecorder()
+	ws.HandleDownload(w, httptest.NewRequest("GET", "/download/qrank.csv.gz", nil))
+	if got := w.Result().StatusCode; got != http.StatusServiceUnavailable {
+		t.Errorf("got status %d, want %d", got, http.StatusServiceUnavailable)
+	}
+	if got := w.Result().Header.Get("Retry-After"); got == "" {
+		t.Error("want Retry-After header")
 	}
 }
