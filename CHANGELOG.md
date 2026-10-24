@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/brawer/wikidata-qrank/compare/v2.4.0...v2.4.1) (2026-10-24)
+
+
+### 🐞 Fixes
+
+* **webserver:** survive restarts when object storage is slow or down ([#112](https://github.com/brawer/wikidata-qrank/issues/112)) ([31101e7](https://github.com/brawer/wikidata-qrank/commit/31101e79379d71863440d50b1095d68177ed4743))
+
 ## [2.4.0](https://github.com/brawer/wikidata-qrank/compare/v2.3.0...v2.4.0) (2026-10-16)
 
 
