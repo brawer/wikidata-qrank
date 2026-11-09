@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.2](https://github.com/brawer/wikidata-qrank/compare/v2.4.1...v2.4.2) (2026-11-09)
+
+
+### 🐞 Fixes
+
+* **deps:** bump github.com/andybalholm/brotli to v1.2.7 ([#116](https://github.com/brawer/wikidata-qrank/issues/116)) ([2c53307](https://github.com/brawer/wikidata-qrank/commit/2c533076d8e148eceaeda50e6dcc69967eb6c2b6))
+
 ## [2.4.1](https://github.com/brawer/wikidata-qrank/compare/v2.4.0...v2.4.1) (2026-10-24)
 
 
