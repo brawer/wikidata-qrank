@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.3](https://github.com/brawer/wikidata-qrank/compare/v2.4.2...v2.4.3) (2026-11-16)
+
+
+### 🐞 Fixes
+
+* **deps:** bump Go toolchain to go1.26.11 ([#118](https://github.com/brawer/wikidata-qrank/issues/118)) ([864cf4f](https://github.com/brawer/wikidata-qrank/commit/864cf4f9d8b75ed88f7b05fd7ff793d66bab8ddd))
+
 ## [2.4.2](https://github.com/brawer/wikidata-qrank/compare/v2.4.1...v2.4.2) (2026-11-09)
 
 
